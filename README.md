@@ -1,22 +1,58 @@
 # 🚀 Distributed AI Software Development Platform
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/)
 [![Python Version](https://img.shields.io/badge/python-3.13-blue.svg)](https://python.org)
 [![Node Version](https://img.shields.io/badge/node-v24.18.0-green.svg)](https://nodejs.org)
+[![Course](https://img.shields.io/badge/CM6453-SW%20Processes%20%26%20DevOps-orange.svg)](https://github.com/gorkemcolakk/Distributed-AI-Software-Development-Platform)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> **CM6453 Software Engineering Process and DevOps - Term Project**  
+> **CM6453 Software Engineering Process and DevOps**  
+> **Instructor:** Prof. Dr. Ensar Gül  
 > A web-based software development platform powered by a distributed multi-agent architecture and capability-based task allocation algorithms.
 
 ---
 
-## 📌 Features
+## 📋 Executive Summary
 
-- 🧠 **Dynamic Requirements Decomposition:** Automatically converts high-level requirement documents into structured Task DAGs.
-- 🎯 **Capability-Based Task Assignment:** Evaluates LLMs across **Coding Capability**, **Reasoning Capability**, and **Context Capacity** to assign tasks to the best-suited agent.
-- 🤖 **Specialized Worker Agents:** Includes pre-built agents for Frontend, Backend, Database, Automated Testing, and Code Integration.
-- ⚡ **Distributed Execution Pipeline:** Manages dependency execution order and collects generated code artifacts.
-- 📊 **Scrum & DevOps Integration:** Designed for 5-sprint agile delivery with Trello and GitHub version control.
+A web-based platform where a **Master Agent** receives long software requirements documents, decomposes them into structured dependency-aware subtasks, and dynamically distributes those tasks to specialized LLM-based worker agents running across team members' environments based on their measured model capabilities (Coding, Reasoning, Context Capacity). The generated artifacts are integrated, tested, and reviewed into a complete web application increment. The project follows the **Scrum methodology** across 5 two-week iterations using **Trello** and **GitHub**.
+
+---
+
+## 🎯 Key Principles
+
+- 🧠 **Capability-Based Allocation:** Master agent evaluates agents by *Coding capability*, *Reasoning capability*, and *Context capacity* to optimize task distribution.
+- 🔗 **Distributed Multi-Agent Architecture:** Ajanlar yerel veya uzak sunucularda (Ollama / LLM API) bağımsız çalışır ve Master Agent ile REST API / Bearer Token üzerinden haberleşir.
+- ⚡ **Automated Task Decomposition (DAG):** Gelen karmaşık gereksinimleri Veritabanı, Backend, Frontend, Test ve Entegrasyon aşamalarına böler.
+- 🔄 **Agile & Scrum Governance:** 5 Sprint × 2 Hafta = 10 Haftalık Scrum yönetimi, Trello panosu ve GitHub Pull Request / Code Review iş akışı.
+
+---
+
+## 👥 Team & Roles
+
+| Member Name | Scrum Role | Assigned Agent & Model | Primary Focus Area |
+| :--- | :--- | :--- | :--- |
+| **Görkem** | Developer / Tech Lead | Master Agent · GPT-4o / Claude 3.5 | Architecture & Engine Setup |
+| **Berat** | Developer | Agent 2 · Qwen2.5-Coder | Backend API & Orchestration |
+| **Elfi** | Developer | Agent 3 · Llama 3.2 | Database & Schema Design |
+| **Kübra** | Developer | Agent 4 · Gemma 2 | Frontend UI / UX Components |
+| **Mahmut** | Developer | Agent 5 · Phi-4 | Automated Testing & QA |
+| **İrem** | Scrum Master / Developer | Agent 6 · DeepSeek-Coder | Documentation & Code Review |
+
+---
+
+## 📊 Status — Sprint 1 (24 Sep – 7 Oct 2026)
+
+### ✅ Working Now (Sprint 1 Completed Baseline)
+- 🖥️ **Web Interface Baseline:** Arayüz bileşenleri ve yönetim paneli tasarımı.
+- ⚙️ **Master Agent Engine:** REST API Gateway, gereksinim analizi ve Ajan Kayıt Sistemi (`src/master/analyzer.py`).
+- 🤖 **Agent Capability Matrix:** Model puanlama sistemi ve yapılandırması (`config/agents_config.json`).
+- 📐 **DAG Task Decomposition:** Gereksinimleri *Requirement Analysis → DB / Backend / Frontend → QA → Integration* bağımlılık grafiğine bölen mekanizma.
+- 📜 **System Architecture & Sprint Docs:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) ve [`docs/SPRINTS.md`](docs/SPRINTS.md) kılavuzları.
+
+### 🔮 Planned for Sprints 2–5
+- **Sprint 2:** Capability evaluation algorithms, dynamic agent selection UI, and status monitoring.
+- **Sprint 3:** Distributed task execution, shared repository synchronization, and result collection.
+- **Sprint 4:** Automated test generation, Code Review agent, error recovery & reassignment.
+- **Sprint 5:** End-to-end integration, performance benchmarking dashboard, final demonstration.
 
 ---
 
@@ -48,34 +84,24 @@
 
 ---
 
-## 🛠️ Quick Start & Installation
+## 🛠️ Quick Start & Development
 
 ### Prerequisites
 - Python 3.10+
 - Node.js v18+
 
-### Setup Steps
+### 1. Installation
+```bash
+git clone https://github.com/gorkemcolakk/Distributed-AI-Software-Development-Platform.git
+cd Distributed-AI-Software-Development-Platform
+```
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/gorkemcolakk/Distributed-AI-Software-Development-Platform.git
-   cd Distributed-AI-Software-Development-Platform
-   ```
-
-2. **Run Automated Tests:**
-   ```bash
-   python -m unittest discover -s tests
-   ```
-
----
-
-## 🤝 Team & Scrum Management
-
-- **Scrum Framework:** 5 Iterations (2 weeks per Sprint, 10 weeks total).
-- **Task Management:** Trello Board
-- **Version Control:** GitHub Repository
+### 2. Run Automated Unit Tests
+```bash
+python -m unittest discover -s tests
+```
 
 ---
 
 ## 📄 License
-This project is open-source under the [MIT License](LICENSE).
+This project is licensed under the [MIT License](LICENSE).
