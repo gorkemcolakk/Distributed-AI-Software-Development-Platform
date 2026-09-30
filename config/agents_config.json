@@ -1,0 +1,62 @@
+{
+  "version": "1.0.0",
+  "capability_weights": {
+    "coding": 0.40,
+    "reasoning": 0.35,
+    "context_capacity": 0.25
+  },
+  "agents": [
+    {
+      "agent_id": "agent-gpt4o",
+      "name": "GPT-4o Master/Backend Agent",
+      "model": "gpt-4o",
+      "capabilities": {
+        "coding": 92,
+        "reasoning": 95,
+        "context_capacity": 90
+      },
+      "specialties": ["backend", "architecture", "requirements_decomposition", "integration"],
+      "max_concurrent_tasks": 5,
+      "status": "active"
+    },
+    {
+      "agent_id": "agent-claude-sonnet",
+      "name": "Claude 3.5 Sonnet Coding Agent",
+      "model": "claude-3-5-sonnet",
+      "capabilities": {
+        "coding": 98,
+        "reasoning": 92,
+        "context_capacity": 95
+      },
+      "specialties": ["frontend", "backend", "code_review", "refactoring"],
+      "max_concurrent_tasks": 4,
+      "status": "active"
+    },
+    {
+      "agent_id": "agent-deepseek-coder",
+      "name": "DeepSeek Coder Specialized Agent",
+      "model": "deepseek-coder-v2",
+      "capabilities": {
+        "coding": 95,
+        "reasoning": 85,
+        "context_capacity": 88
+      },
+      "specialties": ["frontend", "database", "testing"],
+      "max_concurrent_tasks": 6,
+      "status": "active"
+    },
+    {
+      "agent_id": "agent-llama3",
+      "name": "Llama 3 Local Agent",
+      "model": "llama-3-70b",
+      "capabilities": {
+        "coding": 82,
+        "reasoning": 88,
+        "context_capacity": 80
+      },
+      "specialties": ["testing", "documentation", "schema_validation"],
+      "max_concurrent_tasks": 3,
+      "status": "active"
+    }
+  ]
+}
