@@ -13,7 +13,7 @@ This document outlines the 5-sprint agile roadmap for the **CM6453 Software Engi
 - [x] Initial GitHub Repository Setup & Python/Node baseline
 - [x] Master Agent Prototype with Requirements Analyzer (`src/master/analyzer.py`)
 - [x] Agent capability configuration structure (`config/agents_config.json`)
-- [ ] Trello board sprint backlog configuration & UI component baseline
+- [x] Trello board sprint backlog configuration & UI component baseline
 
 ---
 
