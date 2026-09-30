@@ -58,8 +58,8 @@
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/YOUR_USERNAME/distributed-ai-sdlc.git
-   cd distributed-ai-sdlc
+   git clone https://github.com/gorkemcolakk/Distributed-AI-Software-Development-Platform.git
+   cd Distributed-AI-Software-Development-Platform
    ```
 
 2. **Run Automated Tests:**
