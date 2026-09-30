@@ -28,14 +28,14 @@ A web-based platform where a **Master Agent** receives long software requirement
 
 ## 👥 Team & Roles
 
-| Member Name | Scrum Role | Assigned Agent & Model | Primary Focus Area |
-| :--- | :--- | :--- | :--- |
-| **Görkem** | Developer / Tech Lead | Master Agent · GPT-4o / Claude 3.5 | Architecture & Engine Setup |
-| **Berat** | Developer | Agent 2 · Qwen2.5-Coder | Backend API & Orchestration |
-| **Elfi** | Developer | Agent 3 · Llama 3.2 | Database & Schema Design |
-| **Kübra** | Developer | Agent 4 · Gemma 2 | Frontend UI / UX Components |
-| **Mahmut** | Developer | Agent 5 · Phi-4 | Automated Testing & QA |
-| **İrem** | Scrum Master / Developer | Agent 6 · DeepSeek-Coder | Documentation & Code Review |
+| Student No. | Member Name | Scrum Role | Agent & Model | Primary Focus Area |
+| :--- | :--- | :--- | :--- | :--- |
+| **2204012296** | **Eren Görkem Çolak** | Developer · Technical Lead | Master Agent · Qwen3.5 4B | Architecture & Engine Setup |
+| **2204012297** | **Elif Yılmaz** | Product Owner · Developer | Agent 2 · Phi-4 3.8B | Requirements & Product Backlog |
+| **2204012300** | **Mahmut Karaalioğlu** | Developer | Agent 3 · Llama 3.2 3B | Database & Schema Design |
+| **2204012301** | **İrem Yılmaz** | Scrum Master · Developer | Agent 4 · Qwen2.5-Coder 7B | Process Facilitation & Review |
+| **2204012302** | **Kübra Hepcan** | Developer | Agent 5 · Gemma 2 9B | Frontend UI / UX Components |
+| **2204012303** | **Berat İnan** | Developer | Agent 6 · DeepSeek-Coder 6.7B | Automated Testing & QA |
 
 ---
 
