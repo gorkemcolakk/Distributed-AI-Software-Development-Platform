@@ -21,8 +21,8 @@ This document outlines the 5-sprint agile roadmap for the **CM6453 Software Engi
 **Goal:** Implement capability evaluation algorithms, dynamic task-to-agent matching, agent profiles, and status monitoring.
 
 ### Deliverables:
-- [x] Capability Evaluator implementation (`src/master/capability_eval.py`)
-- [x] Fit score weighting algorithms for 7 task categories
+- [ ] Capability Evaluator implementation (`src/master/capability_eval.py`)
+- [ ] Fit score weighting algorithms for 7 task categories
 - [ ] Real-time Agent Status & Capability Dashboard in Web UI
 - [ ] Task distribution pipeline and RPC endpoint connectors
 
