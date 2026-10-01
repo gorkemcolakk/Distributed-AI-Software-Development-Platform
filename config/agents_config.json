@@ -1,62 +1,146 @@
 {
-  "version": "1.0.0",
+  "version": "1.2.0",
+  "retrieved": "2026-10-01",
+  "scope": "Single-file agent registry (store as docs/agents.json). Free-to-use models only for agents; paid frontier models listed under reference_models for comparison. Schema from the team's draft, values and provenance from the model research.",
   "capability_weights": {
     "coding": 0.40,
     "reasoning": 0.35,
     "context_capacity": 0.25
   },
+  "scoring_method": {
+    "scale": "0-100",
+    "coding": "SWE-bench Pro score as published (already 0-100)",
+    "reasoning": "GPQA Diamond score as published (already 0-100)",
+    "context_capacity": "context_tokens / 1,048,576 * 100 (linear; penalizes 262K-context models heavily)",
+    "estimated_values_policy": "Values marked 'estimated' in capability_provenance are approximations (see 'estimates' for range, confidence, basis). The master agent may use them for routing but should flag assignments that depend on them. Replace with measured values when available and change the provenance to 'measured'.",
+    "caveats": [
+      "Measured benchmark values are vendor-reported and may not be independently reproduced.",
+      "Benchmark scores depend on harness and effort settings.",
+      "Weights are the team's initial choice, adjustable in Sprint 2."
+    ]
+  },
   "agents": [
     {
-      "agent_id": "agent-gpt4o",
-      "name": "GPT-4o Master/Backend Agent",
-      "model": "gpt-4o",
-      "capabilities": {
-        "coding": 92,
-        "reasoning": 95,
-        "context_capacity": 90
+      "agent_id": "agent-qwen38",
+      "name": "Qwen3.8-27B Agent",
+      "model": "Qwen/Qwen3.8-27B",
+      "vendor": "Alibaba",
+      "license": "Apache-2.0",
+      "cost": "free (self-hosted; hardware only)",
+      "deployment": {
+        "default": "local",
+        "hardware": "single 24 GB GPU (16.5 GB at UD-Q4_K_M quantization)",
+        "hosted_alternatives": ["Groq (131K context there)", "Together AI", "DeepInfra"],
+        "hosted_alternatives_note": "Hosted options exist but their free/paid status is not verified."
       },
-      "specialties": ["backend", "architecture", "requirements_decomposition", "integration"],
-      "max_concurrent_tasks": 5,
-      "status": "active"
+      "context_tokens": 262144,
+      "capabilities": { "coding": 61.7, "reasoning": 89.2, "context_capacity": 25.0 },
+      "capability_provenance": { "coding": "measured", "reasoning": "measured", "context_capacity": "measured" },
+      "estimates": {},
+      "evidence": {
+        "swe_bench_pro": { "score": 61.7, "source": "vendor model card" },
+        "gpqa_diamond": { "score": 89.2, "source": "vendor model card; ~88.9-90.5 on third-party trackers" },
+        "terminal_bench_2_1": { "score": 73.0, "source": "vendor" },
+        "livecodebench_v6": { "score": 90.3, "source": "vendor" },
+        "artificial_analysis_intelligence_index": { "score": 52, "source": "Artificial Analysis, max reasoning effort" }
+      },
+      "specialties": ["requirements_decomposition", "backend", "frontend", "testing"],
+      "specialties_basis": "Best documented reasoning (GPQA 89.2) plus solid coding; team may adjust.",
+      "max_concurrent_tasks": 1,
+      "max_concurrent_tasks_note": "Conservative default for one local GPU; raise after measuring.",
+      "status": "registered"
     },
     {
-      "agent_id": "agent-claude-sonnet",
-      "name": "Claude 3.5 Sonnet Coding Agent",
-      "model": "claude-3-5-sonnet",
-      "capabilities": {
-        "coding": 98,
-        "reasoning": 92,
-        "context_capacity": 95
+      "agent_id": "agent-laguna-s21",
+      "name": "Laguna S 2.1 Agent",
+      "model": "poolside/laguna-s-2.1",
+      "vendor": "Poolside",
+      "license": "OpenMDW-1.1",
+      "cost": "free via OpenRouter ':free' variant, or free to self-host (hardware only)",
+      "deployment": {
+        "default": "openrouter_free",
+        "openrouter_free": { "context_tokens": 262144, "note": "Free variant listed with 262K context by third-party trackers; verify on OpenRouter." },
+        "local": {
+          "context_tokens": 1048576,
+          "hardware": "quantized (e.g. NVFP4) runs on DGX Spark / Mac Studio class machines; full weights are ~236 GB"
+        }
       },
-      "specialties": ["frontend", "backend", "code_review", "refactoring"],
-      "max_concurrent_tasks": 4,
-      "status": "active"
+      "context_tokens": 262144,
+      "capabilities": { "coding": 59.4, "reasoning": 82, "context_capacity": 25.0 },
+      "capability_provenance": { "coding": "measured", "reasoning": "estimated", "context_capacity": "measured" },
+      "estimates": {
+        "reasoning": {
+          "value": 82,
+          "range": [75, 88],
+          "confidence": "low",
+          "basis": "GPQA Diamond is not published for this model. Qwen3.8-27B's 89.2 scaled by the ratio of SWE-bench Pro scores (59.4/61.7) gives ~86, shaded down because only 8B parameters are active and no reasoning benchmark exists."
+        }
+      },
+      "capabilities_note": "context_capacity becomes 100.0 if run locally with the full 1M window.",
+      "evidence": {
+        "swe_bench_pro": { "score": 59.4, "source": "Poolside (pool harness, 4 attempts avg)" },
+        "swe_bench_multilingual": { "score": 78.5, "source": "Poolside" },
+        "terminal_bench_2_1": { "score": 70.2, "source": "Poolside (thinking on, pool harness)" },
+        "toolathlon_verified": { "score": 49.7, "source": "Poolside" },
+        "deepswe_v1_1": { "score": 40.4, "source": "Poolside" }
+      },
+      "specialties": ["integration", "documentation", "long_context_review"],
+      "specialties_basis": "Strong agentic/terminal results and optional 1M context locally; reasoning is only estimated, so prefer Qwen for requirements analysis.",
+      "max_concurrent_tasks": 1,
+      "max_concurrent_tasks_note": "Conservative default; free hosted tiers are rate-limited, measure before raising.",
+      "status": "registered"
     },
     {
-      "agent_id": "agent-deepseek-coder",
-      "name": "DeepSeek Coder Specialized Agent",
-      "model": "deepseek-coder-v2",
-      "capabilities": {
-        "coding": 95,
-        "reasoning": 85,
-        "context_capacity": 88
+      "agent_id": "agent-gemini-free",
+      "name": "Gemini Free-Tier Agent",
+      "model": "gemini flash-class (free tier; exact model to be confirmed)",
+      "vendor": "Google",
+      "license": "proprietary",
+      "cost": "free tier via Google AI Studio (rate-limited)",
+      "deployment": {
+        "default": "hosted_free",
+        "models_reported_free": ["Gemini 3 Flash Preview", "Gemini 3.1 Flash-Lite Preview"],
+        "verification": "UNVERIFIED: sources disagree on limits and models. Confirm in AI Studio. Gemini 3.8 Flash and Pro-class models are paid."
       },
-      "specialties": ["frontend", "database", "testing"],
-      "max_concurrent_tasks": 6,
-      "status": "active"
-    },
-    {
-      "agent_id": "agent-llama3",
-      "name": "Llama 3 Local Agent",
-      "model": "llama-3-70b",
-      "capabilities": {
-        "coding": 82,
-        "reasoning": 88,
-        "context_capacity": 80
+      "context_tokens": 1000000,
+      "capabilities": { "coding": 50, "reasoning": 78, "context_capacity": 95.4 },
+      "capability_provenance": { "coding": "estimated", "reasoning": "estimated", "context_capacity": "estimated" },
+      "estimates": {
+        "coding": {
+          "value": 50,
+          "range": [40, 60],
+          "confidence": "very low",
+          "basis": "Paid Gemini 3.8 Flash scores 61.6 on SWE-bench Pro; the free-tier models are older/lighter Flash-class versions, so assumed ~10 points lower."
+        },
+        "reasoning": {
+          "value": 78,
+          "range": [65, 88],
+          "confidence": "very low",
+          "basis": "No reasoning benchmark found for the free-tier models. Placed slightly below the open models; paid 3.8 Flash is reported weak on the hardest long-horizon tasks (19.1 on Terminal-Bench 4.0)."
+        },
+        "context_capacity": {
+          "value": 95.4,
+          "range": [25.0, 95.4],
+          "confidence": "very low",
+          "basis": "Gemini Flash models are 1M-token context (1,000,000 / 1,048,576). Free tier might cap this lower; the low end of the range assumes 262K."
+        }
       },
-      "specialties": ["testing", "documentation", "schema_validation"],
-      "max_concurrent_tasks": 3,
-      "status": "active"
+      "evidence": {},
+      "specialties": ["documentation", "testing"],
+      "specialties_basis": "Placeholder for fast, cheap, long-context tasks; entirely estimate-based. Confirm after measuring.",
+      "max_concurrent_tasks": 1,
+      "max_concurrent_tasks_note": "Free tier is rate-limited; measure before raising.",
+      "status": "registered"
     }
-  ]
+  ],
+  "reference_models": {
+    "note": "Paid/frontier models researched for comparison, not registered as agents. Figures vendor-reported (DataCamp roundup, 2026-09-25) unless noted; prices are USD per 1M tokens and change often.",
+    "models": [
+      { "id": "claude-opus-5-5", "vendor": "Anthropic", "context_tokens": 1000000, "price_in_out": [4.0, 20.0], "swe_bench_pro": 89.9, "terminal_bench_4_0": 66.4 },
+      { "id": "claude-fable-5-1", "vendor": "Anthropic", "context_tokens": 1000000, "price_in_out": [10.0, 50.0], "swe_bench_pro": 81.2, "terminal_bench_2_1": "91.4 (Artificial Analysis)" },
+      { "id": "gpt-6-astra", "vendor": "OpenAI", "context_tokens": 1050000, "price_in_out": [10.0, 50.0], "terminal_bench_4_0": "58.2 (tbench.ai)" },
+      { "id": "gemini-3-8-flash", "vendor": "Google", "context_tokens": 1000000, "price_in_out": [0.75, 3.75], "price_note": "promotional through 2026-12-31", "swe_bench_pro": 61.6, "terminal_bench_2_1": 89.4 },
+      { "id": "deepseek-v4-1-flash", "vendor": "DeepSeek", "context_tokens": 1000000, "price_in_out": [0.15, 0.6], "price_note": "off-peak", "terminal_bench_2_1": "90.6 vendor / 74.5 Vals AI" }
+    ]
+  }
 }
