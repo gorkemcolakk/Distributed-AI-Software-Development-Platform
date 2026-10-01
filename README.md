@@ -101,7 +101,9 @@ pip install -r requirements.txt
 
 ### 2. Launch Web Interface (Sprint 1 Increment)
 ```bash
-streamlit run master_agent_projesi/app.py
+streamlit run master_agent_project/app.py
+# veya doğrudan:
+.\start
 ```
 Açılan tarayıcı ekranından gereksinim girip **"⚡ Analyze & Decompose Requirements"** butonuyla görev ayrıştırmasını canlı test edebilirsiniz.
 
