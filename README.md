@@ -88,15 +88,24 @@ A web-based platform where a **Master Agent** receives long software requirement
 
 ### Prerequisites
 - Python 3.10+
-- Node.js v18+
+- pip
 
-### 1. Installation
+### 1. Installation & Dependencies
 ```bash
 git clone https://github.com/gorkemcolakk/Distributed-AI-Software-Development-Platform.git
 cd Distributed-AI-Software-Development-Platform
+
+# Install required dependencies
+pip install -r requirements.txt
 ```
 
-### 2. Run Automated Unit Tests
+### 2. Launch Web Interface (Sprint 1 Increment)
+```bash
+streamlit run master_agent_projesi/app.py
+```
+Açılan tarayıcı ekranından gereksinim girip **"⚡ Analyze & Decompose Requirements"** butonuyla görev ayrıştırmasını canlı test edebilirsiniz.
+
+### 3. Run Automated Unit Tests
 ```bash
 python -m unittest discover -s tests
 ```
