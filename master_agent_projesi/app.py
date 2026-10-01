@@ -8,14 +8,25 @@ import time
 st.set_page_config(page_title="Master Agent Pro", page_icon="🧿", layout="wide")
 
 # 1. API CONFIGURATION (Securely read from environment or user input)
-# Try reading from .env if python-dotenv is present
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
-
 env_api_key = os.getenv("OPENAI_API_KEY", "")
+
+# Search for .env in current and parent directory
+env_paths = [".env", os.path.join(os.path.dirname(__file__), "..", ".env"), os.path.join(os.path.dirname(__file__), ".env")]
+for p in env_paths:
+    if not env_api_key and os.path.exists(p):
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(p)
+            env_api_key = os.getenv("OPENAI_API_KEY", "")
+        except ImportError:
+            with open(p, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip().startswith("OPENAI_API_KEY="):
+                        env_api_key = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+                        os.environ["OPENAI_API_KEY"] = env_api_key
+                        break
+    if env_api_key:
+        break
 
 # 2. REGISTERED AGENTS DATABASE
 agents_data = [
