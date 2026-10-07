@@ -15,6 +15,6 @@ A Product Backlog Item (Trello Card) is **Done** when all of the following crite
 6. **Documentation:** 
    - README, SRS, architecture, or member guides are updated when the item changes them.
    - Any new API endpoints or architectural changes are documented in the repository.
-   - Code variables and comments are in English. Inline comments are specifically added for complex logic.
+   - Code variables and comments are in English.
    - User-facing text (UI) is in Turkish.
-7. **Task Board Updated:** The Trello card is moved to the "Bitti" list, and the relevant GitHub PR link is attached to the card.
+7. **Task Board Updated:** The Trello card is moved to the "Done" list, and the relevant GitHub PR link is attached to the card.
