@@ -18,12 +18,12 @@
 | **2204012302** | **Kübra Hepcan** | Developer |
 | **2204012303** | **Berat İnan** | Developer |
 
-## ⏱️ Ceremonies (Thursday - Wednesday Cycle)
+## ⏱️ Ceremonies 
 
 | 📌 Event | 📅 Day & Time | ⏱️ Duration |
 | :--- | :--- | :--- |
 | **Sprint Planning** | First Thursday of the Sprint | 2 Hours |
-| **Daily Scrum** | Every weekday @ 10:00 PM (WhatsApp) | 15 Minutes |
+| **Daily Scrum** | Every weekday 10:00 PM  | 15 Minutes |
 | **Sprint Review** | Last Wednesday of the Sprint | 1 Hour |
 | **Sprint Retrospective**| Last Wednesday, after Review | 45 Minutes |
 
