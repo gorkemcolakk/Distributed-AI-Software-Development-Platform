@@ -349,7 +349,6 @@ def burndown_df(tasks, done_order):
 with st.sidebar:
     st.markdown("## 🌐 Nexus Core")
     st.caption("Dağıtık ajan ağı aktif")
-    st.markdown("👨‍💻 **Tech Lead:** Eren Görkem Çolak")
     st.markdown("### Ajan Listesi")
     for a in agents_data:
         st.markdown(
@@ -464,6 +463,4 @@ if state.tasks:
         st.dataframe(df, use_container_width=True, hide_index=True)
 
     state.fresh = False
-
-st.markdown("---")
-st.markdown("<div style='text-align: center; color: #6B7280; font-size: 0.85rem; padding-bottom: 2rem;'>Distributed AI Software Development Platform · Technical Lead: <b>Eren Görkem Çolak</b></div>", unsafe_allow_html=True)
+
