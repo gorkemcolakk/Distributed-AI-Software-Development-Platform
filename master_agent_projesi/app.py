@@ -11,35 +11,23 @@ import streamlit.components.v1 as components
 # 1. API CONFIGURATION (anahtar koda gömülmez)
 # ==========================================
 def load_api_key():
-    key = os.getenv("AQ.Ab8RN6JUZtGRBX0ayUaf_Qj3ZbjEiaUcYlg2MiCwUCjBJXYxCg")
-    if key:
+    key = os.getenv("GEMINI_API_KEY", "")
+    if key and key != "api.key":
         return key
     try:
-        return st.secrets["AQ.Ab8RN6JUZtGRBX0ayUaf_Qj3ZbjEiaUcYlg2MiCwUCjBJXYxCg"]  # .streamlit/secrets.toml
+        s_key = st.secrets.get("api.key", "")
+        if s_key and s_key != "api.key":
+            return s_key
     except Exception:
-        return ""
+        pass
+    return ""
 
 API_KEY = load_api_key()
 if API_KEY:
-    genai.configure(api_key=API_KEY)
-# ==========================================
-# 1. API CONFIGURATION (Güvenli Yükleme)
-# ==========================================
-def load_api_key():
-    # Sistem değişkenlerinde "GEMINI_API_KEY" adında bir şifre var mı diye bakar
-    key = os.getenv("AQ.Ab8RN6JUZtGRBX0ayUaf_Qj3ZbjEiaUcYlg2MiCwUCjBJXYxCg")
-    if key:
-        return key
     try:
-        # Streamlit secrets içinde "GEMINI_API_KEY" adında bir şifre var mı diye bakar
-        return st.secrets["api.key"]  
+        genai.configure(api_key=API_KEY)
     except Exception:
-        # Eğer ikisi de yoksa (bilgisayarında test ederken) varsayılan anahtarı kullanır
-        return "api.key"
-
-API_KEY = load_api_key()
-if API_KEY:
-    genai.configure(api_key=API_KEY)
+        API_KEY = ""
 
 # ==========================================
 # 2. AGENTS DATABASE (her ajanın kendi rengi var)
@@ -214,11 +202,8 @@ def decompose_task(user_requirement):
         text = response.text.strip().removeprefix("```json").removeprefix("```").removesuffix("```")
         return text.strip(), False
     except Exception as e:
-        msg = str(e).lower()
-        if "429" in msg or "quota" in msg:
-            st.toast("API kotası doldu. Demo modu (yedek veri) devrede.", icon="🛡️")
-            return get_fallback_json(user_requirement), True
-        raise
+        st.toast("Çevrimdışı / Yerel Master Agent modu devrede.", icon="🛡️")
+        return get_fallback_json(user_requirement), True
 
 def network_html(load=None):
     """Master -> ajan bağlantılarını gösteren canlı SVG. load verilirse çizgi kalınlığı ve akış hızı iş yüküne göre değişir."""
