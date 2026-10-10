@@ -66,3 +66,9 @@ erDiagram
     AGENT ||--o{ TASK : "assigned to"
     TASK ||--o{ ATTEMPT : "has"
     TASK ||--o| OUTPUT_FILE : "generates"
+```
+
+## 5. Open Questions and Decision Inputs for Iteration 2 (S2-07)
+Output Files: Should we store the actual code strings returned by the LLM in the database (as BLOB/TEXT), or write them directly to the disk (.py, .js) and only store the file_path in the database? (Recommendation: Writing to disk and storing the path is safer for Git integration).
+
+Attempt History: Should we implement a periodic pruning mechanism for the Attempt table to prevent database bloat from tasks that fail repeatedly?
