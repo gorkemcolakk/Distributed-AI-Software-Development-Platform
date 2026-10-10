@@ -8,12 +8,13 @@ from src.master.analyzer import RequirementsAnalyzer
 from src.master.capability_eval import CapabilityEvaluator
 from src.master.scheduler import TaskScheduler
 from src.agents.base_agent import BaseAgent, TaskCategory, TaskResult
-
+from src.master.db_manager import init_db
 
 class MasterOrchestrator:
     """Master Agent Orchestrator managing distributed multi-agent software development lifecycle."""
 
     def __init__(self, evaluator: Optional[CapabilityEvaluator] = None):
+        init_db()
         self.analyzer = RequirementsAnalyzer()
         self.evaluator = evaluator or CapabilityEvaluator()
         self.scheduler = TaskScheduler()
