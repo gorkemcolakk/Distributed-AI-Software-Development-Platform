@@ -51,3 +51,8 @@ dist-web/
 logs/
 tmp/
 scratch/
+
+# SQLite Database
+*.db
+*.sqlite3
+state.db
