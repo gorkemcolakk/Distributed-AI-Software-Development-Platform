@@ -201,7 +201,7 @@ def decompose_task(user_requirement):
         response = model.generate_content(f"{system_prompt}\n\nUser Requirement:\n{user_requirement}")
         text = response.text.strip().removeprefix("```json").removeprefix("```").removesuffix("```")
         return text.strip(), False
-    except Exception as e:
+    except Exception:
         st.toast("Çevrimdışı / Yerel Master Agent modu devrede.", icon="🛡️")
         return get_fallback_json(user_requirement), True
 
@@ -239,7 +239,7 @@ def network_html(load=None):
              "@media (prefers-reduced-motion:reduce){.flow,.ring{animation:none}}</style>")
     return style + '<svg viewBox="0 0 800 300" width="100%" style="max-width:760px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">' + "".join(out) + "</svg>"
 
-def skill_bar(label, value, color):
+def skill_bar(label, value):
     return (f'<div class="bar-row"><span class="bar-label">{label}</span>'
             f'<div class="bar-track"><div class="bar-fill" style="width:{value}%"></div></div>'
             f'<span class="bar-val">{value}</span></div>')
@@ -340,9 +340,9 @@ with st.sidebar:
             f'<div class="agent-card" style="--c:{a["color"]}">'
             f'<div class="agent-name"><span class="dot"></span>{a["Agent ID"]}</div>'
             f'<div class="agent-spec">{a["Specialty"]}</div>'
-            + skill_bar("Coding", a["Coding"], a["color"])
-            + skill_bar("Reasoning", a["Reasoning"], a["color"])
-            + skill_bar("Context", a["Context"], a["color"])
+            + skill_bar("Coding", a["Coding"])
+            + skill_bar("Reasoning", a["Reasoning"])
+            + skill_bar("Context", a["Context"])
             + '</div>',
             unsafe_allow_html=True,
         )
@@ -448,4 +448,4 @@ if state.tasks:
         st.dataframe(df, use_container_width=True, hide_index=True)
 
     state.fresh = False
-
+

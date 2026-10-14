@@ -27,12 +27,27 @@ class TaskCategory(Enum):
     DOCUMENTATION = "DOCUMENTATION"
 
 
+class ScoreProvenance(Enum):
+    ESTIMATED = "estimated"     # hypothetical / assumed value, not benchmarked locally
+    MEASURED = "measured"       # value obtained from a local benchmark run
+
+
+def _default_provenance() -> Dict[str, str]:
+    return {
+        "coding": ScoreProvenance.ESTIMATED.value,
+        "reasoning": ScoreProvenance.ESTIMATED.value,
+        "context_capacity": ScoreProvenance.ESTIMATED.value,
+    }
+
+
 @dataclass
 class AgentCapabilityProfile:
     coding_score: float         # 0-100 score for code generation accuracy & syntax
     reasoning_score: float      # 0-100 score for architectural logic & problem decomposition
     context_capacity: float     # 0-100 score representing context window & multi-file awareness
     specialties: List[str] = field(default_factory=list)
+    # Per-metric label: "estimated" until replaced by a value from a local test run ("measured")
+    provenance: Dict[str, str] = field(default_factory=_default_provenance)
 
     def calculate_fit_score(self, task_category: TaskCategory) -> float:
         """
@@ -90,7 +105,8 @@ class BaseAgent:
                 "coding": self.capabilities.coding_score,
                 "reasoning": self.capabilities.reasoning_score,
                 "context_capacity": self.capabilities.context_capacity,
-                "specialties": self.capabilities.specialties
+                "specialties": self.capabilities.specialties,
+                "provenance": self.capabilities.provenance
             },
             "active_tasks": len(self.current_tasks)
         }
