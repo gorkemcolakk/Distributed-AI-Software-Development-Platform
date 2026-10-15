@@ -10,7 +10,7 @@ from src.agents.base_agent import BaseAgent, AgentCapabilityProfile
 class IntegrationAgent(BaseAgent):
     """Specialized Agent for Code Review, Integration & Deployment Assembly."""
 
-    def __init__(self, agent_id: str = None, name: str = "Integration & Review Agent", model_name: str = "gpt-4o"):
+    def __init__(self, agent_id: str = None, name: str = "Integration & Review Agent", model_name: str = "phi4-mini:3.8b"):
         profile = AgentCapabilityProfile(
             coding_score=95.0,
             reasoning_score=95.0,

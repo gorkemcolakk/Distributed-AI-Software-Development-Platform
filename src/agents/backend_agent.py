@@ -10,7 +10,7 @@ from src.agents.base_agent import BaseAgent, AgentCapabilityProfile
 class BackendAgent(BaseAgent):
     """Specialized Agent for Backend API & Business Logic development."""
 
-    def __init__(self, agent_id: str = None, name: str = "Backend Architecture Agent", model_name: str = "gpt-4o"):
+    def __init__(self, agent_id: str = None, name: str = "Backend Architecture Agent", model_name: str = "qwen2.5-coder:7b"):
         profile = AgentCapabilityProfile(
             coding_score=92.0,
             reasoning_score=96.0,

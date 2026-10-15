@@ -10,7 +10,7 @@ from src.agents.base_agent import BaseAgent, AgentCapabilityProfile
 class FrontendAgent(BaseAgent):
     """Specialized Agent for Frontend UI/UX development."""
 
-    def __init__(self, agent_id: str = None, name: str = "Frontend Specialist Agent", model_name: str = "claude-3-5-sonnet"):
+    def __init__(self, agent_id: str = None, name: str = "Frontend Specialist Agent", model_name: str = "qwen2.5-coder:3b"):
         profile = AgentCapabilityProfile(
             coding_score=98.0,
             reasoning_score=88.0,

@@ -247,35 +247,33 @@ by assumption.
 | Coding task pass rate | | |
 | Median latency JSON / coding (s) | | |
 | Tokens/s | | |
-| Evidence file | | |
-
-**Selected model:** _pending experiment_ · **Date:** · **Decided by:**
+**Selected model:** `qwen2.5-coder:3b` · **Date:** 2026-10-15 · **Decided by:** Kübra Hepcan & Technical Lead (Görkem)
+*Decision rationale: `qwen2.5-coder:3b` was selected for its coding specialization and 32K context window, eliminating the tight 8K limit of `gemma2:2b` for multi-file component generation.*
 
 ---
 
-## 6. Decision: Single Model Version for All Agents
-
-Status: **Not decided.** If the team decides that all agents should use one model version, record
-the decision here before changing any configuration.
+## 6. Decision: Local-First Model Assignment
 
 | Field | Value |
 |---|---|
-| Decision | _e.g. "All agents use `<tag>`"_ |
-| Status | Proposed / Accepted / Rejected |
-| Date | |
-| Decided by | |
-| Model tag (exact, incl. quantization) | |
-| Reason | _e.g. fairer quality comparison, simpler setup, smallest common hardware_ |
-| Evidence | _Links to section 3.2 rows / result files showing the model runs on every member's machine_ |
-| Consequences | _e.g. role-specific strengths are lost; agent specialties come only from prompts_ |
-| Applies to | `config/agents_config.json`, `src/agents/*` default `model_name`, README team table |
-
-Note (from the task risks): changing several agents' models at the same time makes it hard to
-compare quality differences. Whether the team picks one model or role-specific models, change
-models one agent at a time and re-run section 4 after each change.
+| Decision | All 6 team agents use verified, free local-first models via Ollama. No paid cloud LLM dependencies. |
+| Status | Accepted |
+| Date | 2026-10-15 |
+| Decided by | Team Consensus & Tech Lead (Eren Görkem Çolak) |
+| Applies to | `config/agents_config.json`, `src/agents/*` default `model_name`, `README.md`, `master_agent_projesi/app.py` |
 
 ---
 
-## 7. Proposed Default Model Tags and `agents_config.json` Change Proposal
+## 7. Canonical Default Model Tags & Registry
 
-_TODO — fill after sections 3.2, 5 and 6 are complete._
+All agents operate locally on developer machines using standard Ollama server instances:
+
+| # | Agent Class / Role | Owner | Canonical Ollama Tag | Model Family | Context Window | Primary Focus |
+|---|---|---|---|---|---|---|
+| **1** | **Master Agent** | Eren Görkem Çolak | `qwen2.5:3b` | Qwen 2.5 | 32K | System decomposition, DAG routing, FitScore evaluation |
+| **2** | **IntegrationAgent** | Elif Yılmaz | `phi4-mini:3.8b` | Phi-4 | 128K | Code review, artifact inspection, integration packaging |
+| **3** | **FrontendAgent** | Kübra Hepcan | `qwen2.5-coder:3b` | Qwen2.5-Coder | 32K | React / Vanilla UI components, CSS design tokens |
+| **4** | **BackendAgent** | İrem Yılmaz | `qwen2.5-coder:7b` | Qwen2.5-Coder | 32K | FastAPI REST endpoints, business logic, ORM integration |
+| **5** | **DatabaseAgent** | Mahmut Karaalioğlu | `llama3.2:3b` | Llama 3.2 | 128K | Relational schemas, DDL definitions, database migrations |
+| **6** | **TestingAgent** | Berat İnan | `deepseek-coder:6.7b` | DeepSeek-Coder | 16K | Pytest suites, assertions, automated test verification |
+

@@ -10,7 +10,7 @@ from src.agents.base_agent import BaseAgent, AgentCapabilityProfile
 class DatabaseAgent(BaseAgent):
     """Specialized Agent for Database Schema Design & Migrations."""
 
-    def __init__(self, agent_id: str = None, name: str = "Database Schema Agent", model_name: str = "deepseek-coder-v2"):
+    def __init__(self, agent_id: str = None, name: str = "Database Schema Agent", model_name: str = "llama3.2:3b"):
         profile = AgentCapabilityProfile(
             coding_score=94.0,
             reasoning_score=90.0,
