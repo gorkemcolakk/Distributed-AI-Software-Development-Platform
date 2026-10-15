@@ -1,0 +1,98 @@
+{
+  "member": "gorkem",
+  "model": "qwen2.5:3b",
+  "date_utc": "2026-10-15T11:40:06+00:00",
+  "options": {
+    "temperature": 0,
+    "seed": 42
+  },
+  "machine": {
+    "os": "Windows 11",
+    "cpu": "Intel64 Family 6 Model 140 Stepping 1, GenuineIntel",
+    "ram_gb": 15.8,
+    "gpu": "NVIDIA GeForce GTX 1650, 4096 MiB",
+    "ollama_version": "ollama version is 0.40.4",
+    "ollama_list": "NAME          ID              SIZE      MODIFIED          \nqwen2.5:3b    357c53fb659c    1.9 GB    About an hour ago"
+  },
+  "hardware_fit": {
+    "installed": true,
+    "model_size_gb": 1.9,
+    "size_source": "ollama list",
+    "vram_gb": 4.0,
+    "required_vram_gb": 2.9,
+    "required_ram_gb": 4.9,
+    "placement": "gpu"
+  },
+  "summary": {
+    "json_task": {
+      "pass_rate": "3/3",
+      "median_wall_seconds": 9.06
+    },
+    "coding_task": {
+      "pass_rate": "3/3",
+      "median_wall_seconds": 3.86
+    }
+  },
+  "results": [
+    {
+      "task": "json_task",
+      "run": 1,
+      "passed": true,
+      "detail": "7 valid subtasks",
+      "wall_seconds": 9.86,
+      "output_tokens": 280,
+      "tokens_per_second": 40.7,
+      "response_excerpt": "{\n  \"subtasks\": [\n    {\n      \"id\": \"T1\",\n      \"title\": \"Create user registration endpoint\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": []\n    },\n    {\n      \"id\": \"T2\",\n      \"title\": \"Implement email verification process\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": [\"T1\"]\n    },\n    {\n      \"id\": \"T3\",\n      \"title\": \"Create user login endpoint\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": []\n    },\n    {\n      \"id\": \"T4\",\n      \"title\": \"Create user profile endpoint to displ"
+    },
+    {
+      "task": "json_task",
+      "run": 2,
+      "passed": true,
+      "detail": "7 valid subtasks",
+      "wall_seconds": 9.06,
+      "output_tokens": 282,
+      "tokens_per_second": 40.4,
+      "response_excerpt": "{\n  \"subtasks\": [\n    {\n      \"id\": \"T1\",\n      \"title\": \"Create user registration endpoint\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": []\n    },\n    {\n      \"id\": \"T2\",\n      \"title\": \"Create user login endpoint\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": [\"T1\"]\n    },\n    {\n      \"id\": \"T3\",\n      \"title\": \"Create endpoint to save notes\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": []\n    },\n    {\n      \"id\": \"T4\",\n      \"title\": \"Create endpoint to retrieve saved notes\",\n  "
+    },
+    {
+      "task": "json_task",
+      "run": 3,
+      "passed": true,
+      "detail": "7 valid subtasks",
+      "wall_seconds": 9.05,
+      "output_tokens": 282,
+      "tokens_per_second": 40.7,
+      "response_excerpt": "{\n  \"subtasks\": [\n    {\n      \"id\": \"T1\",\n      \"title\": \"Create user registration endpoint\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": []\n    },\n    {\n      \"id\": \"T2\",\n      \"title\": \"Create user login endpoint\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": [\"T1\"]\n    },\n    {\n      \"id\": \"T3\",\n      \"title\": \"Create endpoint to save notes\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": []\n    },\n    {\n      \"id\": \"T4\",\n      \"title\": \"Create endpoint to retrieve saved notes\",\n  "
+    },
+    {
+      "task": "coding_task",
+      "run": 1,
+      "passed": true,
+      "detail": "all asserts passed",
+      "wall_seconds": 3.62,
+      "output_tokens": 47,
+      "tokens_per_second": 40.9,
+      "response_excerpt": "```python\nimport re\n\ndef is_palindrome(s: str) -> bool:\n    cleaned = re.sub(r'[^A-Za-z0-9]', '', s).lower()\n    return cleaned == cleaned[::-1]\n```"
+    },
+    {
+      "task": "coding_task",
+      "run": 2,
+      "passed": true,
+      "detail": "all asserts passed",
+      "wall_seconds": 3.88,
+      "output_tokens": 73,
+      "tokens_per_second": 40.6,
+      "response_excerpt": "```python\nimport re\n\ndef is_palindrome(s: str) -> bool:\n    # Remove non-alphanumeric characters and convert to lowercase\n    cleaned_s = re.sub(r'[^a-zA-Z0-9]', '', s).lower()\n    # Check if the cleaned string is a palindrome\n    return cleaned_s == cleaned_s[::-1]\n```"
+    },
+    {
+      "task": "coding_task",
+      "run": 3,
+      "passed": true,
+      "detail": "all asserts passed",
+      "wall_seconds": 3.86,
+      "output_tokens": 73,
+      "tokens_per_second": 40.9,
+      "response_excerpt": "```python\nimport re\n\ndef is_palindrome(s: str) -> bool:\n    # Remove non-alphanumeric characters and convert to lowercase\n    cleaned_s = re.sub(r'[^a-zA-Z0-9]', '', s).lower()\n    # Check if the cleaned string is a palindrome\n    return cleaned_s == cleaned_s[::-1]\n```"
+    }
+  ]
+}
