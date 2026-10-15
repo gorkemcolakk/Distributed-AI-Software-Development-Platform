@@ -30,12 +30,12 @@ A web-based platform where a **Master Agent** receives long software requirement
 
 | Student No. | Member Name | Scrum Role | Agent & Model | Primary Focus Area |
 | :--- | :--- | :--- | :--- | :--- |
-| **2204012296** | **Eren Görkem Çolak** | Developer · Technical Lead | Master Agent · Qwen3.5 4B | Architecture & Engine Setup |
-| **2204012297** | **Elif Yılmaz** | Product Owner · Developer | Agent 2 · Phi-4 3.8B | Requirements & Product Backlog |
-| **2204012300** | **Mahmut Karaalioğlu** | Developer | Agent 3 · Llama 3.2 3B | Database & Schema Design |
-| **2204012301** | **İrem Yılmaz** | Scrum Master · Developer | Agent 4 · Qwen2.5-Coder 7B | Process Facilitation & Review |
-| **2204012302** | **Kübra Hepcan** | Developer | Agent 5 · Gemma 2 9B | Frontend UI / UX Components |
-| **2204012303** | **Berat İnan** | Developer | Agent 6 · DeepSeek-Coder 6.7B | Automated Testing & QA |
+| **2204012296** | **Eren Görkem Çolak** | Developer · Technical Lead | Master Agent · Qwen 2.5 3B | Architecture, Routing & Engine Setup |
+| **2204012297** | **Elif Yılmaz** | Product Owner · Developer | Integration Agent · Phi-4 Mini 3.8B | Code Review, Integration & Product Backlog |
+| **2204012300** | **Mahmut Karaalioğlu** | Developer | Database Agent · Llama 3.2 3B | Database, Schema & Migration Design |
+| **2204012301** | **İrem Yılmaz** | Scrum Master · Developer | Backend Agent · Qwen2.5-Coder 7B | Backend APIs, Business Logic & Scrum Facilitation |
+| **2204012302** | **Kübra Hepcan** | Developer | Frontend Agent · Qwen2.5-Coder 3B | Frontend UI / UX Components & State |
+| **2204012303** | **Berat İnan** | Developer | Testing Agent · DeepSeek-Coder 6.7B | Automated Testing, Assertion Checks & QA |
 
 ---
 

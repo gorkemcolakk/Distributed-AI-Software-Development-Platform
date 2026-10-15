@@ -32,12 +32,74 @@ def call_local_ollama(prompt: str, model: str = OLLAMA_MODEL, host: str = OLLAMA
     return data.get("response", "")
 
 # ==========================================
-# 2. AGENTS DATABASE (her ajanın kendi rengi var)
+# 2. AGENTS DATABASE (5 Model & Uzman Ajanımız)
 # ==========================================
 agents_data = [
-    {"Agent ID": "Agent A (GPT-X)", "Specialty": "Full-Stack / Backend", "Coding": 90, "Reasoning": 85, "Context": 95, "color": "#00F2FE"},
-    {"Agent ID": "Agent B (Model-Y)", "Specialty": "Architecture / Logic", "Coding": 75, "Reasoning": 95, "Context": 70, "color": "#A78BFA"},
-    {"Agent ID": "Agent C (Model-Z)", "Specialty": "Frontend / UI", "Coding": 95, "Reasoning": 70, "Context": 80, "color": "#FBBF24"},
+    {
+        "Agent ID": "Integration Agent (Phi-4 Mini 3.8B)",
+        "short_name": "Phi-4 Mini 3.8B",
+        "Role": "Integration & Review",
+        "Specialty": "Integration",
+        "Member": "Elif Yılmaz",
+        "badge": "INT",
+        "Model": "Phi-4 Mini 3.8B",
+        "Coding": 78,
+        "Reasoning": 95,
+        "Context": 90,
+        "color": "#38BDF8"
+    },
+    {
+        "Agent ID": "Frontend Agent (Qwen2.5-Coder 3B)",
+        "short_name": "Qwen-Coder 3B",
+        "Role": "Frontend UI/UX",
+        "Specialty": "Frontend",
+        "Member": "Kübra Hepcan",
+        "badge": "FE",
+        "Model": "Qwen2.5-Coder 3B",
+        "Coding": 95,
+        "Reasoning": 78,
+        "Context": 85,
+        "color": "#FBBF24"
+    },
+    {
+        "Agent ID": "Backend Agent (Qwen2.5-Coder 7B)",
+        "short_name": "Qwen-Coder 7B",
+        "Role": "Backend & API",
+        "Specialty": "Backend",
+        "Member": "İrem Yılmaz",
+        "badge": "BE",
+        "Model": "Qwen2.5-Coder 7B",
+        "Coding": 96,
+        "Reasoning": 88,
+        "Context": 84,
+        "color": "#A78BFA"
+    },
+    {
+        "Agent ID": "Database Agent (Llama 3.2 3B)",
+        "short_name": "Llama 3.2 3B",
+        "Role": "Database & Schema",
+        "Specialty": "Database",
+        "Member": "Mahmut Karaalioğlu",
+        "badge": "DB",
+        "Model": "Llama 3.2 3B",
+        "Coding": 78,
+        "Reasoning": 82,
+        "Context": 95,
+        "color": "#34D399"
+    },
+    {
+        "Agent ID": "Testing Agent (DeepSeek-Coder 6.7B)",
+        "short_name": "DeepSeek 6.7B",
+        "Role": "Testing & QA",
+        "Specialty": "Testing",
+        "Member": "Berat İnan",
+        "badge": "QA",
+        "Model": "DeepSeek-Coder 6.7B",
+        "Coding": 88,
+        "Reasoning": 95,
+        "Context": 82,
+        "color": "#F87171"
+    },
 ]
 
 PHASE_ICONS = {
@@ -71,8 +133,12 @@ st.markdown("""
                     radial-gradient(34vmax 34vmax at 78% 68%, rgba(167,139,250,.14), transparent 70%),
                     radial-gradient(26vmax 26vmax at 60% 15%, rgba(251,191,36,.07), transparent 70%);
         animation: drift 22s ease-in-out infinite alternate; }
-    .block-container { position: relative; z-index: 1; }
-    #MainMenu, footer, header[data-testid="stHeader"] { visibility: hidden; height: 0; }
+    #MainMenu, footer { visibility: hidden; height: 0; }
+    header[data-testid="stHeader"] { background: transparent !important; z-index: 99999 !important; }
+    .stDeployButton, [data-testid="stAppDeployButton"], [data-testid="stToolbarActions"] { display: none !important; }
+    button[data-testid="stSidebarCollapseButton"], button[data-testid="collapsedControl"], [data-testid="stSidebarHeader"] button {
+        display: flex !important; visibility: visible !important; color: #4FACFE !important; background: #121828 !important; border: 1px solid #1F2937 !important; border-radius: 8px !important;
+    }
     .block-container { padding-top: 2rem; max-width: 1200px; }
 
     section[data-testid="stSidebar"] { background-color: #0A0E17; border-right: 1px solid #1F2937; }
@@ -83,7 +149,8 @@ st.markdown("""
     .section-title { font-size: 1.15rem; font-weight: 600; color: #F3F4F6; margin: 1.6rem 0 0.8rem 0; }
 
     div[data-testid="stMetric"] { background-color: #121828; border: 1px solid #1F2937; border-radius: 12px; padding: 16px 20px; }
-    div[data-testid="stMetricValue"] { color: #4FACFE; font-weight: 700; }
+    div[data-testid="stMetricValue"] { color: #4FACFE; font-weight: 700; font-size: 1.45rem !important; overflow: visible !important; white-space: nowrap !important; }
+    div[data-testid="stMetricValue"] > div { overflow: visible !important; text-overflow: clip !important; white-space: nowrap !important; }
 
     div.stButton > button:first-child { background: linear-gradient(90deg, #0052D4, #4364F7 55%, #6FB1FC); color: white; border: none;
         border-radius: 10px; height: 3.2rem; font-size: 1.05rem; font-weight: 600; transition: transform .2s, box-shadow .2s; }
@@ -146,14 +213,61 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 4. YARDIMCI FONKSİYONLAR
+# 4. YARDIMCI FONKSİYONLAR & FITSCORE ALGORİTMASI
 # ==========================================
-def assign_best_agent(primary_skill):
-    skill = str(primary_skill).capitalize()
-    if skill not in ["Coding", "Reasoning", "Context"]:
-        skill = "Reasoning"
-    best = max(agents_data, key=lambda a: a[skill])
-    return best, skill, best[skill]
+PHASE_WEIGHTS = {
+    "Requirements_Analysis": {"Reasoning": 0.60, "Context": 0.30, "Coding": 0.10, "specialty": "Integration"},
+    "Frontend_Development":  {"Coding": 0.55, "Context": 0.25, "Reasoning": 0.20, "specialty": "Frontend"},
+    "Backend_Development":   {"Coding": 0.50, "Reasoning": 0.35, "Context": 0.15, "specialty": "Backend"},
+    "Database_Design":      {"Context": 0.55, "Reasoning": 0.30, "Coding": 0.15, "specialty": "Database"},
+    "Quality_Assurance_and_Testing": {"Reasoning": 0.45, "Coding": 0.40, "Context": 0.15, "specialty": "Testing"}
+}
+
+def assign_best_agent(phase_or_skill: str = "Requirements_Analysis", primary_skill: str = None, current_load: dict = None):
+    """
+    Sprint 2 Yetenek Değerlendirme & FitScore Algoritması:
+    Görev türüne göre yetenek ağırlıkları (Coding, Reasoning, Context) ve uzmanlık eşleşmesiyle en uygun ajanı seçer.
+    """
+    if phase_or_skill in PHASE_WEIGHTS:
+        weights = PHASE_WEIGHTS[phase_or_skill]
+    else:
+        skill = str(primary_skill or phase_or_skill).capitalize()
+        if skill == "Coding":
+            weights = {"Coding": 0.70, "Reasoning": 0.20, "Context": 0.10, "specialty": ""}
+        elif skill == "Context":
+            weights = {"Context": 0.70, "Reasoning": 0.20, "Coding": 0.10, "specialty": ""}
+        else:
+            weights = {"Reasoning": 0.70, "Coding": 0.20, "Context": 0.10, "specialty": ""}
+
+    best_agent = None
+    best_score = -1.0
+    dominant_skill = max(["Coding", "Reasoning", "Context"], key=lambda s: weights.get(s, 0))
+
+    for a in agents_data:
+        # Ağırlıklı Yetenek Uygunluk Skoru (FitScore: 0 - 100)
+        score = (
+            a["Coding"] * weights.get("Coding", 0) +
+            a["Reasoning"] * weights.get("Reasoning", 0) +
+            a["Context"] * weights.get("Context", 0)
+        )
+        # Uzmanlık Bonusu (+5 puan)
+        spec = weights.get("specialty", "")
+        if spec and spec.lower() in a["Specialty"].lower():
+            score = min(100.0, score + 5.0)
+
+        # Yük dengeleme (Load Balancing) cezası
+        if current_load and a["Agent ID"] in current_load:
+            load_pts = current_load[a["Agent ID"]]
+            score = max(0.0, score - (load_pts * 0.8))
+
+        if score > best_score:
+            best_score = score
+            best_agent = a
+
+    if not best_agent:
+        best_agent = agents_data[0]
+
+    return best_agent, dominant_skill, round(best_score, 1)
 
 def get_fallback_json(requirement=""):
     """Demo modu: sabit şablon, ama girdiye göre konu ve puanlar değişir."""
@@ -182,21 +296,50 @@ def decompose_task(user_requirement):
     """(json_metni, demo_modu_mu) döndürür."""
     system_prompt = """
     You are an Expert Software Architect and the Master Agent in a distributed multi-agent system.
-    Analyze the provided software requirement and decompose it into specific, actionable sub-tasks.
-    Categorize work into: Requirements_Analysis, Frontend_Development, Backend_Development, Database_Design, Quality_Assurance_and_Testing.
+    Analyze the provided software requirement and decompose it into the following 5 specific sub-tasks:
+    - Requirements_Analysis
+    - Frontend_Development
+    - Backend_Development
+    - Database_Design
+    - Quality_Assurance_and_Testing
 
-    CRITICAL INSTRUCTION FOR DESCRIPTION: The "description" field MUST be highly detailed, containing at least 3-4 full sentences explaining the technical steps, required frameworks, and expected outcomes. Do not give short answers.
-
-    Provide a JSON object containing for each:
-    - "description": Highly detailed technical explanation (min 3 sentences).
-    - "complexity": "Low", "Medium", or "High".
-    - "primary_skill_required": "Coding", "Reasoning", or "Context".
-    - "story_points": Estimated Agile story points (1, 2, 3, 5, or 8).
-
-    Return ONLY valid JSON.
+    CRITICAL: You MUST respond with ONLY a valid JSON object matching this exact schema:
+    {
+      "Requirements_Analysis": {
+        "description": "Detailed explanation of requirements and architecture.",
+        "complexity": "Medium",
+        "primary_skill_required": "Reasoning",
+        "story_points": 3
+      },
+      "Frontend_Development": {
+        "description": "Detailed explanation of UI layout and components.",
+        "complexity": "Medium",
+        "primary_skill_required": "Coding",
+        "story_points": 5
+      },
+      "Backend_Development": {
+        "description": "Detailed explanation of REST APIs and business logic.",
+        "complexity": "High",
+        "primary_skill_required": "Coding",
+        "story_points": 8
+      },
+      "Database_Design": {
+        "description": "Detailed explanation of SQL schema and relationships.",
+        "complexity": "Medium",
+        "primary_skill_required": "Context",
+        "story_points": 5
+      },
+      "Quality_Assurance_and_Testing": {
+        "description": "Detailed explanation of unit and integration test suites.",
+        "complexity": "Low",
+        "primary_skill_required": "Reasoning",
+        "story_points": 3
+      }
+    }
+    Do not add extra keys or markdown outside the JSON.
     """
     try:
-        prompt = f"{system_prompt}\n\nUser Requirement:\n{user_requirement}\n\nReturn JSON output now:"
+        prompt = f"{system_prompt}\n\nUser Requirement:\n{user_requirement}\n\nJSON output:"
         raw_response = call_local_ollama(prompt, model=OLLAMA_MODEL)
         
         # JSON bloğunu temizle ve ayıkla
@@ -214,9 +357,93 @@ def decompose_task(user_requirement):
         st.toast("Yerel Ollama çevrimdışı. Güvenli yedek demo modu devrede.", icon="🛡️")
         return get_fallback_json(user_requirement), True
 
+def normalize_tasks(parsed_data, requirement=""):
+    """Model ne tür bir JSON dönerse dönsün, UI'ın beklediği 5 aşamalı standart formata dönüştürür."""
+    standard_phases = [
+        "Requirements_Analysis",
+        "Frontend_Development",
+        "Backend_Development",
+        "Database_Design",
+        "Quality_Assurance_and_Testing"
+    ]
+    fallback_dict = json.loads(get_fallback_json(requirement))
+    if not isinstance(parsed_data, dict):
+        return fallback_dict
+
+    # Model tek bir sarmalayıcı anahtar kullandıysa aç
+    for wrap_key in ["tasks", "phases", "subtasks", "decomposition", "Requirement_Decomposition", "sub_tasks", "requirement"]:
+        if wrap_key in parsed_data and isinstance(parsed_data[wrap_key], dict):
+            # Eğer alt sözlük standart aşamalardan en az birini içeriyorsa veya sözlükse
+            sub = parsed_data[wrap_key]
+            if any(k in sub for k in standard_phases) or not any(k in parsed_data for k in standard_phases):
+                parsed_data = sub
+                break
+
+    def clean_key(k):
+        return re.sub(r"[^a-zA-Z0-9]", "", str(k).lower())
+
+    lookup = {clean_key(k): (k, v) for k, v in parsed_data.items()}
+
+    default_skills = {
+        "Requirements_Analysis": "Reasoning",
+        "Frontend_Development": "Coding",
+        "Backend_Development": "Coding",
+        "Database_Design": "Context",
+        "Quality_Assurance_and_Testing": "Reasoning"
+    }
+
+    result = {}
+    for phase in standard_phases:
+        fb = fallback_dict.get(phase, {})
+        val = None
+        if phase in parsed_data:
+            val = parsed_data[phase]
+        else:
+            c_phase = clean_key(phase)
+            for lk_k, (orig_k, orig_v) in lookup.items():
+                if c_phase in lk_k or lk_k in c_phase:
+                    val = orig_v
+                    break
+
+        if isinstance(val, dict):
+            skill = str(val.get("primary_skill_required", fb.get("primary_skill_required", default_skills[phase]))).capitalize()
+            if skill not in ["Coding", "Reasoning", "Context"]:
+                skill = default_skills[phase]
+            try:
+                pts = int(val.get("story_points", fb.get("story_points", 3)))
+            except (ValueError, TypeError):
+                pts = fb.get("story_points", 3)
+
+            result[phase] = {
+                "description": str(val.get("description", fb.get("description", ""))),
+                "complexity": str(val.get("complexity", fb.get("complexity", "Medium"))),
+                "primary_skill_required": skill,
+                "story_points": pts
+            }
+        elif isinstance(val, str) and val.strip():
+            result[phase] = {
+                "description": val.strip(),
+                "complexity": fb.get("complexity", "Medium"),
+                "primary_skill_required": default_skills[phase],
+                "story_points": fb.get("story_points", 3)
+            }
+        elif isinstance(val, list) and val:
+            desc = "; ".join(str(item) for item in val if item)
+            result[phase] = {
+                "description": desc or fb.get("description", ""),
+                "complexity": fb.get("complexity", "Medium"),
+                "primary_skill_required": default_skills[phase],
+                "story_points": fb.get("story_points", 3)
+            }
+        else:
+            result[phase] = fb
+    return result
+
+
 def network_html(load=None):
-    """Master -> ajan bağlantılarını gösteren canlı SVG. load verilirse çizgi kalınlığı ve akış hızı iş yüküne göre değişir."""
-    pos = [(140, 215), (400, 215), (660, 215)]
+    """Master -> 5 Model/Ajan bağlantılarını gösteren canlı SVG. load verilirse çizgi kalınlığı ve akış hızı iş yüküne göre değişir."""
+    # 5 model için 800px genişlik üzerinde simetrik ve dengeli konumlar
+    pos = [(90, 225), (245, 225), (400, 225), (555, 225), (710, 225)]
     peak = max(load.values()) if load and max(load.values()) else 1
     out = []
     for i, a in enumerate(agents_data):
@@ -230,23 +457,26 @@ def network_html(load=None):
         out.append(f'<path id="p{i}" d="M400,72 C400,150 {x},140 {x},{y-30}" fill="none" stroke="{c}" stroke-opacity=".4" stroke-width="{width}" stroke-dasharray="6 6" class="flow"/>')
         for k in range(n):
             out.append(f'<circle r="4.5" fill="{c}"><animateMotion dur="{dur}s" begin="{k * dur / n}s" repeatCount="indefinite"><mpath href="#p{i}"/></animateMotion></circle>')
-        sub = f"{pts} puan" if load else a["Specialty"]
+        sub = f"{pts} puan" if load else a["Role"]
+        badge = a.get("badge", str(i+2))
+        model_label = a["short_name"]
         out.append(
-            f'<circle cx="{x}" cy="{y}" r="28" fill="#121828" stroke="{c}" stroke-width="2"/>'
-            f'<circle cx="{x}" cy="{y}" r="28" fill="none" stroke="{c}" class="ring"/>'
-            f'<text x="{x}" y="{y+6}" text-anchor="middle" fill="{c}" font-size="17" font-weight="800">{a["Agent ID"][6]}</text>'
-            f'<text x="{x}" y="{y+52}" text-anchor="middle" fill="#E5E7EB" font-size="13" font-weight="600">{a["Agent ID"]}</text>'
-            f'<text x="{x}" y="{y+70}" text-anchor="middle" fill="#9CA3AF" font-size="12">{sub}</text>')
-    out.append('<circle cx="400" cy="42" r="30" fill="#121828" stroke="#4FACFE" stroke-width="2.5"/>'
-               '<circle cx="400" cy="42" r="30" fill="none" stroke="#4FACFE" class="ring"/>'
-               '<text x="400" y="48" text-anchor="middle" fill="#4FACFE" font-size="18" font-weight="800">M</text>'
-               '<text x="442" y="47" fill="#E5E7EB" font-size="13" font-weight="600">Master Agent</text>')
+            f'<circle cx="{x}" cy="{y}" r="26" fill="#121828" stroke="{c}" stroke-width="2"/>'
+            f'<circle cx="{x}" cy="{y}" r="26" fill="none" stroke="{c}" class="ring"/>'
+            f'<text x="{x}" y="{y+5}" text-anchor="middle" fill="{c}" font-size="12" font-weight="800">{badge}</text>'
+            f'<text x="{x}" y="{y+48}" text-anchor="middle" fill="#E5E7EB" font-size="12" font-weight="600">{model_label}</text>'
+            f'<text x="{x}" y="{y+64}" text-anchor="middle" fill="#9CA3AF" font-size="11">{sub}</text>')
+    out.append('<circle cx="400" cy="42" r="30" fill="#121828" stroke="#818CF8" stroke-width="2.5"/>'
+               '<circle cx="400" cy="42" r="30" fill="none" stroke="#818CF8" class="ring"/>'
+               '<text x="400" y="47" text-anchor="middle" fill="#818CF8" font-size="13" font-weight="800">MASTER</text>'
+               '<text x="400" y="86" text-anchor="middle" fill="#E5E7EB" font-size="13" font-weight="600">Qwen 2.5 (3B)</text>'
+               '<text x="400" y="102" text-anchor="middle" fill="#9CA3AF" font-size="11">Master Agent / Nexus Core</text>')
     style = ("<style>body{margin:0;background:transparent;font-family:Inter,'Segoe UI',sans-serif}"
              ".flow{animation:dash 1.1s linear infinite}@keyframes dash{to{stroke-dashoffset:-12}}"
              ".ring{transform-box:fill-box;transform-origin:center;animation:pulse 2.6s ease-out infinite}"
              "@keyframes pulse{from{transform:scale(1);opacity:.8}to{transform:scale(1.7);opacity:0}}"
              "@media (prefers-reduced-motion:reduce){.flow,.ring{animation:none}}</style>")
-    return style + '<svg viewBox="0 0 800 300" width="100%" style="max-width:760px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">' + "".join(out) + "</svg>"
+    return style + '<svg viewBox="0 0 800 320" width="100%" style="max-width:780px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">' + "".join(out) + "</svg>"
 
 def skill_bar(label, value):
     return (f'<div class="bar-row"><span class="bar-label">{label}</span>'
@@ -259,17 +489,29 @@ NEXT_STATUS = {"Beklemede": "Çalışıyor", "Çalışıyor": "Tamamlandı", "Ta
 BTN_LABEL = {"Beklemede": "▶ Başlat", "Çalışıyor": "✔ Tamamla", "Tamamlandı": "↺ Sıfırla"}
 
 def pts_of(d):
+    if not isinstance(d, dict):
+        return 3
     try:
         return int(d.get("story_points", 3))
     except (TypeError, ValueError):
         return 3
 
 def resolve(phase, details):
-    """(atanan ajan, yetenek, ajanın skoru, algoritmanın önerdiği ajan). Kullanıcı seçimi öneriyi geçersiz kılar."""
-    best, skill, _ = assign_best_agent(details.get("primary_skill_required", "Reasoning"))
+    """(atanan ajan, yetenek, ajanın fit skoru, algoritmanın önerdiği ajan). Kullanıcı seçimi öneriyi geçersiz kılar."""
+    if not isinstance(details, dict):
+        details = {}
+    best, skill, score = assign_best_agent(phase, details.get("primary_skill_required", "Reasoning"))
     ov = st.session_state.get(f"ov_{phase}", AUTO)
     agent = next((a for a in agents_data if a["Agent ID"] == ov), best)
-    return agent, skill, agent[skill], best
+    if agent["Agent ID"] != best["Agent ID"]:
+        weights = PHASE_WEIGHTS.get(phase, {"Reasoning": 0.5, "Coding": 0.3, "Context": 0.2})
+        user_score = (
+            agent["Coding"] * weights.get("Coding", 0) +
+            agent["Reasoning"] * weights.get("Reasoning", 0) +
+            agent["Context"] * weights.get("Context", 0)
+        )
+        score = round(user_score, 1)
+    return agent, skill, score, best
 
 def advance(phase):
     ss = st.session_state
@@ -281,6 +523,8 @@ def advance(phase):
         ss.done_order.remove(phase)
 
 def task_card(phase, details, idx, agent, skill, score, best, status, fresh):
+    if not isinstance(details, dict):
+        details = {}
     complexity = details.get("complexity", "Medium")
     sc, pct = STATUS_STYLE[status]
     cx_color = COMPLEXITY_COLORS.get(complexity, "#FBBF24")
@@ -299,17 +543,19 @@ def task_card(phase, details, idx, agent, skill, score, best, status, fresh):
         f'<div class="task-foot">'
         f'<span class="chip chip-cx" style="--c:{cx_color}">Zorluk: {complexity}</span>'
         f'<span class="chip">Gereken yetenek: {skill}</span>{manual_chip}'
-        f'<span class="assign">🤖 {agent["Agent ID"]}<small>{skill} {score}</small></span>'
+        f'<span class="assign">🤖 {agent["Agent ID"]}<small>FitScore: {score}</small></span>'
         f'</div></div>'
     )
 
 def build_log(req, tasks, demo):
     lines = [("MASTER", f"Gereksinim alındı ({len(req)} karakter)"),
-             ("MASTER", "Demo verisi kullanılıyor (yedek mod)" if demo else "Gemini ile görev ayrıştırma tamamlandı"),
-             ("MASTER", f"{len(tasks)} alt görev sınıflandırıldı")]
+             ("MASTER", "Demo verisi kullanılıyor (yedek mod)" if demo else "Yerel Qwen 2.5 modeli ile görev ayrıştırma tamamlandı"),
+             ("MASTER", f"{len(tasks)} alt görev FitScore algoritmasıyla yönlendirildi")]
     for ph, d in tasks.items():
-        ag, sk, sc = assign_best_agent(d.get("primary_skill_required", "Reasoning"))
-        lines.append(("ROUTER", f"{ph.replace('_', ' ')} → {ag['Agent ID']} ({sk} {sc})"))
+        if not isinstance(d, dict):
+            d = {"primary_skill_required": "Reasoning"}
+        ag, sk, sc = assign_best_agent(ph, d.get("primary_skill_required", "Reasoning"))
+        lines.append(("ROUTER", f"{ph.replace('_', ' ')} → {ag['Agent ID']} (FitScore: {sc})"))
     lines.append(("SYSTEM", f"Dağıtım hazır: {sum(pts_of(d) for d in tasks.values())} story point"))
     return lines
 
@@ -342,13 +588,26 @@ def burndown_df(tasks, done_order):
 # ==========================================
 with st.sidebar:
     st.markdown("## 🌐 Nexus Core")
-    st.caption("Dağıtık ajan ağı aktif")
-    st.markdown("### Ajan Listesi")
+    st.caption("Dağıtık multi-agent orkestrasyon motoru")
+
+    st.markdown("### Master Agent")
+    st.markdown(
+        f'<div class="agent-card" style="--c:#818CF8;">'
+        f'<div class="agent-name"><span class="dot" style="--c:#818CF8"></span>Master Agent (Qwen 2.5 3B)</div>'
+        f'<div class="agent-spec">Orkestrasyon & Mimar · <span style="color:#9CA3AF">Üye: Eren Görkem Çolak</span></div>'
+        + skill_bar("Coding", 85)
+        + skill_bar("Reasoning", 92)
+        + skill_bar("Context", 85)
+        + '</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("### 🤖 Alt Ajan Havuzu (5 Worker)")
     for a in agents_data:
         st.markdown(
             f'<div class="agent-card" style="--c:{a["color"]}">'
             f'<div class="agent-name"><span class="dot"></span>{a["Agent ID"]}</div>'
-            f'<div class="agent-spec">{a["Specialty"]}</div>'
+            f'<div class="agent-spec">{a["Role"]} · <span style="color:#9CA3AF">Üye: {a["Member"]}</span></div>'
             + skill_bar("Coding", a["Coding"])
             + skill_bar("Reasoning", a["Reasoning"])
             + skill_bar("Context", a["Context"])
@@ -375,9 +634,9 @@ st.markdown('<div class="sub-header">Sprint 2: Akıllı görev parçalama ve aja
 
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("Sistem", "Çevrimiçi")
-m2.metric("Aktif ajan", len(agents_data))
+m2.metric("Aktif Ajan", "6 (1 Master + 5 Alt)")
 m3.metric("Son analiz süresi", f"{state.last_time:.1f} sn" if state.last_time else "Henüz yok")
-m4.metric("Veri kaynağı", "Demo" if state.demo_mode else "Gemini")
+m4.metric("Model Sunucusu", "Ollama")
 
 components.html(network_html(current_load() if state.tasks else None), height=310)
 
@@ -395,7 +654,8 @@ if st.button("🚀 Analiz et ve ajanlara dağıt", use_container_width=True):
             try:
                 t0 = time.perf_counter()
                 raw, demo = decompose_task(requirement_input)
-                parsed = json.loads(raw)
+                raw_parsed = json.loads(raw)
+                parsed = normalize_tasks(raw_parsed, requirement_input)
                 elapsed = time.perf_counter() - t0
             except json.JSONDecodeError:
                 st.error("Model geçerli bir JSON döndürmedi. Aynı gereksinimle tekrar deneyin.")
@@ -450,8 +710,12 @@ if state.tasks:
 
     with st.expander("Atama tablosu (Pandas)"):
         df = pd.DataFrame([
-            {"Görev": p.replace("_", " "), "Zorluk": d.get("complexity"), "Puan": pts_of(d),
-             "Yetenek": d.get("primary_skill_required"), "Ajan": resolve(p, d)[0]["Agent ID"], "Durum": state.status[p]}
+            {"Görev": p.replace("_", " "),
+             "Zorluk": (d.get("complexity", "Medium") if isinstance(d, dict) else "Medium"),
+             "Puan": pts_of(d),
+             "Yetenek": (d.get("primary_skill_required", "Reasoning") if isinstance(d, dict) else "Reasoning"),
+             "Ajan": resolve(p, d)[0]["Agent ID"],
+             "Durum": state.status.get(p, "Beklemede")}
             for p, d in tasks.items()
         ])
         st.dataframe(df, use_container_width=True, hide_index=True)

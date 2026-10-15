@@ -10,7 +10,7 @@ from src.agents.base_agent import BaseAgent, AgentCapabilityProfile
 class TestingAgent(BaseAgent):
     """Specialized Agent for Quality Assurance & Automated Testing."""
 
-    def __init__(self, agent_id: str = None, name: str = "Automated Testing Agent", model_name: str = "llama-3-70b"):
+    def __init__(self, agent_id: str = None, name: str = "Automated Testing Agent", model_name: str = "deepseek-coder:6.7b"):
         profile = AgentCapabilityProfile(
             coding_score=85.0,
             reasoning_score=90.0,
