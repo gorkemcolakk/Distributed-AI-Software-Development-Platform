@@ -2,32 +2,34 @@ import os
 import json
 import time
 import html
+import urllib.request
+import re
 import streamlit as st
-import google.generativeai as genai
 import pandas as pd
 import streamlit.components.v1 as components
 
 # ==========================================
-# 1. API CONFIGURATION (anahtar koda gömülmez)
+# 1. LOCAL OLLAMA CONFIGURATION (Yerel & Özel)
 # ==========================================
-def load_api_key():
-    key = os.getenv("GEMINI_API_KEY", "")
-    if key and key != "api.key":
-        return key
-    try:
-        s_key = st.secrets.get("api.key", "")
-        if s_key and s_key != "api.key":
-            return s_key
-    except Exception:
-        pass
-    return ""
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
 
-API_KEY = load_api_key()
-if API_KEY:
-    try:
-        genai.configure(api_key=API_KEY)
-    except Exception:
-        API_KEY = ""
+def call_local_ollama(prompt: str, model: str = OLLAMA_MODEL, host: str = OLLAMA_HOST, timeout: int = 45) -> str:
+    """Yerel Ollama sunucusuna HTTP isteği gönderir ve yanıtı döndürür."""
+    body = json.dumps({
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+        "options": {"temperature": 0.1, "seed": 42}
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"{host}/api/generate",
+        data=body,
+        headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    return data.get("response", "")
 
 # ==========================================
 # 2. AGENTS DATABASE (her ajanın kendi rengi var)
@@ -194,15 +196,22 @@ def decompose_task(user_requirement):
     Return ONLY valid JSON.
     """
     try:
-        if not API_KEY:
-            st.toast("API anahtarı bulunamadı. Demo modu devrede.", icon="🛡️")
-            return get_fallback_json(user_requirement), True
-        model = genai.GenerativeModel('gemini-flash-latest')
-        response = model.generate_content(f"{system_prompt}\n\nUser Requirement:\n{user_requirement}")
-        text = response.text.strip().removeprefix("```json").removeprefix("```").removesuffix("```")
-        return text.strip(), False
+        prompt = f"{system_prompt}\n\nUser Requirement:\n{user_requirement}\n\nReturn JSON output now:"
+        raw_response = call_local_ollama(prompt, model=OLLAMA_MODEL)
+        
+        # JSON bloğunu temizle ve ayıkla
+        match = re.search(r"\{.*\}", raw_response, re.DOTALL)
+        if match:
+            text = match.group(0).strip()
+        else:
+            text = raw_response.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+            
+        # JSON geçerliliğini doğrula
+        json.loads(text)
+        st.toast("Yerel Qwen 2.5 (3B) modeli görevi başarıyla ayrıştırdı! 🚀", icon="🧠")
+        return text, False
     except Exception:
-        st.toast("Çevrimdışı / Yerel Master Agent modu devrede.", icon="🛡️")
+        st.toast("Yerel Ollama çevrimdışı. Güvenli yedek demo modu devrede.", icon="🛡️")
         return get_fallback_json(user_requirement), True
 
 def network_html(load=None):
