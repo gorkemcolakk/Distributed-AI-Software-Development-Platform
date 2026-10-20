@@ -3,22 +3,43 @@ Master Agent Orchestrator.
 Main entrypoint connecting decomposition, capability evaluation, task scheduling, and agent execution.
 """
 
+import logging
+import sqlite3
 from typing import Dict, Any, List, Optional
 from src.master.analyzer import RequirementsAnalyzer
 from src.master.capability_eval import CapabilityEvaluator
 from src.master.scheduler import TaskScheduler
 from src.agents.base_agent import BaseAgent, TaskCategory, TaskResult, AgentStatus
-from src.master.db_manager import init_db
+from src.master import db_manager
+
+logger = logging.getLogger(__name__)
+
 
 class MasterOrchestrator:
     """Master Agent Orchestrator managing distributed multi-agent software development lifecycle."""
 
-    def __init__(self, evaluator: Optional[CapabilityEvaluator] = None):
-        init_db()
+    def __init__(self, evaluator: Optional[CapabilityEvaluator] = None,
+                 db_path: Optional[str] = None, persist: bool = True):
+        self.persist = persist
+        self.db_path = db_manager.init_db(db_path, verbose=False) if persist else None
         self.analyzer = RequirementsAnalyzer()
         self.evaluator = evaluator or CapabilityEvaluator()
         self.scheduler = TaskScheduler()
         self.execution_history: List[TaskResult] = []
+
+    def _db(self, fn, *args, **kwargs):
+        """Runs a persistence call; SQLite I/O errors are logged, never crash the run.
+        ValueError (e.g. wrongly COMPLETED record) is intentionally propagated."""
+        if not self.persist:
+            return None
+        try:
+            return fn(*args, db_path=self.db_path, **kwargs)
+        except sqlite3.Error as exc:
+            logger.warning("SQLite persistence failed in %s: %s", fn.__name__, exc)
+            return None
+
+    def _agent_ids(self) -> Dict[str, str]:
+        return {a.name: a.agent_id for a in self.evaluator.registered_agents}
 
     def _reset_error_agents(self):
         """Resets agents in ERROR status back to IDLE before a new run begins."""
@@ -45,6 +66,11 @@ class MasterOrchestrator:
         task_map = {t["task_id"]: t for t in tasks}
         assignments = []
         assignment_by_id = {}
+        agent_ids = self._agent_ids()
+
+        self._db(db_manager.upsert_agents, self.evaluator.registered_agents)
+        self._db(db_manager.create_run, run_id, project_title,
+                 requirement_id=decomposition["requirement_id"], total_tasks=len(tasks))
 
         while not self.scheduler.is_all_finished(tasks):
             executable_tasks = self.scheduler.get_executable_tasks(tasks)
@@ -78,10 +104,12 @@ class MasterOrchestrator:
                     }
                     assignments.append(record)
                     assignment_by_id[task_id] = record
+                    self._db(db_manager.save_task_result, run_id, task, record, agent_ids=agent_ids)
                     continue
 
                 # Candidate failover execution
                 attempted_agents = []
+                attempt_log = []
                 task_succeeded = False
                 last_result = None
                 last_agent = None
@@ -94,6 +122,13 @@ class MasterOrchestrator:
                     result = agent.execute_task(task)
                     self.execution_history.append(result)
                     last_result = result
+                    attempt_log.append({
+                        "agent_id": agent.agent_id,
+                        "agent_name": agent.name,
+                        "is_successful": result.status == "SUCCESS",
+                        "error_message": result.error_message,
+                        "execution_time_seconds": result.execution_time_seconds,
+                    })
 
                     if result.status == "SUCCESS":
                         task_succeeded = True
@@ -132,6 +167,9 @@ class MasterOrchestrator:
                     }
                     assignments.append(record)
                     assignment_by_id[task_id] = record
+
+                self._db(db_manager.save_task_result, run_id, task, record,
+                         attempts=attempt_log, agent_ids=agent_ids)
 
         # Deadlock protection for remaining unfinished tasks
         processed = self.scheduler.get_processed_tasks()
@@ -174,6 +212,7 @@ class MasterOrchestrator:
             }
             assignments.append(record)
             assignment_by_id[task_id] = record
+            self._db(db_manager.save_task_result, run_id, task, record, agent_ids=agent_ids)
 
         # Calculate system status
         completed_count = len(self.scheduler.completed_tasks)
@@ -188,6 +227,15 @@ class MasterOrchestrator:
             system_status = "FAILED"
         else:
             system_status = "PARTIALLY_COMPLETED"
+
+        status_counts = {
+            "COMPLETED": completed_count,
+            "FAILED": failed_count,
+            "UNASSIGNED": unassigned_count,
+            "BLOCKED": blocked_count
+        }
+        self._db(db_manager.upsert_agents, self.evaluator.registered_agents)
+        self._db(db_manager.finish_run, run_id, system_status, status_counts)
 
         return {
             "run_id": run_id,
