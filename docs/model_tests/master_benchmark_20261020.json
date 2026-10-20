@@ -1,0 +1,155 @@
+{
+  "timestamp": "2026-10-20T19:21:02.228284+00:00",
+  "ollama_host": "http://localhost:11434",
+  "runs_per_model": 3,
+  "requirement_doc": "docs/model_tests/sample_requirement.md",
+  "requirement_word_count": 431,
+  "options": {
+    "temperature": 0.1,
+    "seed": 42
+  },
+  "models": {
+    "qwen2.5:3b": [
+      {
+        "model": "qwen2.5:3b",
+        "wall_clock_seconds": 21.277,
+        "eval_count": 246,
+        "eval_duration_seconds": 4.418,
+        "tokens_per_second": 55.68,
+        "prompt_eval_count": 1486,
+        "prompt_eval_duration_seconds": 8.076,
+        "json_valid": true,
+        "raw_json_valid": true,
+        "task_count": 5,
+        "schema_compliant": true,
+        "dependencies_valid": true,
+        "has_cycle": false,
+        "tasks": [
+          "Requirements_Analysis",
+          "Frontend_Development",
+          "Backend_Development",
+          "Database_Design",
+          "Quality_Assurance_and_Testing"
+        ],
+        "raw_response_snippet": "{\n      \"Requirements_Analysis\": {\n        \"description\": \"Detailed explanation of requirements and architecture.\",\n        \"complexity\": \"Medium\",\n        \"primary_skill_required\": \"Reasoning\",\n        \"story_points\": 3\n      },\n      \"Frontend_Development\": {\n        \"description\": \"Detailed expla"
+      },
+      {
+        "model": "qwen2.5:3b",
+        "wall_clock_seconds": 6.648,
+        "eval_count": 246,
+        "eval_duration_seconds": 4.557,
+        "tokens_per_second": 53.98,
+        "prompt_eval_count": 1486,
+        "prompt_eval_duration_seconds": 0.052,
+        "json_valid": true,
+        "raw_json_valid": true,
+        "task_count": 5,
+        "schema_compliant": true,
+        "dependencies_valid": true,
+        "has_cycle": false,
+        "tasks": [
+          "Requirements_Analysis",
+          "Frontend_Development",
+          "Backend_Development",
+          "Database_Design",
+          "Quality_Assurance_and_Testing"
+        ],
+        "raw_response_snippet": "{\n      \"Requirements_Analysis\": {\n        \"description\": \"Detailed explanation of requirements and architecture.\",\n        \"complexity\": \"Medium\",\n        \"primary_skill_required\": \"Reasoning\",\n        \"story_points\": 3\n      },\n      \"Frontend_Development\": {\n        \"description\": \"Detailed expla"
+      },
+      {
+        "model": "qwen2.5:3b",
+        "wall_clock_seconds": 6.645,
+        "eval_count": 246,
+        "eval_duration_seconds": 4.553,
+        "tokens_per_second": 54.03,
+        "prompt_eval_count": 1486,
+        "prompt_eval_duration_seconds": 0.056,
+        "json_valid": true,
+        "raw_json_valid": true,
+        "task_count": 5,
+        "schema_compliant": true,
+        "dependencies_valid": true,
+        "has_cycle": false,
+        "tasks": [
+          "Requirements_Analysis",
+          "Frontend_Development",
+          "Backend_Development",
+          "Database_Design",
+          "Quality_Assurance_and_Testing"
+        ],
+        "raw_response_snippet": "{\n      \"Requirements_Analysis\": {\n        \"description\": \"Detailed explanation of requirements and architecture.\",\n        \"complexity\": \"Medium\",\n        \"primary_skill_required\": \"Reasoning\",\n        \"story_points\": 3\n      },\n      \"Frontend_Development\": {\n        \"description\": \"Detailed expla"
+      }
+    ],
+    "qwen2.5:7b": [
+      {
+        "model": "qwen2.5:7b",
+        "wall_clock_seconds": 75.6,
+        "eval_count": 296,
+        "eval_duration_seconds": 41.161,
+        "tokens_per_second": 7.19,
+        "prompt_eval_count": 1486,
+        "prompt_eval_duration_seconds": 19.269,
+        "json_valid": true,
+        "raw_json_valid": true,
+        "task_count": 5,
+        "schema_compliant": true,
+        "dependencies_valid": true,
+        "has_cycle": false,
+        "tasks": [
+          "Requirements_Analysis",
+          "Frontend_Development",
+          "Backend_Development",
+          "Database_Design",
+          "Quality_Assurance_and_Testing"
+        ],
+        "raw_response_snippet": "{\n      \"Requirements_Analysis\": {\n        \"description\": \"Detailed analysis of user roles, permissions, and functional requirements, including system architecture and security considerations.\",\n        \"complexity\": \"Medium\",\n        \"primary_skill_required\": \"Reasoning\",\n        \"story_points\": 3"
+      },
+      {
+        "model": "qwen2.5:7b",
+        "wall_clock_seconds": 44.707,
+        "eval_count": 304,
+        "eval_duration_seconds": 42.37,
+        "tokens_per_second": 7.17,
+        "prompt_eval_count": 1486,
+        "prompt_eval_duration_seconds": 0.245,
+        "json_valid": true,
+        "raw_json_valid": true,
+        "task_count": 5,
+        "schema_compliant": true,
+        "dependencies_valid": true,
+        "has_cycle": false,
+        "tasks": [
+          "Requirements_Analysis",
+          "Frontend_Development",
+          "Backend_Development",
+          "Database_Design",
+          "Quality_Assurance_and_Testing"
+        ],
+        "raw_response_snippet": "{\n      \"Requirements_Analysis\": {\n        \"description\": \"Detailed analysis of user roles, permissions, and functional requirements, including system architecture and security considerations.\",\n        \"complexity\": \"Medium\",\n        \"primary_skill_required\": \"Reasoning\",\n        \"story_points\": 3"
+      },
+      {
+        "model": "qwen2.5:7b",
+        "wall_clock_seconds": 44.332,
+        "eval_count": 304,
+        "eval_duration_seconds": 42.06,
+        "tokens_per_second": 7.23,
+        "prompt_eval_count": 1486,
+        "prompt_eval_duration_seconds": 0.204,
+        "json_valid": true,
+        "raw_json_valid": true,
+        "task_count": 5,
+        "schema_compliant": true,
+        "dependencies_valid": true,
+        "has_cycle": false,
+        "tasks": [
+          "Requirements_Analysis",
+          "Frontend_Development",
+          "Backend_Development",
+          "Database_Design",
+          "Quality_Assurance_and_Testing"
+        ],
+        "raw_response_snippet": "{\n      \"Requirements_Analysis\": {\n        \"description\": \"Detailed analysis of user roles, permissions, and functional requirements, including system architecture and security considerations.\",\n        \"complexity\": \"Medium\",\n        \"primary_skill_required\": \"Reasoning\",\n        \"story_points\": 3"
+      }
+    ]
+  }
+}

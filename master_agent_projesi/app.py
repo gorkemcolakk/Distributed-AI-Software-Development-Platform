@@ -8,13 +8,21 @@ import streamlit as st
 import pandas as pd
 import streamlit.components.v1 as components
 
+try:
+    from dotenv import load_dotenv
+    _env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+    load_dotenv(dotenv_path=_env_path)
+except ImportError:
+    pass
+
 # ==========================================
 # 1. LOCAL OLLAMA CONFIGURATION (Yerel & Özel)
 # ==========================================
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "180"))
 
-def call_local_ollama(prompt: str, model: str = OLLAMA_MODEL, host: str = OLLAMA_HOST, timeout: int = 45) -> str:
+def call_local_ollama(prompt: str, model: str = OLLAMA_MODEL, host: str = OLLAMA_HOST, timeout: int = OLLAMA_TIMEOUT) -> str:
     """Yerel Ollama sunucusuna HTTP isteği gönderir ve yanıtı döndürür."""
     body = json.dumps({
         "model": model,
