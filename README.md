@@ -30,7 +30,7 @@ A web-based platform where a **Master Agent** receives long software requirement
 
 | Student No. | Member Name | Scrum Role | Agent & Model | Primary Focus Area |
 | :--- | :--- | :--- | :--- | :--- |
-| **2204012296** | **Eren Görkem Çolak** | Developer · Technical Lead | Master Agent · Qwen 2.5 3B | Architecture, Routing & Engine Setup |
+| **2204012296** | **Eren Görkem Çolak** | Developer · Technical Lead | Master Agent · Qwen 2.5 7B | Architecture, Routing & Engine Setup |
 | **2204012297** | **Elif Yılmaz** | Product Owner · Developer | Integration Agent · Phi-4 Mini 3.8B | Code Review, Integration & Product Backlog |
 | **2204012300** | **Mahmut Karaalioğlu** | Developer | Database Agent · Llama 3.2 3B | Database, Schema & Migration Design |
 | **2204012301** | **İrem Yılmaz** | Scrum Master · Developer | Backend Agent · Qwen2.5-Coder 7B | Backend APIs, Business Logic & Scrum Facilitation |

@@ -270,10 +270,12 @@ All agents operate locally on developer machines using standard Ollama server in
 
 | # | Agent Class / Role | Owner | Canonical Ollama Tag | Model Family | Context Window | Primary Focus |
 |---|---|---|---|---|---|---|
-| **1** | **Master Agent** | Eren Görkem Çolak | `qwen2.5:3b` | Qwen 2.5 | 32K | System decomposition, DAG routing, FitScore evaluation |
+| **1** | **Master Agent** | Eren Görkem Çolak | `qwen2.5:7b` | Qwen 2.5 | 32K | System decomposition, DAG routing, FitScore evaluation |
 | **2** | **IntegrationAgent** | Elif Yılmaz | `phi4-mini:3.8b` | Phi-4 | 128K | Code review, artifact inspection, integration packaging |
 | **3** | **FrontendAgent** | Kübra Hepcan | `qwen2.5-coder:3b` | Qwen2.5-Coder | 32K | React / Vanilla UI components, CSS design tokens |
 | **4** | **BackendAgent** | İrem Yılmaz | `qwen2.5-coder:7b` | Qwen2.5-Coder | 32K | FastAPI REST endpoints, business logic, ORM integration |
 | **5** | **DatabaseAgent** | Mahmut Karaalioğlu | `llama3.2:3b` | Llama 3.2 | 128K | Relational schemas, DDL definitions, database migrations |
 | **6** | **TestingAgent** | Berat İnan | `deepseek-coder:6.7b` | DeepSeek-Coder | 16K | Pytest suites, assertions, automated test verification |
+
+*20 Ekim 2026: master modeli qwen2.5:3b'den qwen2.5:7b'ye geçirildi, puanlar henüz ölçülmedi.*
 

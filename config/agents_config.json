@@ -20,18 +20,19 @@
       "name": "Master Agent",
       "member": "Eren Görkem Çolak",
       "role": "Master Orchestrator & Technical Lead",
-      "model": "qwen2.5:3b",
+      "model": "qwen2.5:7b",
       "vendor": "Alibaba",
       "license": "Apache-2.0",
       "cost": "free (local Ollama)",
       "deployment": {
         "default": "local",
-        "ollama_tag": "qwen2.5:3b",
+        "ollama_tag": "qwen2.5:7b",
         "hardware": "GTX 1650 4GB VRAM / 16GB RAM"
       },
       "context_tokens": 32768,
       "capabilities": { "coding": 85.0, "reasoning": 92.0, "context_capacity": 85.0 },
-      "capability_provenance": { "coding": "measured", "reasoning": "measured", "context_capacity": "measured" },
+      "capability_provenance": { "coding": "estimated", "reasoning": "estimated", "context_capacity": "estimated" },
+      "notes": "3b ölçümü: coding: 85.0, reasoning: 92.0, context_capacity: 85.0 (2026-10-15 duman testi). 7b puanları henüz ölçülmedi.",
       "specialties": ["requirements_decomposition", "architecture", "orchestration", "agent_routing"],
       "max_concurrent_tasks": 1,
       "status": "active"
