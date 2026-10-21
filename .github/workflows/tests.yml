@@ -1,0 +1,31 @@
+name: Tests
+
+# Her PR'da ve main'e her push'ta birim testleri calistirir.
+# Amac: specialties silinmesi, eksik bagimlilik, bozuk import gibi
+# gecmiste merge sonrasi fark edilen hatalari merge oncesinde yakalamak.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: python -m unittest discover tests -v
