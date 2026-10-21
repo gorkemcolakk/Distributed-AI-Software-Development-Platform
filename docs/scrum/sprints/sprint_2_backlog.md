@@ -12,15 +12,15 @@ Standardize API key and fallback configuration, unify the Streamlit UI and core 
 
 ## 2. Selected Product Backlog Items & Action Plan (What & How)
 
-| Card ID | Task Title | Primary Assignee | Collaboration & Support | Priority | Story Points | Est. Hours | Dependencies | Status |
+| Card ID | Task Title | Primary Assignee | Priority | Story Points | Est. Hours | Dependencies | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **S2-01** | Fix API Key Configuration & Remove Credential-Like Constants (`app.py`, `.env.example`) | İrem Yılmaz | Eren Görkem Çolak | Highest | 3 | 4h | S1-06 | Done |
-| **S2-02** | Unify Streamlit UI and Core Engine Under a Single Agent Registry (`agents_config.json`) | Kübra Hepcan | Eren Görkem Çolak, Mahmut Karaalioğlu | Highest | 5 | 10h | S1-06, S2-01 | In Progress |
-| **S2-03** | Use Weighted Task-Fitness Scoring & Filter Out Unavailable Agents (`capability_eval.py`) | Eren Görkem Çolak | Berat İnan (Test Cases) | High | 3 | 6h | S2-02, S1-06 | In Progress |
-| **S2-04** | Validate Task Decomposition Output & Make Fallback Behavior Reliable (`analyzer.py`, `app.py`) | Mahmut Karaalioğlu | Elif Yılmaz (PO), Berat İnan | High | 3 | 6h | S2-01, S2-02, S1-05 | To Do |
-| **S2-05** | Fix Scheduler Lifecycle (`run_id`) & Accurately Report Failed/Unassigned Tasks (`scheduler.py`, `orchestrator.py`) | Eren Görkem Çolak | İrem Yılmaz, Berat İnan | Highest | 3 | 8h | S2-03, S2-04 | To Do |
-| **S2-06** | Bind Visible UI Task Assignments & Statuses to Real Engine Results (`app.py`) | Kübra Hepcan | Eren Görkem Çolak, Elif Yılmaz (PO) | High | 3 | 6h | S2-02, S2-03, S2-05 | To Do |
-| **S2-07** | Integrate SQLite Persistence Layer (`db_manager.py`) with Unified Agent Registry & Run Lifecycle | İrem Yılmaz | Mahmut Karaalioğlu, Elif Yılmaz (PO) | High | 2 | 4h | S1-04, S2-02, S2-05 | To Do |
+| **S2-01** | Fix API Key Configuration & Remove Credential-Like Constants (`app.py`, `.env.example`) | İrem Yılmaz | Highest | 3 | 4h | S1-06 | Done |
+| **S2-02** | Unify Streamlit UI and Core Engine Under a Single Agent Registry (`agents_config.json`) | Kübra Hepcan | Highest | 5 | 10h | S1-06, S2-01 | In Progress |
+| **S2-03** | Use Weighted Task-Fitness Scoring & Filter Out Unavailable Agents (`capability_eval.py`) | Eren Görkem Çolak | High | 3 | 6h | S2-02, S1-06 | In Progress |
+| **S2-04** | Validate Task Decomposition Output & Make Fallback Behavior Reliable (`analyzer.py`, `app.py`) | Mahmut Karaalioğlu | High | 3 | 6h | S2-01, S2-02, S1-05 | To Do |
+| **S2-05** | Fix Scheduler Lifecycle (`run_id`) & Accurately Report Failed/Unassigned Tasks (`scheduler.py`, `orchestrator.py`) | Eren Görkem Çolak | Highest | 3 | 8h | S2-03, S2-04 | To Do |
+| **S2-06** | Bind Visible UI Task Assignments & Statuses to Real Engine Results (`app.py`) | Kübra Hepcan | High | 3 | 6h | S2-02, S2-03, S2-05 | To Do |
+| **S2-07** | Integrate SQLite Persistence Layer (`db_manager.py`) with Unified Agent Registry & Run Lifecycle | İrem Yılmaz | High | 2 | 4h | S1-04, S2-02, S2-05 | To Do |
 
 **Total Sprint 2 Capacity:** 22 Story Points (44 Estimated Hours)
 

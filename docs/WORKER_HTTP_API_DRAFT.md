@@ -3,7 +3,7 @@
 
 **Hazırlayan:** İrem Yılmaz (Backend Agent — `qwen2.5-coder:7b` / Scrum Master)  
 **İlgili Belgeler & Referanslar:** 
-- Elif Yılmaz (Product Owner) — [`docs/SRS.md`](file:///c:/Users/admin/OneDrive/Desktop/Distributed-AI-Software-Development-Platform/docs/SRS.md) (*REQ-8 Dağıtık Ağ İletişimi, REQ-9 Zaman Aşımı ve Hata Kurtarma, NFR-2 Düğüm Hata İzolasyonu*)
+- Kübra Hepcan — [`docs/SRS.md`](file:///c:/Users/admin/OneDrive/Desktop/Distributed-AI-Software-Development-Platform/docs/SRS.md) (*REQ-8 Dağıtık Ağ İletişimi, REQ-9 Zaman Aşımı ve Hata Kurtarma, NFR-2 Düğüm Hata İzolasyonu*)
 - Sistem Mimarisi — [`docs/ARCHITECTURE.md`](file:///c:/Users/admin/OneDrive/Desktop/Distributed-AI-Software-Development-Platform/docs/ARCHITECTURE.md) (*Bölüm 3: Communication Protocol*)
 - Temel Veri Modelleri — [`src/agents/base_agent.py`](file:///c:/Users/admin/OneDrive/Desktop/Distributed-AI-Software-Development-Platform/src/agents/base_agent.py) (*BaseAgent, AgentStatus, TaskCategory, TaskResult*)
 - Sprint Kartı: **S2-01** / **S2-07** / Hazırlık: **Sprint 3 (REQ-8 & REQ-3.2)**
@@ -13,7 +13,7 @@
 ## 1. Genel Bakış ve Amaç
 Bu doküman, dağıtık makinelerde veya farklı çalışma ortamlarında yerel Ollama modelleriyle çalışan bağımsız Worker Ajanların (`FrontendAgent`, `DatabaseAgent`, `TestingAgent`, `IntegrationAgent`), İrem Yılmaz sorumluluğundaki **Merkezi Backend API Servisi (Master/Backend Node)** ile HTTP REST üzerinden nasıl haberleşeceğini, hangi adrese bağlanacağını, hangi JSON verilerini gönderip ne yanıt alacağını standartlaştırmak üzere hazırlanmıştır.
 
-Elif'in SRS dokümanındaki **NFR-2 (Node Fault Isolation)** ilkesi uyarınca, herhangi bir worker ajan makinesinin çökmesi, ağının kopması veya zaman aşımına uğraması merkezi orkestratörü ve Streamlit arayüzünü kilitlemeyecek; tüm iletişim durum kodları ve zaman aşımı mekanizmalarıyla izole edilecektir.
+Kübra'nın SRS dokümanındaki **NFR-2 (Node Fault Isolation)** ilkesi uyarınca, herhangi bir worker ajan makinesinin çökmesi, ağının kopması veya zaman aşımına uğraması merkezi orkestratörü ve Streamlit arayüzünü kilitlemeyecek; tüm iletişim durum kodları ve zaman aşımı mekanizmalarıyla izole edilecektir.
 
 ---
 

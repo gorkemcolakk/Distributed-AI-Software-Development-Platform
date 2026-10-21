@@ -62,5 +62,4 @@ python -m src.master.orchestrator "Örnek gereksinim"
 
 ---
 
-**Raporu Düzenleyen:** İrem Yılmaz (Scrum Master)  
-**Onaylayan:** Elif Yılmaz (Product Owner)
+**Raporu Düzenleyen:** İrem Yılmaz (Scrum Master)

@@ -72,4 +72,3 @@ SQLite veritabanı (state.db) başarıyla başlatıldı.
 
 **Raporu Hazırlayan:** İrem Yılmaz (Scrum Master & Backend Agent)  
 **Tarih:** 2026-10-20  
-**Gözden Geçiren:** Elif Yılmaz (Product Owner)
