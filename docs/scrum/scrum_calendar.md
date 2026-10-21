@@ -16,10 +16,10 @@ Within the Scrum Team, there are no sub-teams or hierarchies. In accordance with
 
 | Student ID | Full Name | Scrum Accountability | Assigned Local Ollama Model (`S1-06`) | Primary Technical Focus & Owned Trello Cards |
 | :--- | :--- | :--- | :--- | :--- |
-| **2204012301** | **İrem Yılmaz** | **Scrum Master & Developer** | `qwen2.5-coder:7b` (Backend Agent) | Scrum Facilitation, SQLite Data Layer (`db_manager.py`), API Config, Worker HTTP API & Retry Logic (**S1-04, S2-01, S2-07, S3-02, S4-01**) |
-| **2204012297** | **Elif Yılmaz** | **Product Owner & Developer** | `phi4-mini:3.8b` (Integration Agent) | Product Backlog Management, Web UI Prototype, Evidence-Based Integration Agent, Security Policy & Release Docs (**S1-02, S4-02, S4-04, S5-04**) |
-| **2204012296** | **Eren Görkem Çolak** | **Developer** (Tech Lead) | `qwen2.5:3b` (Master Agent) | Master Orchestrator, Analyzer, Weighted Selection, Run-Scoped Scheduler & Agent Contracts (**S1-01, S1-07, S2-03, S2-05, S3-01**) |
-| **2204012300** | **Mahmut Karaalioğlu** | **Developer** | `llama3.2:3b` (Database Agent) | System Architecture, JSON Schema Validation, Safe Workspace Artifact Writer & DAG Validation (**S1-03, S2-04, S3-03, S3-04**) |
+| **2204012301** | **İrem Yılmaz** | **Scrum Master & Developer** | `qwen2.5-coder:7b` (Backend Agent) | Scrum Facilitation, SQLite Data Layer (`db_manager.py`), API Config, Worker HTTP API & Retry Logic (**S1-04, S2-01, S3-02, S4-01**) |
+| **2204012297** | **Elif Yılmaz** | **Product Owner & Developer** | `phi4-mini:3.8b` (Integration Agent) | Product Backlog Management, Web UI Prototype, Agent Contracts & Schema Validation, Evidence-Based Integration Agent, Security Policy & Release Docs (**S1-02, S2-04, S4-02, S4-04, S5-04**) |
+| **2204012296** | **Eren Görkem Çolak** | **Developer** (Tech Lead) | `qwen2.5:7b` (Master Agent) | Master Orchestrator, Analyzer, Weighted Selection & Run-Scoped Scheduler (**S1-01, S1-07, S2-03, S2-05, S3-01**) |
+| **2204012300** | **Mahmut Karaalioğlu** | **Developer** | `llama3.2:3b` (Database Agent) | System Architecture, SQLite Persistence Layer (`db_manager.py`), Safe Workspace Artifact Writer & DAG Validation (**S1-03, S2-07, S3-03, S3-04**) |
 | **2204012302** | **Kübra Hepcan** | **Developer** | `qwen2.5-coder:3b` / `gemma2:2b` (Frontend Agent) | System Requirements (`SRS`), Streamlit UI Prototype, Unified Registry UI, Live Status & Telemetry Dashboard (**S1-02, S1-05, S2-02, S2-06, S5-01**) |
 | **2204012303** | **Berat İnan** | **Developer** | `deepseek-coder:6.7b` (Testing Agent) | Ollama Hardware Research, Unit/Integration Test Suite, CI Quality Gate, Model Benchmarking & E2E Demo (**S1-06, S4-03, S5-02, S5-03**) |
 

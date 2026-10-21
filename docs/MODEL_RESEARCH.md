@@ -167,7 +167,7 @@ reliable fix and it needs no prompt engineering.
 Consequences:
 - For the `TestingAgent` role (pytest suites, assertions, code generation) the model is usable: the
   coding task is the role-relevant one and it passes.
-- **Open action for S2-04 (`analyzer.py`, `app.py` — Mahmut).** Two defences, measured here, in
+- **Open action for S2-04 (`analyzer.py`, `app.py` — Elif).** Two defences, measured here, in
   order of preference:
   1. Send a JSON schema in Ollama's `format` parameter on every decomposition call (3/3 above, no
      latency cost). This prevents the drift instead of repairing it.
