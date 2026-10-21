@@ -138,6 +138,7 @@
       "context_tokens": 16384,
       "capabilities": { "coding": 88.0, "reasoning": 95.0, "context_capacity": 82.0 },
       "capability_provenance": { "coding": "estimated", "reasoning": "estimated", "context_capacity": "estimated" },
+      "specialties": ["testing", "pytest", "unit_testing", "integration_testing"],
       "notes": "Yerel duman testi 2026-10-21 (docs/model_tests/berat_deepseek-coder_6.7b_20261021.json): kodlama görevi 3/3 geçti (medyan 6.32 sn, ~12 tok/sn), JSON ayrıştırma görevi 0/3 (model son alt görevde 'depends_on' yerine 'dependson' yazıyor). Donanım: cpu_only, GPU yok, 15.7 GB RAM. Puanlar 0-100 ölçeğinde ölçülmediği için 'estimated' kaldı.",
       "max_concurrent_tasks": 1,
       "status": "registered"
