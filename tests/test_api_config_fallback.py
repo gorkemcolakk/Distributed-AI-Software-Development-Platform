@@ -64,7 +64,7 @@ class TestApiConfigAndFallback(unittest.TestCase):
 
         config = get_model_config()
         self.assertEqual(config["ollama_host"], "http://localhost:11434")
-        self.assertEqual(config["ollama_model"], "qwen2.5:3b")
+        self.assertEqual(config["ollama_model"], "qwen2.5:7b")
         self.assertGreater(config["timeout"], 0)
         self.assertTrue(config["fallback_enabled"])
 

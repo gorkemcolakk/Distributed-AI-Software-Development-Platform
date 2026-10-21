@@ -47,8 +47,8 @@ def get_model_config() -> dict:
     """
     return {
         "ollama_host": os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/"),
-        "ollama_model": os.getenv("OLLAMA_MODEL", "qwen2.5:3b"),
-        "timeout": int(os.getenv("OLLAMA_TIMEOUT", "45")),
+        "ollama_model": os.getenv("OLLAMA_MODEL", "qwen2.5:7b"),
+        "timeout": int(os.getenv("OLLAMA_TIMEOUT", "180")),
         "api_key": load_api_key("GEMINI_API_KEY"),
         "fallback_enabled": os.getenv("FALLBACK_ENABLED", "true").lower() in ("true", "1", "yes"),
     }
@@ -460,8 +460,8 @@ def decompose_task(user_requirement):
             
         # JSON geçerliliğini doğrula
         json.loads(text)
-        st.toast("Yerel Qwen 2.5 (3B) modeli görevi başarıyla ayrıştırdı! 🚀", icon="🧠")
-        return text, False, "Yerel Ollama (Qwen 2.5:3b)"
+        st.toast("Yerel Qwen 2.5 (7B) modeli görevi başarıyla ayrıştırdı! 🚀", icon="🧠")
+        return text, False, "Yerel Ollama (Qwen 2.5:7b)"
     except ModelServiceError as err:
         if err.error_type == "QUOTA_EXCEEDED":
             st.warning("⚠️ **Kota Uyarısı (429):** API / Model kullanım kotası aşıldı. Kesinti yaşanmaması için sistem etiketlenmiş güvenli yedek (fallback) moduna geçti.")
@@ -597,7 +597,7 @@ def network_html(load=None):
     out.append('<circle cx="400" cy="42" r="30" fill="#121828" stroke="#818CF8" stroke-width="2.5"/>'
                '<circle cx="400" cy="42" r="30" fill="none" stroke="#818CF8" class="ring"/>'
                '<text x="400" y="47" text-anchor="middle" fill="#818CF8" font-size="13" font-weight="800">MASTER</text>'
-               '<text x="400" y="86" text-anchor="middle" fill="#E5E7EB" font-size="13" font-weight="600">Qwen 2.5 (3B)</text>'
+               '<text x="400" y="86" text-anchor="middle" fill="#E5E7EB" font-size="13" font-weight="600">Qwen 2.5 (7B)</text>'
                '<text x="400" y="102" text-anchor="middle" fill="#9CA3AF" font-size="11">Master Agent / Nexus Core</text>')
     style = ("<style>body{margin:0;background:transparent;font-family:Inter,'Segoe UI',sans-serif}"
              ".flow{animation:dash 1.1s linear infinite}@keyframes dash{to{stroke-dashoffset:-12}}"
@@ -676,7 +676,7 @@ def task_card(phase, details, idx, agent, skill, score, best, status, fresh):
     )
 
 def build_log(req, tasks, demo, mode_label=""):
-    mode_str = mode_label or ("Güvenli Yedek (Demo)" if demo else "Yerel Qwen 2.5 (3B)")
+    mode_str = mode_label or ("Güvenli Yedek (Demo)" if demo else "Yerel Qwen 2.5 (7B)")
     lines = [
         ("MASTER", f"Gereksinim alındı ({len(req)} karakter)"),
         ("CONFIG", f"Model pipeline kipi: {mode_str}"),
@@ -732,7 +732,7 @@ with st.sidebar:
     st.markdown("### Master Agent")
     st.markdown(
         f'<div class="agent-card" style="--c:#818CF8;">'
-        f'<div class="agent-name"><span class="dot" style="--c:#818CF8"></span>Master Agent (Qwen 2.5 3B)</div>'
+        f'<div class="agent-name"><span class="dot" style="--c:#818CF8"></span>Master Agent (Qwen 2.5 7B)</div>'
         f'<div class="agent-spec">Orkestrasyon & Mimar · <span style="color:#9CA3AF">Üye: Eren Görkem Çolak</span></div>'
         + skill_bar("Coding", 85)
         + skill_bar("Reasoning", 92)
