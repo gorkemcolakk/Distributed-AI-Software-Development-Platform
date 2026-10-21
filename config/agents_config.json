@@ -154,8 +154,8 @@
   "runtime_config": {
     "engine": "local_ollama",
     "ollama_host": "http://localhost:11434",
-    "default_model": "qwen2.5:3b",
-    "timeout_seconds": 45,
+    "default_model": "qwen2.5:7b",
+    "timeout_seconds": 180,
     "fallback_enabled": true,
     "api_key_env_var": "GEMINI_API_KEY",
     "backend_api_host": "http://localhost:8000",
