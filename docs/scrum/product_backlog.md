@@ -25,7 +25,7 @@ Deliver a web-based distributed multi-agent software development platform where 
 ### Phase 2: Agent Management, Registry Unification & Task Assignment (Sprint 2)
 | PBI ID | Trello Card | Title & Description | Acceptance Criteria Summary | Priority | Size (SP) | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **PBI-08** | **S2-01** | **API Key Standardization & Safe Fallback:** Remove duplicate `load_api_key()` and enforce safe demo mode without leaking keys. | Single config path; no hardcoded keys; graceful handling of missing keys or 429 errors. | Highest | 3 | In Progress |
+| **PBI-08** | **S2-01** | **API Key Standardization & Safe Fallback:** Remove duplicate `load_api_key()` and enforce safe demo mode without leaking keys. | Single config path; no hardcoded keys; graceful handling of missing keys or 429 errors. | Highest | 3 | Done |
 | **PBI-09** | **S2-02** | **Unified Canonical Agent Registry:** Connect Streamlit UI and Core Engine to the same `config/agents_config.json` schema. | UI hardcoded `agents_data` removed; UI and engine list identical agent IDs and Ollama tags. | Highest | 5 | In Progress |
 | **PBI-10** | **S2-03** | **Weighted Fitness Scoring & Availability Filtering:** Use `TaskCategory` weights and exclude `BUSY`/`OFFLINE`/`ERROR` agents. | Deterministic fit score; unavailable agents excluded; tie-breaker and specialty bonus tested. | High | 3 | In Progress |
 | **PBI-11** | **S2-04** | **Task Decomposition Schema Validation:** Validate LLM JSON output against task schema and label fallback data. | Empty input, malformed JSON, unknown categories, and long documents handled predictably. | High | 3 | Sprint Backlog |

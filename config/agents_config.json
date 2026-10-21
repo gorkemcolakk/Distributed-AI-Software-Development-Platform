@@ -150,5 +150,16 @@
       { "id": "claude-3-5-sonnet", "vendor": "Anthropic", "context_tokens": 200000 },
       { "id": "gpt-4o", "vendor": "OpenAI", "context_tokens": 128000 }
     ]
+  },
+  "runtime_config": {
+    "engine": "local_ollama",
+    "ollama_host": "http://localhost:11434",
+    "default_model": "qwen2.5:3b",
+    "timeout_seconds": 45,
+    "fallback_enabled": true,
+    "api_key_env_var": "GEMINI_API_KEY",
+    "backend_api_host": "http://localhost:8000",
+    "backend_api_port": 8000,
+    "fallback_policy": "When Ollama is unreachable, timeouts occur, or rate limit 429 is encountered, system transitions to labeled fallback mode without crashing."
   }
 }
