@@ -141,10 +141,47 @@ the project is ever used commercially.
 | İrem | `qwen2.5-coder:7b` | | | | | not checked | | | | |
 | Kübra | `qwen2.5-coder:3b` | | | | | not checked | | | | |
 | Kübra | `gemma2:2b` | | | | | not checked | | | | |
-| Berat | `deepseek-coder:6.7b` | | | | | not checked | | | | |
+| Berat | `deepseek-coder:6.7b` | Windows 11 | 15.7 GB | none usable (no NVIDIA GPU detected) | 0.40.7 | test failed (JSON) / test passed (coding) | 0/3 | 3/3 | 32.86 s / 6.32 s | [berat_deepseek-coder_6.7b_20261021.json](model_tests/berat_deepseek-coder_6.7b_20261021.json) |
 
 Fill each row from the `machine` and `summary` fields of that member's result file, and link the
 file in "Test evidence". Scores taken from these runs are labeled `measured` (section 2).
+
+**Berat / `deepseek-coder:6.7b` finding (2026-10-21).** The coding task passes 3/3 (median 6.32 s,
+~12 tok/s, CPU only). The JSON task fails 3/3 with `subtask missing required keys`: the model
+produces valid JSON and correct categories, but in the last subtask it writes the key as
+`dependson` instead of `depends_on`. The drift is reproducible at `temperature=0, seed=42`, so it
+is a model behaviour, not a flaky run.
+
+**Prompt is not the cause (measured 2026-10-21).** The fixed prompt was re-run 3× against a variant
+that adds an explicit instruction: *"Every subtask object must use exactly these four keys, spelled
+with underscores: id, title, category, depends_on. Do not abbreviate or rename any key."* Result:
+0/3 either way, `dependson` still present in all six responses. Spelling the requirement out does
+not fix the drift, so there is no prompt-level workaround.
+
+**Structured output does fix it (measured 2026-10-21).** Passing a JSON schema in Ollama's `format`
+parameter (`/api/generate`, Ollama 0.40.7) with `required: [id, title, category, depends_on]`
+constrains decoding to the schema. Result: **3/3 passed, "7 valid subtasks", `dependson` gone**,
+median 33.46 s — i.e. no latency cost versus the 32.86 s unconstrained run. This is the cheapest
+reliable fix and it needs no prompt engineering.
+
+Consequences:
+- For the `TestingAgent` role (pytest suites, assertions, code generation) the model is usable: the
+  coding task is the role-relevant one and it passes.
+- **Open action for S2-04 (`analyzer.py`, `app.py` — Mahmut).** Two defences, measured here, in
+  order of preference:
+  1. Send a JSON schema in Ollama's `format` parameter on every decomposition call (3/3 above, no
+     latency cost). This prevents the drift instead of repairing it.
+  2. Keep a key-normalization step before schema validation as a safety net, for models or
+     providers that ignore `format`: compare keys with separators and casing stripped
+     (`depends_on` / `dependson` / `depends-on` collapse onto one key), then reject whatever cannot
+     be repaired. A prototype was tried locally during S2-06 and did repair the live
+     `deepseek-coder:6.7b` response into 7 valid tasks, but it was reverted so the fix lands once,
+     in S2-04, with its owner.
+- The smoke-test checker in `scripts/model_smoke_test.py` is deliberately **not** loosened to
+  accept `dependson`. It measures raw model compliance, so the 0/3 result above stays comparable
+  with the other members' runs.
+- No GPU was detected on this machine, so `placement` is `cpu_only`; the ~33 s JSON latency is a
+  CPU-only figure and is expected to drop on a GPU machine.
 
 ### 3.3 Hardware Suitability Check (RAM/VRAM and `ollama list`)
 
@@ -192,7 +229,7 @@ is used only if the 3.3 check is `insufficient` or the section 4 test fails.
 | Database (`DatabaseAgent`) | Mahmut | `llama3.2:3b` | Mahmut's machine, local Ollama | | | Another member's machine via `OLLAMA_HOST` | not checked |
 | Review / Integration (`IntegrationAgent`) | İrem | `qwen2.5-coder:7b` | İrem's machine, local Ollama | | | `qwen2.5-coder:3b` locally, or a GPU machine via `OLLAMA_HOST` | not checked |
 | Frontend (`FrontendAgent`) | Kübra | section 5 result | Kübra's machine, local Ollama | | | The other section 5 option | not checked |
-| Testing (`TestingAgent`) | Berat | `deepseek-coder:6.7b` | Berat's machine, local Ollama | | | `qwen2.5-coder:3b` locally, or a GPU machine via `OLLAMA_HOST` | not checked |
+| Testing (`TestingAgent`) | Berat | `deepseek-coder:6.7b` | Berat's machine, local Ollama | `cpu_only` | yes (3.8 GB, Ollama 0.40.7) | `qwen2.5-coder:3b` locally, or a GPU machine via `OLLAMA_HOST` | primary kept — coding task 3/3, JSON task 0/3 (see 3.2 note) |
 | Backend (`BackendAgent`) | _unassigned_ | _tbd_ | _tbd_ | | | | no owner (see 1.2) |
 
 **Insufficient machines found:** _none recorded yet._ List each one here as
@@ -270,10 +307,12 @@ All agents operate locally on developer machines using standard Ollama server in
 
 | # | Agent Class / Role | Owner | Canonical Ollama Tag | Model Family | Context Window | Primary Focus |
 |---|---|---|---|---|---|---|
-| **1** | **Master Agent** | Eren Görkem Çolak | `qwen2.5:3b` | Qwen 2.5 | 32K | System decomposition, DAG routing, FitScore evaluation |
+| **1** | **Master Agent** | Eren Görkem Çolak | `qwen2.5:7b` | Qwen 2.5 | 32K | System decomposition, DAG routing, FitScore evaluation |
 | **2** | **IntegrationAgent** | Elif Yılmaz | `phi4-mini:3.8b` | Phi-4 | 128K | Code review, artifact inspection, integration packaging |
 | **3** | **FrontendAgent** | Kübra Hepcan | `qwen2.5-coder:3b` | Qwen2.5-Coder | 32K | React / Vanilla UI components, CSS design tokens |
 | **4** | **BackendAgent** | İrem Yılmaz | `qwen2.5-coder:7b` | Qwen2.5-Coder | 32K | FastAPI REST endpoints, business logic, ORM integration |
 | **5** | **DatabaseAgent** | Mahmut Karaalioğlu | `llama3.2:3b` | Llama 3.2 | 128K | Relational schemas, DDL definitions, database migrations |
 | **6** | **TestingAgent** | Berat İnan | `deepseek-coder:6.7b` | DeepSeek-Coder | 16K | Pytest suites, assertions, automated test verification |
+
+*20 Ekim 2026: master modeli qwen2.5:3b'den qwen2.5:7b'ye geçirildi, puanlar henüz ölçülmedi.*
 
