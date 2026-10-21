@@ -1,0 +1,98 @@
+{
+  "member": "irem",
+  "model": "qwen2.5-coder:7b",
+  "date_utc": "2026-10-21T20:39:59+00:00",
+  "options": {
+    "temperature": 0,
+    "seed": 42
+  },
+  "machine": {
+    "os": "Windows 11",
+    "cpu": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+    "ram_gb": 31.7,
+    "gpu": "NVIDIA GeForce RTX 3050 6GB Laptop GPU, 6144 MiB",
+    "ollama_version": "ollama version is 0.40.6",
+    "ollama_list": "NAME                 ID              SIZE      MODIFIED   \nqwen2.5-coder:14b    9ec8897f747e    9.0 GB    2 days ago    \nqwen2.5-coder:7b     dae161e27b0e    4.7 GB    7 days ago"
+  },
+  "hardware_fit": {
+    "installed": true,
+    "model_size_gb": 4.7,
+    "size_source": "ollama list",
+    "vram_gb": 6.0,
+    "required_vram_gb": 5.7,
+    "required_ram_gb": 7.7,
+    "placement": "gpu"
+  },
+  "summary": {
+    "json_task": {
+      "pass_rate": "0/3",
+      "median_wall_seconds": 15.2
+    },
+    "coding_task": {
+      "pass_rate": "3/3",
+      "median_wall_seconds": 3.72
+    }
+  },
+  "results": [
+    {
+      "task": "json_task",
+      "run": 1,
+      "passed": false,
+      "detail": "subtasks missing or count not in 3-8",
+      "wall_seconds": 39.58,
+      "output_tokens": 629,
+      "tokens_per_second": 27.5,
+      "response_excerpt": "```json\n{\n  \"subtasks\": [\n    {\n      \"id\": \"T1\",\n      \"title\": \"User Registration\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": []\n    },\n    {\n      \"id\": \"T2\",\n      \"title\": \"User Authentication\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": [\"T1\"]\n    },\n    {\n      \"id\": \"T3\",\n      \"title\": \"User Login\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": [\"T2\"]\n    },\n    {\n      \"id\": \"T4\",\n      \"title\": \"Note Storage\",\n      \"category\": \"DATABASE\",\n      \"depends_on\": [\"T1\"]\n  "
+    },
+    {
+      "task": "json_task",
+      "run": 2,
+      "passed": false,
+      "detail": "subtasks missing or count not in 3-8",
+      "wall_seconds": 15.2,
+      "output_tokens": 362,
+      "tokens_per_second": 27.7,
+      "response_excerpt": "```json\n{\n  \"subtasks\": [\n    {\n      \"id\": \"T1\",\n      \"title\": \"User Registration\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": []\n    },\n    {\n      \"id\": \"T2\",\n      \"title\": \"User Authentication\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": [\"T1\"]\n    },\n    {\n      \"id\": \"T3\",\n      \"title\": \"User Login\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": [\"T2\"]\n    },\n    {\n      \"id\": \"T4\",\n      \"title\": \"Note Storage\",\n      \"category\": \"DATABASE\",\n      \"depends_on\": [\"T1\"]\n  "
+    },
+    {
+      "task": "json_task",
+      "run": 3,
+      "passed": false,
+      "detail": "subtasks missing or count not in 3-8",
+      "wall_seconds": 15.1,
+      "output_tokens": 362,
+      "tokens_per_second": 27.9,
+      "response_excerpt": "```json\n{\n  \"subtasks\": [\n    {\n      \"id\": \"T1\",\n      \"title\": \"User Registration\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": []\n    },\n    {\n      \"id\": \"T2\",\n      \"title\": \"User Authentication\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": [\"T1\"]\n    },\n    {\n      \"id\": \"T3\",\n      \"title\": \"User Login\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": [\"T2\"]\n    },\n    {\n      \"id\": \"T4\",\n      \"title\": \"Note Storage\",\n      \"category\": \"DATABASE\",\n      \"depends_on\": [\"T1\"]\n  "
+    },
+    {
+      "task": "coding_task",
+      "run": 1,
+      "passed": true,
+      "detail": "all asserts passed",
+      "wall_seconds": 3.82,
+      "output_tokens": 43,
+      "tokens_per_second": 28.4,
+      "response_excerpt": "```python\ndef is_palindrome(s: str) -> bool:\n    filtered_chars = [char.lower() for char in s if char.isalnum()]\n    return filtered_chars == filtered_chars[::-1]\n```"
+    },
+    {
+      "task": "coding_task",
+      "run": 2,
+      "passed": true,
+      "detail": "all asserts passed",
+      "wall_seconds": 3.68,
+      "output_tokens": 43,
+      "tokens_per_second": 27.5,
+      "response_excerpt": "```python\ndef is_palindrome(s: str) -> bool:\n    filtered_chars = [char.lower() for char in s if char.isalnum()]\n    return filtered_chars == filtered_chars[::-1]\n```"
+    },
+    {
+      "task": "coding_task",
+      "run": 3,
+      "passed": true,
+      "detail": "all asserts passed",
+      "wall_seconds": 3.72,
+      "output_tokens": 43,
+      "tokens_per_second": 27.2,
+      "response_excerpt": "```python\ndef is_palindrome(s: str) -> bool:\n    filtered_chars = [char.lower() for char in s if char.isalnum()]\n    return filtered_chars == filtered_chars[::-1]\n```"
+    }
+  ]
+}
