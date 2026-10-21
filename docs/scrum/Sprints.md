@@ -23,7 +23,7 @@ This document outlines the 5-sprint agile execution roadmap for the **CM6453 Sof
 **Sprint Goal:** Standardize runtime API/fallback configuration, unify the Streamlit UI and core engine under a single canonical agent registry, enforce weighted capability selection with availability filtering, validate task decomposition JSON schemas, and isolate per-run scheduler and SQLite states (`run_id`).
 
 ### Deliverables & Trello Mapping:
-- [ ] **S2-01:** Fix API Key Configuration, Remove Duplicate Loaders & Enforce Safe Demo/Fallback Mode (`master_agent_projesi/app.py`, `.env.example`)
+- [x] **S2-01:** Fix API Key Configuration, Remove Duplicate Loaders & Enforce Safe Demo/Fallback Mode (`master_agent_projesi/app.py`, `.env.example`)
 - [ ] **S2-02:** Unify Streamlit UI and Core Engine Under a Single Canonical Agent Registry (`config/agents_config.json`, `src/agents/base_agent.py`, `app.py`)
 - [ ] **S2-03:** Implement Weighted Task-Fitness Scoring & Filter Unavailable (`BUSY`/`OFFLINE`/`ERROR`) Agents (`src/master/capability_eval.py`)
 - [ ] **S2-04:** Validate Task Decomposition JSON Output Against Schema & Label Fallback Data (`src/master/analyzer.py`, `app.py`)

@@ -14,7 +14,7 @@ Standardize API key and fallback configuration, unify the Streamlit UI and core 
 
 | Card ID | Task Title | Primary Assignee | Collaboration & Support | Priority | Story Points | Est. Hours | Dependencies | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **S2-01** | Fix API Key Configuration & Remove Credential-Like Constants (`app.py`, `.env.example`) | İrem Yılmaz | Eren Görkem Çolak | Highest | 3 | 4h | S1-06 | In Progress |
+| **S2-01** | Fix API Key Configuration & Remove Credential-Like Constants (`app.py`, `.env.example`) | İrem Yılmaz | Eren Görkem Çolak | Highest | 3 | 4h | S1-06 | Done |
 | **S2-02** | Unify Streamlit UI and Core Engine Under a Single Agent Registry (`agents_config.json`) | Kübra Hepcan | Eren Görkem Çolak, Mahmut Karaalioğlu | Highest | 5 | 10h | S1-06, S2-01 | In Progress |
 | **S2-03** | Use Weighted Task-Fitness Scoring & Filter Out Unavailable Agents (`capability_eval.py`) | Eren Görkem Çolak | Berat İnan (Test Cases) | High | 3 | 6h | S2-02, S1-06 | In Progress |
 | **S2-04** | Validate Task Decomposition Output & Make Fallback Behavior Reliable (`analyzer.py`, `app.py`) | Mahmut Karaalioğlu | Elif Yılmaz (PO), Berat İnan | High | 3 | 6h | S2-01, S2-02, S1-05 | To Do |
@@ -27,7 +27,7 @@ Standardize API key and fallback configuration, unify the Streamlit UI and core 
 ---
 
 ## 3. Sprint 2 Verification & Acceptance Checklist
-- [ ] **S2-01:** Only a single `load_api_key` path remains; missing keys trigger clearly labeled demo/fallback mode without errors.
+- [x] **S2-01:** Only a single `load_api_key` path remains; missing keys trigger clearly labeled demo/fallback mode without errors.
 - [ ] **S2-02:** Hardcoded `agents_data` in `app.py` is replaced by the canonical `config/agents_config.json` loader.
 - [ ] **S2-03:** `BUSY`, `OFFLINE`, and `ERROR` agents are excluded from candidate selection; specialty bonuses and tie-breakers are unit-tested.
 - [ ] **S2-04:** Malformed JSON, empty requirements, and multi-paragraph long requirement documents are validated against the task schema.

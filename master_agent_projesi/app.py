@@ -3,33 +3,130 @@ import json
 import time
 import html
 import urllib.request
+import urllib.error
+import socket
 import re
 import streamlit as st
 import pandas as pd
 import streamlit.components.v1 as components
 
 # ==========================================
-# 1. LOCAL OLLAMA CONFIGURATION (Yerel & Özel)
+# 1. MERKEZİ API VE MODEL YAPILANDIRMASI (Central Config & Fallback - S2-01)
 # ==========================================
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+def load_api_key(key_name: str = "GEMINI_API_KEY") -> str:
+    """
+    Merkezi API anahtarı yükleme işlevi (S2-01).
+    Kaynak kodunda asla sabit anahtar (hardcoded secret) tutulmaz. Öncelik sırası:
+    1. Sistem ortam değişkenleri (os.getenv)
+    2. Streamlit secrets (st.secrets)
+    Anahtar bulunamazsa veya yer tutucu ise güvenli bir şekilde boş dize döndürür.
+    """
+    env_val = os.getenv(key_name, "").strip()
+    if env_val and env_val not in ("api.key", "YOUR_API_KEY_HERE", "None"):
+        return env_val
+    try:
+        if hasattr(st, "secrets") and st.secrets and key_name in st.secrets:
+            sec_val = str(st.secrets.get(key_name, "")).strip()
+            if sec_val and sec_val not in ("api.key", "YOUR_API_KEY_HERE", "None"):
+                return sec_val
+    except Exception:
+        pass
+    return ""
 
-def call_local_ollama(prompt: str, model: str = OLLAMA_MODEL, host: str = OLLAMA_HOST, timeout: int = 45) -> str:
-    """Yerel Ollama sunucusuna HTTP isteği gönderir ve yanıtı döndürür."""
+def get_model_config() -> dict:
+    """
+    Tek ve merkezi API/Model yapılandırması.
+    Yerel Ollama sunucusu ve isteğe bağlı bulut API parametrelerini yönetir.
+    """
+    return {
+        "ollama_host": os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/"),
+        "ollama_model": os.getenv("OLLAMA_MODEL", "qwen2.5:3b"),
+        "timeout": int(os.getenv("OLLAMA_TIMEOUT", "45")),
+        "api_key": load_api_key("GEMINI_API_KEY"),
+        "fallback_enabled": os.getenv("FALLBACK_ENABLED", "true").lower() in ("true", "1", "yes"),
+    }
+
+MODEL_CONFIG = get_model_config()
+OLLAMA_HOST = MODEL_CONFIG["ollama_host"]
+OLLAMA_MODEL = MODEL_CONFIG["ollama_model"]
+
+class ModelServiceError(Exception):
+    """Model sunucusu veya API çağrısı sırasında oluşan sınıflandırılmış hata."""
+    def __init__(self, message: str, error_type: str = "UNKNOWN", status_code: int = None):
+        super().__init__(message)
+        self.message = message
+        self.error_type = error_type  # QUOTA_EXCEEDED, TIMEOUT, CONNECTION_REFUSED, NOT_FOUND, SERVER_ERROR
+        self.status_code = status_code
+
+def call_local_ollama(prompt: str, model: str = None, host: str = None, timeout: int = None) -> str:
+    """
+    Yerel Ollama sunucusuna HTTP isteği gönderir ve yanıtı döndürür.
+    Kota (429), zaman aşımı ve bağlantı kopukluğu hatalarını sınıflandırarak ModelServiceError fırlatır.
+    """
+    cfg = get_model_config()
+    model = model or cfg["ollama_model"]
+    host = host or cfg["ollama_host"]
+    timeout = timeout or cfg["timeout"]
+
     body = json.dumps({
         "model": model,
         "prompt": prompt,
         "stream": False,
         "options": {"temperature": 0.1, "seed": 42}
     }).encode("utf-8")
+
     req = urllib.request.Request(
         f"{host}/api/generate",
         data=body,
         headers={"Content-Type": "application/json"}
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
-    return data.get("response", "")
+
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return data.get("response", "")
+    except urllib.error.HTTPError as e:
+        if e.code == 429:
+            raise ModelServiceError(
+                "Model sunucusu veya API kota sınırına ulaşıldı (HTTP 429 Too Many Requests).",
+                error_type="QUOTA_EXCEEDED",
+                status_code=429
+            )
+        elif e.code == 404:
+            raise ModelServiceError(
+                f"İstenen model '{model}' Ollama üzerinde bulunamadı (HTTP 404).",
+                error_type="NOT_FOUND",
+                status_code=404
+            )
+        else:
+            raise ModelServiceError(
+                f"Model sunucusu HTTP {e.code} hatası döndürdü: {e.reason}",
+                error_type="SERVER_ERROR",
+                status_code=e.code
+            )
+    except urllib.error.URLError as e:
+        reason_str = str(e.reason).lower()
+        if isinstance(e.reason, (socket.timeout, TimeoutError)) or "timed out" in reason_str:
+            raise ModelServiceError(
+                f"Model sunucusuna bağlantı zaman aşımına uğradı ({timeout}s).",
+                error_type="TIMEOUT"
+            )
+        else:
+            raise ModelServiceError(
+                f"Yerel Ollama sunucusuna bağlanılamadı ({host}): Çevrimdışı veya bağlantı reddedildi.",
+                error_type="CONNECTION_REFUSED"
+            )
+    except (socket.timeout, TimeoutError):
+        raise ModelServiceError(
+            f"Model sunucusu yanıt vermedi; istek zaman aşımına uğradı ({timeout}s).",
+            error_type="TIMEOUT"
+        )
+    except Exception as e:
+        raise ModelServiceError(
+            f"Beklenmeyen model bağlantı hatası: {e}",
+            error_type="UNKNOWN"
+        )
+
 
 # ==========================================
 # 2. AGENTS DATABASE (5 Model & Uzman Ajanımız)
@@ -293,7 +390,12 @@ def get_fallback_json(requirement=""):
     return json.dumps(data, ensure_ascii=False)
 
 def decompose_task(user_requirement):
-    """(json_metni, demo_modu_mu) döndürür."""
+    """
+    Gereksinim metnini 5 alt göreve ayrıştırır.
+    (json_metni, demo_modu_mu, mod_etiketi) döndürür.
+    Model sunucusu çevrimdışı, bağlantı zaman aşımına uğramış veya kota (429) durumunda
+    sistem çökmeden etiketlenmiş güvenli yedek (fallback/demo) moduna geçer.
+    """
     system_prompt = """
     You are an Expert Software Architect and the Master Agent in a distributed multi-agent system.
     Analyze the provided software requirement and decompose it into the following 5 specific sub-tasks:
@@ -340,7 +442,7 @@ def decompose_task(user_requirement):
     """
     try:
         prompt = f"{system_prompt}\n\nUser Requirement:\n{user_requirement}\n\nJSON output:"
-        raw_response = call_local_ollama(prompt, model=OLLAMA_MODEL)
+        raw_response = call_local_ollama(prompt)
         
         # JSON bloğunu temizle ve ayıkla
         match = re.search(r"\{.*\}", raw_response, re.DOTALL)
@@ -352,10 +454,29 @@ def decompose_task(user_requirement):
         # JSON geçerliliğini doğrula
         json.loads(text)
         st.toast("Yerel Qwen 2.5 (3B) modeli görevi başarıyla ayrıştırdı! 🚀", icon="🧠")
-        return text, False
-    except Exception:
-        st.toast("Yerel Ollama çevrimdışı. Güvenli yedek demo modu devrede.", icon="🛡️")
-        return get_fallback_json(user_requirement), True
+        return text, False, "Yerel Ollama (Qwen 2.5:3b)"
+    except ModelServiceError as err:
+        if err.error_type == "QUOTA_EXCEEDED":
+            st.warning("⚠️ **Kota Uyarısı (429):** API / Model kullanım kotası aşıldı. Kesinti yaşanmaması için sistem etiketlenmiş güvenli yedek (fallback) moduna geçti.")
+            st.toast("Kota sınırı (429) aşıldı! Güvenli yedek mod devrede.", icon="⚠️")
+            label = "Kota Sınırı (429) - Güvenli Yedek"
+        elif err.error_type == "TIMEOUT":
+            st.warning("⏱️ **Zaman Aşımı Uyarısı:** Model sunucusuna bağlantı zaman aşımına uğradı. Sistem çökmeden güvenli yedek (fallback) kipine geçti.")
+            st.toast("Zaman aşımı! Güvenli yedek mod devrede.", icon="⏱️")
+            label = "Zaman Aşımı (Timeout) - Güvenli Yedek"
+        elif err.error_type == "CONNECTION_REFUSED":
+            st.info("🔌 **Bağlantı Uyarısı:** Yerel Ollama sunucusuna erişilemedi (Çevrimdışı). Sistem kesintisiz güvenli yedek (fallback) modunda çalışıyor.")
+            st.toast("Ollama çevrimdışı. Güvenli yedek mod devrede.", icon="🛡️")
+            label = "Ollama Çevrimdışı - Güvenli Yedek"
+        else:
+            st.warning(f"🛡️ **Yedek Mod:** {err.message} Sistem güvenli yedek modda çalışıyor.")
+            st.toast("Güvenli yedek mod devrede.", icon="🛡️")
+            label = f"Yedek Mod ({err.error_type})"
+        return get_fallback_json(user_requirement), True, label
+    except Exception as e:
+        st.warning(f"🛡️ **Yedek Mod:** Beklenmeyen model çıktısı ({e}). Güvenli yedek şablonu kullanıldı.")
+        st.toast("Güvenli yedek mod devrede.", icon="🛡️")
+        return get_fallback_json(user_requirement), True, "Ayrıştırma Hatası - Güvenli Yedek"
 
 def normalize_tasks(parsed_data, requirement=""):
     """Model ne tür bir JSON dönerse dönsün, UI'ın beklediği 5 aşamalı standart formata dönüştürür."""
@@ -547,10 +668,15 @@ def task_card(phase, details, idx, agent, skill, score, best, status, fresh):
         f'</div></div>'
     )
 
-def build_log(req, tasks, demo):
-    lines = [("MASTER", f"Gereksinim alındı ({len(req)} karakter)"),
-             ("MASTER", "Demo verisi kullanılıyor (yedek mod)" if demo else "Yerel Qwen 2.5 modeli ile görev ayrıştırma tamamlandı"),
-             ("MASTER", f"{len(tasks)} alt görev FitScore algoritmasıyla yönlendirildi")]
+def build_log(req, tasks, demo, mode_label=""):
+    mode_str = mode_label or ("Güvenli Yedek (Demo)" if demo else "Yerel Qwen 2.5 (3B)")
+    lines = [
+        ("MASTER", f"Gereksinim alındı ({len(req)} karakter)"),
+        ("CONFIG", f"Model pipeline kipi: {mode_str}"),
+        ("FALLBACK" if demo else "MASTER",
+         f"Etiketli yedek/tanıtım veri seti devrede ({mode_str})" if demo else "Yerel Qwen 2.5 modeli ile görev ayrıştırma tamamlandı"),
+        ("MASTER", f"{len(tasks)} alt görev FitScore algoritmasıyla yönlendirildi")
+    ]
     for ph, d in tasks.items():
         if not isinstance(d, dict):
             d = {"primary_skill_required": "Reasoning"}
@@ -560,7 +686,13 @@ def build_log(req, tasks, demo):
     return lines
 
 def terminal_html(lines, animate):
-    colors = {"MASTER": "#4FACFE", "ROUTER": "#A78BFA", "SYSTEM": "#34D399"}
+    colors = {
+        "MASTER": "#4FACFE",
+        "ROUTER": "#A78BFA",
+        "SYSTEM": "#34D399",
+        "CONFIG": "#FBBF24",
+        "FALLBACK": "#F87171"
+    }
     rows = "".join(
         f'<div class="ln" style="animation-delay:{(k * 0.6) if animate else 0}s">'
         f'<span style="color:{colors.get(tag, "#9CA3AF")}">[{tag}]</span> {html.escape(msg)}</div>'
@@ -619,7 +751,7 @@ with st.sidebar:
 # 6. ANA EKRAN
 # ==========================================
 state = st.session_state
-for key, val in {"last_time": None, "demo_mode": False, "tasks": None, "status": {},
+for key, val in {"last_time": None, "demo_mode": False, "mode_label": "", "tasks": None, "status": {},
                  "done_order": [], "log": [], "fresh": False}.items():
     state.setdefault(key, val)
 
@@ -636,7 +768,7 @@ m1, m2, m3, m4 = st.columns(4)
 m1.metric("Sistem", "Çevrimiçi")
 m2.metric("Aktif Ajan", "6 (1 Master + 5 Alt)")
 m3.metric("Son analiz süresi", f"{state.last_time:.1f} sn" if state.last_time else "Henüz yok")
-m4.metric("Model Sunucusu", "Ollama")
+m4.metric("Model Kaynağı", "🛡️ Güvenli Yedek" if state.demo_mode else "🧠 Yerel Ollama")
 
 components.html(network_html(current_load() if state.tasks else None), height=310)
 
@@ -653,7 +785,12 @@ if st.button("🚀 Analiz et ve ajanlara dağıt", use_container_width=True):
         with st.spinner("Master Agent görevleri analiz ediyor ve dağıtıyor..."):
             try:
                 t0 = time.perf_counter()
-                raw, demo = decompose_task(requirement_input)
+                decomp_res = decompose_task(requirement_input)
+                if len(decomp_res) == 3:
+                    raw, demo, mode_label = decomp_res
+                else:
+                    raw, demo = decomp_res[0], decomp_res[1]
+                    mode_label = "Güvenli Yedek" if demo else "Yerel Ollama"
                 raw_parsed = json.loads(raw)
                 parsed = normalize_tasks(raw_parsed, requirement_input)
                 elapsed = time.perf_counter() - t0
@@ -666,13 +803,16 @@ if st.button("🚀 Analiz et ve ajanlara dağıt", use_container_width=True):
         for key in [k for k in state.keys() if str(k).startswith("ov_")]:
             del state[key]
         state.tasks, state.demo_mode, state.last_time = parsed, demo, elapsed
+        state.mode_label = mode_label
         state.status = {ph: "Beklemede" for ph in parsed}
         state.done_order = []
-        state.log = build_log(requirement_input, parsed, demo)
+        state.log = build_log(requirement_input, parsed, demo, mode_label)
         state.fresh = True
         st.rerun()
 
 if state.tasks:
+    if state.demo_mode:
+        st.info(f"🛡️ **Aktif Kip: Güvenli Tanıtım / Yedek (Fallback Mode)** — {state.get('mode_label', 'Yedek Mod Devrede')}. Yerel veya harici model sunucusuna erişilemediğinde sistem çökmeden etiketlenmiş güvenli şablonla görevleri ayrıştırır.")
     tasks = state.tasks
     total = sum(pts_of(d) for d in tasks.values())
     done = sum(pts_of(tasks[ph]) for ph in state.done_order)
