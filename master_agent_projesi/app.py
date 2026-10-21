@@ -759,7 +759,7 @@ def run_engine(requirement, live):
 
         ag.execute_task = wrapped
     title = " ".join(requirement.split())[:60] or "Generated Software System"
-    orch = MasterOrchestrator(evaluator=CapabilityEvaluator(agents), persist=False)
+    orch = MasterOrchestrator(evaluator=CapabilityEvaluator(agents))  # çalıştırma state.db'ye yazılır (S2-07)
     t0 = time.perf_counter()
     report = orch.process_requirement(requirement, title)
     elapsed = time.perf_counter() - t0
