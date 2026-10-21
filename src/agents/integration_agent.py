@@ -4,10 +4,11 @@ import time
 from typing import Dict, Any, List, Optional
 
 try:
-    from src.agents.base_agent import BaseAgent, TaskResult
+    from src.agents.base_agent import BaseAgent, TaskResult, AgentStatus
 except ImportError:
     BaseAgent = object
     TaskResult = None
+    AgentStatus = None
 
 from src.contracts import (
     IntegrationFinding,
@@ -43,9 +44,10 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
         self.model_name = model_name
         self.workspace_root = os.path.abspath(workspace_root or os.getcwd())
 
-        # Master motorunun ajan durumunu kontrol edebilmesi için
+        # Master motorunun ajan durumunu kontrol edebilmesi için.
+        # Diğer ajanlarla aynı tip olmalı: arayüz status.value okuyor.
         if not hasattr(self, "status"):
-            self.status = "IDLE"
+            self.status = AgentStatus.IDLE if AgentStatus else "IDLE"
             
         # YENİ EKLENEN: Master motorunun aktif görev sayısını okuyabilmesi için
         if not hasattr(self, "current_tasks"):
