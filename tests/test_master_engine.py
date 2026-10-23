@@ -33,7 +33,7 @@ class TestMasterEngine(unittest.TestCase):
         self.frontend_agent = FrontendAgent()
         self.backend_agent = BackendAgent()
         self.db_agent = DatabaseAgent()
-        self.test_agent = TestingAgent()
+        self.test_agent = TestingAgent(use_ollama=False)
         self.int_agent = IntegrationAgent()
 
         self.evaluator.register_agent(self.frontend_agent)
@@ -283,7 +283,7 @@ class TestOrchestratorNegativeScenarios(unittest.TestCase):
     def setUp(self):
         self.real_evaluator = CapabilityEvaluator()
         for agent in (FrontendAgent(), BackendAgent(), DatabaseAgent(),
-                      TestingAgent(), IntegrationAgent()):
+                      TestingAgent(use_ollama=False), IntegrationAgent()):
             self.real_evaluator.register_agent(agent)
 
     @staticmethod
@@ -443,6 +443,148 @@ class TestOrchestratorNegativeScenarios(unittest.TestCase):
         # Everything downstream of the failed frontend task is blocked
         self.assertEqual(records["task-qa-1"]["status"], "BLOCKED")
         self.assertEqual(records["task-int-1"]["status"], "BLOCKED")
+
+
+# ---------------------------------------------------------------------------
+# S3-06: DAG cycle detection and BLOCKED propagation
+#
+# The analyzer always returns the same linear DAG, so these tests replace
+# orchestrator.analyzer.decompose with a fixed custom task graph.
+# ---------------------------------------------------------------------------
+
+def _task(task_id, deps=(), category="BACKEND", specialty="backend"):
+    return {
+        "task_id": task_id,
+        "title": f"Task {task_id}",
+        "category": category,
+        "description": f"Synthetic task {task_id} for DAG tests",
+        "dependencies": list(deps),
+        "required_specialty": specialty,
+    }
+
+
+def _run_with_graph(tasks, *agents):
+    orchestrator = MasterOrchestrator(evaluator=build_fake_evaluator(*agents), persist=False)
+    orchestrator.analyzer.decompose = lambda text, title: {"requirement_id": "req-dag", "tasks": tasks}
+    result = orchestrator.process_requirement("graph test", "DAG")
+    return result, {t["task_id"]: t for t in result["task_assignments"]}
+
+
+class TestSchedulerCycleDetection(unittest.TestCase):
+    """S3-06: TaskScheduler.find_cycles on hand-built graphs."""
+
+    def setUp(self):
+        from src.master.scheduler import TaskScheduler
+        self.scheduler = TaskScheduler()
+
+    def test_acyclic_graph_has_no_cycles(self):
+        tasks = [_task("a"), _task("b", ["a"]), _task("c", ["a"]), _task("d", ["b", "c"])]
+        self.assertEqual(self.scheduler.find_cycles(tasks), [])
+
+    def test_two_node_cycle_is_detected(self):
+        tasks = [_task("a", ["b"]), _task("b", ["a"]), _task("c")]
+        self.assertEqual(self.scheduler.find_cycles(tasks), [["a", "b"]])
+
+    def test_self_dependency_is_a_cycle(self):
+        self.assertEqual(self.scheduler.find_cycles([_task("a", ["a"])]), [["a"]])
+
+    def test_long_cycle_and_separate_cycles_are_reported(self):
+        tasks = [_task("a", ["c"]), _task("b", ["a"]), _task("c", ["b"]),
+                 _task("x", ["y"]), _task("y", ["x"]), _task("free", ["a"])]
+        cycles = sorted(self.scheduler.find_cycles(tasks))
+        self.assertEqual(cycles, [["a", "b", "c"], ["x", "y"]])
+
+    def test_undefined_dependency_is_not_a_cycle(self):
+        self.assertEqual(self.scheduler.find_cycles([_task("a", ["ghost"])]), [])
+
+    def test_cycle_members_are_never_executable(self):
+        tasks = [_task("a", ["b"]), _task("b", ["a"]), _task("c")]
+        executable = [t["task_id"] for t in self.scheduler.get_executable_tasks(tasks)]
+        self.assertEqual(executable, ["c"])
+
+
+class TestOrchestratorDagBlocking(unittest.TestCase):
+    """S3-06: cyclic / failed / missing prerequisites must end as BLOCKED, never executed."""
+
+    def test_cyclic_tasks_are_blocked_with_cycle_reason(self):
+        agent = FakeAgent("fake-dag", "DAG Agent")
+        tasks = [_task("a", ["b"]), _task("b", ["a"]), _task("c")]
+        result, records = _run_with_graph(tasks, agent)
+
+        self.assertEqual(records["c"]["status"], "COMPLETED")
+        for tid in ("a", "b"):
+            self.assertEqual(records[tid]["status"], "BLOCKED")
+            self.assertIn("döngüsel bağımlılık", records[tid]["reason"])
+            self.assertIn("a <-> b", records[tid]["reason"])
+            self.assertIsNone(records[tid]["assigned_agent"])
+        self.assertEqual(agent.executed_task_ids, ["c"])
+        self.assertEqual(result["system_status"], "PARTIALLY_COMPLETED")
+
+    def test_task_downstream_of_cycle_is_blocked_but_not_marked_cyclic(self):
+        agent = FakeAgent("fake-dag", "DAG Agent")
+        tasks = [_task("a", ["b"]), _task("b", ["a"]), _task("after", ["a"])]
+        _, records = _run_with_graph(tasks, agent)
+
+        self.assertEqual(records["after"]["status"], "BLOCKED")
+        self.assertNotIn("döngüsel bağımlılık tespit", records["after"]["reason"])
+        self.assertIn("'a'", records["after"]["reason"])
+        self.assertEqual(agent.executed_task_ids, [])
+
+    def test_failed_task_blocks_whole_downstream_chain_transitively(self):
+        agent = FakeAgent("fake-dag", "DAG Agent", fail_on=["root"])
+        # "side" is listed first: an agent that errors stays ERROR (unavailable) for the
+        # rest of the run, so anything scheduled after "root" would become UNASSIGNED.
+        tasks = [_task("side"), _task("root"), _task("mid", ["root"]), _task("leaf", ["mid"])]
+        result, records = _run_with_graph(tasks, agent)
+
+        self.assertEqual(records["root"]["status"], "FAILED")
+        self.assertEqual(records["mid"]["status"], "BLOCKED")
+        self.assertIn("'root', durum FAILED", records["mid"]["reason"])
+        self.assertEqual(records["leaf"]["status"], "BLOCKED")
+        self.assertIn("'mid', durum BLOCKED", records["leaf"]["reason"])
+        self.assertEqual(records["side"]["status"], "COMPLETED")
+        self.assertEqual(sorted(agent.executed_task_ids), ["root", "side"])
+        self.assertEqual(result["status_counts"], {"COMPLETED": 1, "FAILED": 1, "UNASSIGNED": 0, "BLOCKED": 2})
+
+    def test_one_failed_parent_in_diamond_blocks_the_join(self):
+        agent = FakeAgent("fake-dag", "DAG Agent", fail_on=["right"])
+        tasks = [_task("top"), _task("left", ["top"]), _task("right", ["top"]),
+                 _task("join", ["left", "right"])]
+        _, records = _run_with_graph(tasks, agent)
+
+        self.assertEqual(records["left"]["status"], "COMPLETED")
+        self.assertEqual(records["right"]["status"], "FAILED")
+        self.assertEqual(records["join"]["status"], "BLOCKED")
+        self.assertIn("'right', durum FAILED", records["join"]["reason"])
+        self.assertNotIn("join", agent.executed_task_ids)
+
+    def test_undefined_dependency_is_blocked(self):
+        agent = FakeAgent("fake-dag", "DAG Agent")
+        _, records = _run_with_graph([_task("a", ["ghost"])], agent)
+
+        self.assertEqual(records["a"]["status"], "BLOCKED")
+        self.assertIn("'ghost' tanımlı değil", records["a"]["reason"])
+        self.assertEqual(agent.executed_task_ids, [])
+
+    def test_unassigned_parent_blocks_child(self):
+        offline = FakeAgent("fake-off", "Offline Agent", status=AgentStatus.OFFLINE)
+        tasks = [_task("ui", category="FRONTEND", specialty="frontend"), _task("api", ["ui"])]
+        _, records = _run_with_graph(tasks, offline)
+
+        self.assertEqual(records["ui"]["status"], "UNASSIGNED")
+        self.assertEqual(records["api"]["status"], "BLOCKED")
+        self.assertIn("'ui', durum UNASSIGNED", records["api"]["reason"])
+
+    def test_diamond_executes_in_dependency_order(self):
+        agent = FakeAgent("fake-dag", "DAG Agent")
+        tasks = [_task("join", ["left", "right"]), _task("right", ["top"]),
+                 _task("left", ["top"]), _task("top")]
+        result, _ = _run_with_graph(tasks, agent)
+
+        order = agent.executed_task_ids
+        self.assertEqual(result["system_status"], "COMPLETED")
+        self.assertEqual(order[0], "top")
+        self.assertEqual(order[-1], "join")
 
 
 if __name__ == "__main__":
