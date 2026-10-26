@@ -45,6 +45,44 @@ class TaskScheduler:
 
         return executable
 
+    def find_cycles(self, tasks: List[Dict[str, Any]]) -> List[List[str]]:
+        """Returns each dependency cycle as a sorted list of task_ids (Tarjan SCC).
+        Dependencies on undefined task_ids are ignored here; they are reported separately."""
+        graph = {t["task_id"]: [d for d in t.get("dependencies", [])] for t in tasks}
+        index: Dict[str, int] = {}
+        lowlink: Dict[str, int] = {}
+        stack: List[str] = []
+        on_stack: Set[str] = set()
+        cycles: List[List[str]] = []
+
+        def visit(node: str):
+            index[node] = lowlink[node] = len(index)
+            stack.append(node)
+            on_stack.add(node)
+            for dep in graph[node]:
+                if dep not in graph:
+                    continue
+                if dep not in index:
+                    visit(dep)
+                    lowlink[node] = min(lowlink[node], lowlink[dep])
+                elif dep in on_stack:
+                    lowlink[node] = min(lowlink[node], index[dep])
+            if lowlink[node] == index[node]:
+                component = []
+                while True:
+                    member = stack.pop()
+                    on_stack.discard(member)
+                    component.append(member)
+                    if member == node:
+                        break
+                if len(component) > 1 or node in graph[node]:
+                    cycles.append(sorted(component))
+
+        for task_id in graph:
+            if task_id not in index:
+                visit(task_id)
+        return cycles
+
     def mark_completed(self, task_id: str):
         """Marks a task as successfully completed."""
         self.completed_tasks.add(task_id)

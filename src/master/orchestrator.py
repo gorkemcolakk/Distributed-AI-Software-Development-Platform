@@ -174,11 +174,14 @@ class MasterOrchestrator:
         # Deadlock protection for remaining unfinished tasks
         processed = self.scheduler.get_processed_tasks()
         remaining_tasks = [t for t in tasks if t["task_id"] not in processed]
+        cycle_of = {tid: cycle for cycle in self.scheduler.find_cycles(tasks) for tid in cycle}
 
         for task in remaining_tasks:
             task_id = task["task_id"]
             deps = task.get("dependencies", [])
             block_reasons = []
+            if task_id in cycle_of:
+                block_reasons.append(f"döngüsel bağımlılık tespit edildi: {' <-> '.join(cycle_of[task_id])}")
 
             for dep in deps:
                 if dep not in task_map:
