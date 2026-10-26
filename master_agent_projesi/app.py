@@ -714,12 +714,9 @@ def is_real_agent(agent):
         return False
 
 
-def engine_uses_ollama():
-    """Motor ajanlarından en az biri gerçekten Ollama çağırıyorsa True (şimdilik hepsi stub)."""
-    return any(is_real_agent(c) for c in AGENT_CLASSES.values())
-
-
-REFLECT_DEFAULT = engine_uses_ollama() if ENGINE_ERROR is None else False
+# Varsayılan kapalı: herkesin makinesinde her ajanın modeli yüklü değil. Açık başlarsa
+# Ollama kapalıyken ya da model eksikken ajanlar OFFLINE sayılır ve hiçbir görev atanmaz.
+REFLECT_DEFAULT = False
 
 
 def build_agents():
@@ -875,7 +872,7 @@ with st.sidebar:
     st.caption("Dağıtık multi-agent orkestrasyon motoru")
     st.caption(f"📄 {CONFIG['path_name']} · v{CONFIG['version']} · {CONFIG['retrieved']}")
     st.checkbox("Ollama'da yüklü olmayan modeli OFFLINE say", value=REFLECT_DEFAULT, key="reflect_ollama",
-                help="Ajanlar stub (sabit çıktı) iken model gerekmediği için varsayılan kapalı; ajanlar Ollama çağırmaya başlayınca otomatik açılır.")
+                help="Açıkken modeli Ollama'da yüklü olmayan ajanlar OFFLINE sayılır ve görev almaz. Herkeste her model yüklü olmadığı için varsayılan kapalı.")
 
     st.markdown("### Master Agent")
     m = MASTER
