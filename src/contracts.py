@@ -8,6 +8,7 @@ class WorkerTaskStatus(str, Enum):
     PENDING = "PENDING"
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
+    SUCCESS = "SUCCESS"
     FAILED = "FAILED"
 
 class OrchestratorTaskStatus(str, Enum):
@@ -15,6 +16,7 @@ class OrchestratorTaskStatus(str, Enum):
     PENDING = "PENDING"
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
+    SUCCESS = "SUCCESS"
     FAILED = "FAILED"
     UNASSIGNED = "UNASSIGNED"
     BLOCKED = "BLOCKED"

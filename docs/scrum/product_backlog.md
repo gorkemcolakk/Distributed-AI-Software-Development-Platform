@@ -39,7 +39,7 @@ Deliver a web-based distributed multi-agent software development platform where 
 | PBI ID | Trello Card | Title & Description | Acceptance Criteria Summary | Priority | Size (SP) | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **PBI-15** | **S3-01** | **Versioned Master–Worker Contracts:** Define HTTP/JSON schemas for task envelopes, result manifests, and errors. | Versioned schemas (`docs/contracts/v1/`) with `run_id`, `task_id`, timestamps, and retry semantics. | Highest | 5 | Product Backlog |
-| **PBI-16** | **S3-02** | **Authenticated Worker HTTP API:** Implement worker endpoint/client with Bearer token auth, timeouts, and health checks. | Separate worker process/host accepts valid token requests and rejects unauthorized/malformed calls. | Highest | 5 | Product Backlog |
+| **PBI-16** | **S3-02** | **Authenticated Worker HTTP API:** Implement worker endpoint/client with Bearer token auth, timeouts, and health checks. | Separate worker process/host accepts valid token requests and rejects unauthorized/malformed calls. | Highest | 5 | Done |
 | **PBI-17** | **S3-03** | **Real Worker Execution & Safe Artifact Collection:** Invoke local Ollama models and write validated files to isolated workspaces. | At least one worker executes real Ollama inference; path traversal prevented; artifact manifest returned. | Highest | 5 | Product Backlog |
 | **PBI-18** | **S3-04** | **DAG Dependency Graph Validation:** Detect cyclic/missing dependencies and schedule only tasks with successful prerequisites. | Cycles and missing IDs rejected; failed upstream task leaves downstream tasks `BLOCKED`. | High | 3 | Product Backlog |
 

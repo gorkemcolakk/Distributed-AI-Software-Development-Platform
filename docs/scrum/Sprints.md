@@ -38,7 +38,7 @@ This document outlines the 5-sprint agile execution roadmap for the **CM6453 Sof
 
 ### Deliverables & Trello Mapping:
 - [ ] **S3-01:** Define Versioned Master–Worker Task, Result, and Error JSON Contracts (`docs/ARCHITECTURE.md`, `docs/contracts/v1/*.json`)
-- [ ] **S3-02:** Implement Authenticated Worker Agent HTTP/JSON Endpoint & Client Adapter with Health Checks and Timeouts (`src/api/`)
+- [x] **S3-02:** Implement Authenticated Worker Agent HTTP/JSON Endpoint & Client Adapter with Health Checks and Timeouts (`src/api/`)
 - [ ] **S3-03:** Execute Real Worker Agent Tasks via Local Ollama Models & Safely Collect Workspace Artifact Files (`src/agents/*_agent.py`)
 - [ ] **S3-04:** Validate Task Dependency Graph (DAG Cycles/Missing Refs) & Schedule Only Ready Tasks (`src/master/scheduler.py`)
 
