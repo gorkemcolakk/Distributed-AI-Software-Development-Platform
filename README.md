@@ -39,14 +39,14 @@ A web-based platform where a **Master Agent** receives long software requirement
 
 ---
 
-## 📊 Status — Sprint 1 (24 Sep – 7 Oct 2026)
+## 📊 Status — Sprint 1 (1 Oct – 15 Oct 2026)
 
 ### ✅ Working Now (Sprint 1 Completed Baseline)
 - 🖥️ **Web Interface Baseline:** Arayüz bileşenleri ve yönetim paneli tasarımı.
 - ⚙️ **Master Agent Engine:** REST API Gateway, gereksinim analizi ve Ajan Kayıt Sistemi (`src/master/analyzer.py`).
 - 🤖 **Agent Capability Matrix:** Model puanlama sistemi ve yapılandırması (`config/agents_config.json`).
 - 📐 **DAG Task Decomposition:** Gereksinimleri *Requirement Analysis → DB / Backend / Frontend → QA → Integration* bağımlılık grafiğine bölen mekanizma.
-- 📜 **System Architecture & Sprint Docs:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) ve [`docs/SPRINTS.md`](docs/SPRINTS.md) kılavuzları.
+- 📜 **System Architecture & Sprint Docs:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) ve [`docs/scrum/Sprints.md`](docs/scrum/Sprints.md) kılavuzları.
 
 ### 🔮 Planned for Sprints 2–5
 - **Sprint 2:** Capability evaluation algorithms, dynamic agent selection UI, and status monitoring.
@@ -63,7 +63,7 @@ A web-based platform where a **Master Agent** receives long software requirement
 │   └── agents_config.json
 ├── docs/                    # Architectural & Sprint documentation
 │   ├── ARCHITECTURE.md      # Multi-Agent Architecture Specification
-│   └── SPRINTS.md           # 5-Sprint Agile Roadmap
+│   └── scrum/               # 5-Sprint Roadmap, Backlogs & Scrum Records
 ├── src/                     # Core Python Engine
 │   ├── agents/              # BaseAgent & Specialized Worker Agents
 │   │   ├── base_agent.py

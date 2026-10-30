@@ -33,7 +33,9 @@ sys.path.insert(0, ROOT)
 
 from src.contracts import TaskPayloadContract_v1
 
-BASE_URL = (os.getenv("WORKER_BASE_URL") or os.getenv("BACKEND_API_HOST") or "http://localhost:8000").rstrip("/")
+BASE_URL = (os.getenv("WORKER_BASE_URL") or os.getenv("BACKEND_API_HOST") or "http://127.0.0.1:8000").rstrip("/")
+if BASE_URL.startswith("http://localhost:"):
+    BASE_URL = BASE_URL.replace("http://localhost:", "http://127.0.0.1:", 1)
 TOKEN = os.getenv("WORKER_AUTH_TOKEN") or os.getenv("BACKEND_AUTH_TOKEN") or ""
 TASK_PATH = os.getenv("WORKER_TASK_PATH", "/task")
 HEALTH_PATH = os.getenv("WORKER_HEALTH_PATH", "/health")
