@@ -5,7 +5,6 @@
   * **Sprint 2 – Week 4:** October 22, 2026 – October 29, 2026
 * **Sprint Status:** **COMPLETED**
 * **Scrum Master:** İrem Yılmaz (Backend Agent & Scrum Master)
-* **Product Owner:** Elif Yılmaz (Integration Agent & Product Owner)
 
 ---
 
@@ -15,8 +14,6 @@ Standardize runtime API configuration and safe fallback logic, unify the Streaml
 ---
 
 ## 2. Selected Product Backlog Items & Task Plan (What & How)
-
-In accordance with team governance, each card is assigned strictly to a single accountable owner:
 
 | Card ID | Task Title & Scope | Responsible | Priority | Story Points | Est. Hours | Dependencies | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |

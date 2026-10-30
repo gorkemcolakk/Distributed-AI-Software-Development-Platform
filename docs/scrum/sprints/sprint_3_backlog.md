@@ -5,7 +5,6 @@
   * **Sprint 3 – Week 6:** November 05, 2026 – November 12, 2026
 * **Sprint Status:** **IN PROGRESS**
 * **Scrum Master:** İrem Yılmaz (Backend Agent & Scrum Master)
-* **Product Owner:** Elif Yılmaz (Integration Agent & Product Owner)
 
 ---
 
@@ -15,8 +14,6 @@ Define versioned Master–Worker HTTP/JSON task contracts (`contracts.py`), impl
 ---
 
 ## 2. Selected Product Backlog Items & Task Plan (What & How)
-
-In accordance with team governance, each card is assigned strictly to a single accountable owner:
 
 | Card ID | Task Title & Scope | Responsible | Priority | Story Points | Est. Hours | Dependencies | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |

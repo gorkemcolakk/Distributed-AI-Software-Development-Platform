@@ -15,8 +15,6 @@ Establish the foundational repository and team workflow, define testable system 
 
 ## 2. Selected Product Backlog Items & Task Plan (What & How)
 
-In accordance with team governance, each card is assigned strictly to a single accountable owner:
-
 | Card ID | Task Title & Scope | Responsible | Priority | Story Points | Est. Hours | Dependencies | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **S1-01** | Establish GitHub Repository & Team Workflow Guidelines (`README.md`, `.gitignore`) | Eren Görkem Çolak | High | 2 | 4h | None | Done |
