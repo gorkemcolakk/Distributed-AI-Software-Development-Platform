@@ -39,20 +39,28 @@ A web-based platform where a **Master Agent** receives long software requirement
 
 ---
 
-## 📊 Status — Sprint 1 (1 Oct – 15 Oct 2026)
+## 📊 Status — Sprint 3 (29 Oct – 12 Nov 2026, in progress)
 
-### ✅ Working Now (Sprint 1 Completed Baseline)
-- 🖥️ **Web Interface Baseline:** Arayüz bileşenleri ve yönetim paneli tasarımı.
-- ⚙️ **Master Agent Engine:** REST API Gateway, gereksinim analizi ve Ajan Kayıt Sistemi (`src/master/analyzer.py`).
-- 🤖 **Agent Capability Matrix:** Model puanlama sistemi ve yapılandırması (`config/agents_config.json`).
-- 📐 **DAG Task Decomposition:** Gereksinimleri *Requirement Analysis → DB / Backend / Frontend → QA → Integration* bağımlılık grafiğine bölen mekanizma.
-- 📜 **System Architecture & Sprint Docs:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) ve [`docs/scrum/Sprints.md`](docs/scrum/Sprints.md) kılavuzları.
+Sprint 1 (1–15 Oct) and Sprint 2 (15–29 Oct) are completed. Details: [`docs/scrum/Sprints.md`](docs/scrum/Sprints.md).
 
-### 🔮 Planned for Sprints 2–5
-- **Sprint 2:** Capability evaluation algorithms, dynamic agent selection UI, and status monitoring.
-- **Sprint 3:** Distributed task execution, shared repository synchronization, and result collection.
-- **Sprint 4:** Automated test generation, Code Review agent, error recovery & reassignment.
-- **Sprint 5:** End-to-end integration, performance benchmarking dashboard, final demonstration.
+### ✅ Working Now
+- 🖥️ **Web Interface:** Streamlit arayüzü ajanları `config/agents_config.json` dosyasından okur; "Analiz et" butonu gerçek `MasterOrchestrator`'ı çalıştırır, görev ve ajan durumları motordan gelir.
+- ⚙️ **Master Agent Engine:** Ağırlıklı yetenek puanı (FitScore) ile ajan seçimi, `BUSY`/`OFFLINE`/`ERROR` filtresi, failover ve her çalıştırma için ayrı `run_id`.
+- 📐 **DAG Scheduling:** Bağımlılık sırasına göre çalıştırma; döngüsel bağımlılık tespiti ve başarısız görevin sonrasındaki görevlerin `BLOCKED` işaretlenmesi.
+- 🗄️ **SQLite Persistence:** Her çalıştırma `state.db`'ye (`runs`, `agents`, `tasks`, `attempts`) kaydedilir; başarısız görevler `COMPLETED` olarak yazılamaz.
+- 🌐 **Worker HTTP API:** Bearer token ile korunan FastAPI worker sunucusu (`/health`, `/task`) — [`src/api/worker_server.py`](src/api/worker_server.py).
+- 🤖 **Local LLM Agents:** BackendAgent (`qwen2.5-coder:7b`) ve TestingAgent (`deepseek-coder:6.7b`) yerel Ollama'ya kod/test ürettirir; Ollama kapalıysa etiketli yedek moda geçer.
+- ✅ **CI:** Her pull request'te GitHub Actions ile 111 birim testi çalışır.
+
+### 🚧 Not Yet
+- Görev ayrıştırma (`src/master/analyzer.py`) henüz sabit bir şablon kullanıyor; Master modeline bağlanması planlanıyor.
+- Frontend, Database ve Integration ajanları henüz örnek çıktı üretiyor (Sprint 3 kartları).
+- Master, worker'lara henüz HTTP üzerinden görev göndermiyor; tüm ajanlar tek süreçte çalışıyor (S3-01).
+
+### 🔮 Planned
+- **Sprint 3:** Master–worker görev sözleşmeleri ve dağıtık gönderim, Frontend/Database ajanlarının yerel Ollama'ya bağlanması, artifact manifest.
+- **Sprint 4:** Error recovery & reassignment, Code Review agent, CI quality gate.
+- **Sprint 5:** End-to-end integration, telemetry & benchmarking dashboard, final demonstration.
 
 ---
 
@@ -77,9 +85,12 @@ A web-based platform where a **Master Agent** receives long software requirement
 │   │   ├── capability_eval.py # Model Evaluation & Selection Algorithm
 │   │   ├── scheduler.py     # Task Dependency Scheduler
 │   │   └── orchestrator.py  # Execution Pipeline Orchestrator
-│   └── api/                 # API Gateway Service
-└── tests/                   # Automated Unit Tests
-    └── test_master_engine.py
+│   ├── api/                 # Worker Agent HTTP API (FastAPI)
+│   │   └── worker_server.py
+│   └── contracts.py         # Pydantic Inter-Agent Contracts
+├── master_agent_projesi/    # Streamlit Web Interface
+│   └── app.py
+└── tests/                   # Automated Unit Tests (7 modules)
 ```
 
 ---
@@ -99,15 +110,23 @@ cd Distributed-AI-Software-Development-Platform
 pip install -r requirements.txt
 ```
 
-### 2. Launch Web Interface (Sprint 1 Increment)
+### 2. Launch Web Interface
 ```bash
 streamlit run master_agent_projesi/app.py
 # veya doğrudan:
 .\start
 ```
-Açılan tarayıcı ekranından gereksinim girip **"⚡ Analyze & Decompose Requirements"** butonuyla görev ayrıştırmasını canlı test edebilirsiniz.
+Açılan tarayıcı ekranından gereksinim girip **"🚀 Analiz et ve ajanlara dağıt"** butonuyla Master Agent motorunu çalıştırabilirsiniz. Ollama kapalıyken de çalışır (etiketli yedek mod).
 
-### 3. Run Automated Unit Tests
+### 3. Run the Worker HTTP API (optional)
+```bash
+# Windows PowerShell: $env:WORKER_AUTH_TOKEN="your-token"
+export WORKER_AUTH_TOKEN=your-token
+python -m src.api.worker_server
+```
+Sunucu varsayılan olarak `8000` portunda açılır (`WORKER_PORT` ile değiştirilebilir). `GET /health` herkese açıktır; `POST /task` için `Authorization: Bearer <token>` gerekir.
+
+### 4. Run Automated Unit Tests
 ```bash
 python -m unittest discover -s tests
 ```
