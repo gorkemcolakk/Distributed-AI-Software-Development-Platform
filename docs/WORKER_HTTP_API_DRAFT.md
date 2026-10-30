@@ -3,9 +3,9 @@
 
 **Hazırlayan:** İrem Yılmaz (Backend Agent — `qwen2.5-coder:7b` / Scrum Master)  
 **İlgili Belgeler & Referanslar:** 
-- Kübra Hepcan — [`docs/SRS.md`](file:///c:/Users/admin/OneDrive/Desktop/Distributed-AI-Software-Development-Platform/docs/SRS.md) (*REQ-8 Dağıtık Ağ İletişimi, REQ-9 Zaman Aşımı ve Hata Kurtarma, NFR-2 Düğüm Hata İzolasyonu*)
-- Sistem Mimarisi — [`docs/ARCHITECTURE.md`](file:///c:/Users/admin/OneDrive/Desktop/Distributed-AI-Software-Development-Platform/docs/ARCHITECTURE.md) (*Bölüm 3: Communication Protocol*)
-- Temel Veri Modelleri — [`src/agents/base_agent.py`](file:///c:/Users/admin/OneDrive/Desktop/Distributed-AI-Software-Development-Platform/src/agents/base_agent.py) (*BaseAgent, AgentStatus, TaskCategory, TaskResult*)
+- Kübra Hepcan — [`docs/SRS.md`](SRS.md) (*REQ-8 Dağıtık Ağ İletişimi, REQ-9 Zaman Aşımı ve Hata Kurtarma, NFR-2 Düğüm Hata İzolasyonu*)
+- Sistem Mimarisi — [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) (*Bölüm 3: Communication Protocol*)
+- Temel Veri Modelleri — [`src/agents/base_agent.py`](../src/agents/base_agent.py) (*BaseAgent, AgentStatus, TaskCategory, TaskResult*)
 - Sprint Kartı: **S2-01** / **S2-07** / Hazırlık: **Sprint 3 (REQ-8 & REQ-3.2)**
 
 ---
