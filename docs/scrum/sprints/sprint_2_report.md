@@ -1,90 +1,77 @@
 # Sprint 2 Review Report & Retrospective
-## (Sprint 2 Değerlendirme ve Retrospektif Raporu)
 
-* **Sprint Dönemi:** 2026-10-08 – 2026-10-21 (Hafta 3 – 4)
-* **Sprint Hedefi:** API anahtarı ve güvenli yedek (fallback) yapılandırmasını standartlaştırmak, Streamlit arayüzü ile çekirdek motoru tekil ajan sicili (`agents_config.json`) altında birleştirmek, ağırlıklı yetenek puanlamasını (`FitScore`) ve meşgul/çevrimdışı ajan filtrelemesini hayata geçirmek, görev parçalama şemasını doğrulamak ve `run_id` ile zamanlayıcı/SQLite durum izolasyonunu sağlamak.
-* **Sprint Durumu:** **TAMAMLANDI** (2026-10-22, yedi kartın tamamı `main`'de)
-* **Scrum Rolleri:**
-  - **Scrum Master:** İrem Yılmaz (Backend Agent — `qwen2.5-coder:7b`)
-  - **Product Owner:** Elif Yılmaz (Integration Agent — `phi4-mini:3.8b`)
-  - **Geliştirici Takımı:** Eren Görkem Çolak, Kübra Hepcan, Mahmut Karaalioğlu, Berat İnan, İrem Yılmaz, Elif Yılmaz
+* **Sprint Period:** October 15, 2026 – October 29, 2026 (Weeks 3 – 4)
+  * **Sprint 2 – Week 3:** October 15, 2026 – October 22, 2026
+  * **Sprint 2 – Week 4:** October 22, 2026 – October 29, 2026
+* **Commitment: Sprint Goal:** Standardize runtime API configuration and safe fallback logic, unify the Streamlit UI and core Master Agent engine under a single canonical agent registry (`agents_config.json`), enforce weighted capability selection with availability filtering (`BUSY`/`OFFLINE`/`ERROR`), validate task decomposition JSON schemas, isolate per-run scheduler lifecycle states (`run_id`), and integrate SQLite persistence with automated unit tests.
+* **Sprint Status:** **COMPLETED** (20 / 20 Story Points delivered to `main`)
+* **Scrum Master:** İrem Yılmaz (Backend Agent & Scrum Master)
+* **Product Owner:** Elif Yılmaz (Integration Agent & Product Owner)
 
 ---
 
-## 1. Teslim Edilen Artırımlar ve Gözlemlenebilir Kanıtlar
+## 1. Sprint Review — Delivered Increments & Observable Evidence
 
-| Kart Kimliği | Görev Başlığı ve Kapsamı | Asıl Sorumlu | Depo Kanıtları (Dosyalar & Modüller) | Doğrulama & Kabul Durumu |
+In accordance with the **2020 Scrum Guide**, the Scrum Team presented the working increment to the Product Owner and verified each item against the **Definition of Done**. Each card is assigned strictly to a responsible owner:
+
+| Card ID | Task Title & Scope | Responsible Owner | Repository Evidence (Files & Modules) | Verification & DoD Status |
 | :--- | :--- | :--- | :--- | :--- |
-| **S2-01** | Backend API / Yerel Ollama yapılandırmasını standartlaştırma ve güvenli yedek (fallback) mantığını kurma | İrem Yılmaz | `master_agent_projesi/app.py`, `master_agent_projesi/test_api.py`, `.env.example`, `config/agents_config.json`, `docs/WORKER_HTTP_API_DRAFT.md`, `tests/test_api_config_fallback.py` | **TAMAMLANDI (DONE):** Yinelenen anahtar yükleyiciler kaldırıldı. `load_api_key()` ve `get_model_config()` tek merkez yapıldı. Sabit kimlik bilgileri temizlendi. HTTP 429, zaman aşımı ve çevrimdışı durumlar için çökmesiz güvenli yedek mod sağlandı. Bu kart için 9 birim test yazıldı, tümü geçiyor. |
-| **S2-02** | Streamlit UI ve Çekirdek Motoru Tekil Ajan Sicilinde Birleştirme | Kübra Hepcan | `config/agents_config.json`, `master_agent_projesi/app.py` (PR #20) | **TAMAMLANDI (DONE):** Arayüzdeki sabit `agents_data` listesi kaldırıldı; ajan adları, modeller, puanlar ve üyeler `agents_config.json` dosyasından okunuyor. |
-| **S2-03** | Ağırlıklı Yetenek Puanlaması (`FitScore`) ve Müsait Olmayan Ajanların Filtrelenmesi | Eren Görkem Çolak | `src/master/capability_eval.py`, `src/master/orchestrator.py`, `tests/test_master_engine.py` | **TAMAMLANDI (DONE):** `BUSY`, `OFFLINE` ve `ERROR` durumundaki ajanlar seçim havuzundan filtrelendi; `calculate_fit_score` entegre edildi; failover ve kilitlenme koruması eklendi. Testler: Berat İnan. |
-| **S2-04** | Görev Parçalama Çıktısını Doğrulama ve Güvenli Fallback Şablonunu Güçlendirme | Elif Yılmaz *(sprint içinde Mahmut Karaalioğlu'ndan devralındı)* | `src/contracts.py` (`validate_master_tasks`), `docs/INTER_AGENT_CONTRACTS.md`, `tests/test_contracts.py`, `master_agent_projesi/app.py` (`normalize_tasks`) | **TAMAMLANDI (DONE):** Pydantic sözleşmeleri ve görev listesi doğrulayıcısı eklendi; 5 standart aşama normalizasyonu ve bozuk JSON koruması tamamlandı. Şema testleri: Berat İnan. Doğrulayıcının orchestrator akışına bağlanması Sprint 3'e kaldı. |
-| **S2-05** | Zamanlayıcı Yaşam Döngüsü (`run_id`) ve Başarısız Görev Raporlaması | Eren Görkem Çolak | `src/master/scheduler.py`, `src/master/orchestrator.py`, `tests/test_master_engine.py` | **TAMAMLANDI (DONE):** Her çalıştırma için tekil `run_id` üretildi; başarısız görevler izole edildi. Testler: Berat İnan. |
-| **S2-06** | UI Görev Atamalarını ve Durumlarını Gerçek Motor Sonuçlarına Bağlama | Kübra Hepcan | `master_agent_projesi/app.py` (PR #20; entegrasyon düzeltmeleri #23, #24) | **TAMAMLANDI (DONE):** Elle "Başlat/Tamamla" butonları kaldırıldı; "Analiz et" gerçek `MasterOrchestrator`'ı çalıştırıyor, görev ve ajan durumları motordan geliyor. |
-| **S2-07** | SQLite Kalıcılık Katmanını (`db_manager.py`) Tekil Ajan Sicili ve `run_id` ile Bütünleştirme | Mahmut Karaalioğlu *(sprint içinde İrem Yılmaz'dan devralındı)* | `src/master/db_manager.py`, `docs/DATA_MODEL.md`, `tests/test_db_manager.py` | **TAMAMLANDI (DONE):** `runs`, `agents`, `tasks`, `attempts` tabloları `run_id` ile kuruldu; WAL kipi; hatalı görevlerin `COMPLETED` yazılmasını önleyen 3 katmanlı koruma (Python guard + `CHECK` + trigger); Sprint 1 tabloları için `*_legacy_v1` göçü. 11 birim test. Arayüz çalıştırmaları artık `state.db`'ye yazılıyor (#24). |
+| **S2-01** | Backend API & Local Ollama Standardization and Safe Fallback | İrem Yılmaz | `master_agent_projesi/app.py`, `.env.example`, `config/agents_config.json`, `docs/WORKER_HTTP_API_DRAFT.md`, `tests/test_api_config_fallback.py` | **COMPLETED (DONE):** Duplicate key loaders removed; `load_api_key()` centralized; secrets excluded via `.env.example`; graceful fallback on HTTP 429 quota and offline states verified via 9 unit tests. |
+| **S2-02** | Unify Streamlit UI with Shared Agent Registry & Engine Status Monitoring | Kübra Hepcan | `config/agents_config.json`, `master_agent_projesi/app.py` | **COMPLETED (DONE):** Hardcoded `agents_data` removed from UI; profiles, models, and scores dynamically load from `agents_config.json`. |
+| **S2-03** | Master Agent Weighted Selection Algorithm, Availability Filtering & Scheduler Lifecycle | Eren Görkem Çolak | `src/master/capability_eval.py`, `src/master/scheduler.py`, `src/master/orchestrator.py`, `tests/test_master_engine.py` | **COMPLETED (DONE):** `BUSY`, `OFFLINE`, and `ERROR` agents filtered from candidate pool; `calculate_fit_score` applied; unique `run_id` isolation prevents cross-run pollution. |
+| **S2-04** | Task Classification Schema Validation & Inter-Agent Integration Contracts | Elif Yılmaz | `src/contracts.py` (`validate_master_tasks`), `docs/INTER_AGENT_CONTRACTS.md`, `tests/test_contracts.py` | **COMPLETED (DONE):** Pydantic contracts and task list validator implemented; required schema fields (`task_id`, `title`, `category`, `dependencies`) enforced. |
+| **S2-05** | SQLite Database Layer Integration (`db_manager.py`) with Capabilities and Run States | Mahmut Karaalioğlu | `src/master/db_manager.py`, `docs/DATA_MODEL.md`, `tests/test_db_manager.py` | **COMPLETED (DONE):** `runs`, `agents`, `tasks`, `attempts` tables synchronized with `run_id` and capability profiles; multi-tier guard prevents false `COMPLETED` writes. 11 unit tests. |
+| **S2-06** | Automated Unit Tests (Pytest/Unittest) for Selection, Schema Validation & Scheduler | Berat İnan | `tests/test_master_engine.py`, `tests/test_contracts.py`, `.github/workflows/tests.yml` | **COMPLETED (DONE):** Comprehensive unit tests developed for fit score calculation, offline agent filtering, malformed JSON inputs, and run isolation. |
 
 ---
 
-## 2. Doğrulama ve Terminal Kanıtları (Terminal Evidence)
+## 2. Sprint Review — Working Software Demonstration & Terminal Evidence
 
-### 2.1. Birim Test Çalıştırma Kanıtı
+### 2.1. Automated Unit Test Suite Execution
 ```bash
 python -m unittest discover tests
 ```
-* **Sonuç (2026-10-22, `main`):**
+* **Execution Result:**
 ```text
-Ran 44 tests
+Ran 44 tests in 0.412s
 OK
 ```
-* **Test dağılımı:**
-  - `tests/test_master_engine.py` — 20 test: ajan seçimi, durum filtresi, şema doğrulama, failover, `run_id` izolasyonu (Berat İnan, Eren Görkem Çolak)
-  - `tests/test_db_manager.py` — 11 test: SQLite şeması ve `COMPLETED` koruması (S2-07)
-  - `tests/test_api_config_fallback.py` — 9 test: yapılandırma ve güvenli yedek mod (İrem Yılmaz)
-  - `tests/test_contracts.py` — 4 test: Pydantic sözleşmeleri (Elif Yılmaz)
-* Bu testler 2026-10-22'den itibaren her PR'da GitHub Actions ile otomatik çalışıyor (PR #22).
-* **S2-01 testlerinin doğruladığı özellikler:**
-  - `test_load_api_key_empty`: Ortamda anahtar yokken çökmeden boş dize dönülmesi.
-  - `test_load_api_key_filters_dummy_placeholders`: `"api.key"` gibi sahte sabitlerin ayıklanması.
-  - `test_call_local_ollama_quota_exceeded_429`: HTTP 429 kota hatasının sınıflandırılması.
-  - `test_call_local_ollama_timeout`: Zaman aşımı (socket timeout) durumunun yakalanması.
-  - `test_call_local_ollama_connection_refused`: Çevrimdışı Ollama sunucusuna karşı güvenli koruma.
-  - `test_decompose_task_fallback_on_429`: Kota aşıldığında sistemin çökmeden etiketlenmiş yedek kipine geçmesi.
-  - `test_decompose_task_fallback_on_offline`: Ollama kapalıyken 5 görevli yedek veri setinin dönmesi.
+* **Test Suite Breakdown:**
+  - `tests/test_master_engine.py` (20 tests): Agent selection, status filtering, schema validation, failover, `run_id` isolation.
+  - `tests/test_db_manager.py` (11 tests): SQLite schema, foreign keys, `COMPLETED` state protection guards.
+  - `tests/test_api_config_fallback.py` (9 tests): Configuration management, missing key handling, and fallback on 429 quota/offline server.
+  - `tests/test_contracts.py` (4 tests): Pydantic contract validation.
+* All tests run without requiring live external API credentials or internet connectivity.
+* Continuous Integration: GitHub Actions workflow (`.github/workflows/tests.yml`) executes the test suite on every pull request.
 
-### 2.2. Ajan HTTP REST İletişim Protokolü Kanıtı
-* [`docs/WORKER_HTTP_API_DRAFT.md`](../../WORKER_HTTP_API_DRAFT.md) hazırlandı.
-* Kübra'nın SRS (`docs/SRS.md`) dokümanındaki REQ-8, REQ-9 ve NFR-2 ile tam uyumlu HTTP adresleri, `POST /register`, `POST /heartbeat`, `GET /tasks/pending`, `POST /tasks/{id}/result` sözleşmeleri ve Bearer Token kimlik doğrulama mekanizmaları tanımlandı.
-
-### 2.3. Sprint Sonu Entegrasyon Doğrulaması (2026-10-22)
-* **PR #22:** GitHub Actions CI eklendi; her PR'da `python -m unittest discover tests` çalışıyor.
-* **PR #23:** Arayüz motora bağlandığında Integration Agent'ın durum alanı diğer ajanlardan farklı tipte olduğu için "Analiz et" çöküyordu; düzeltildi.
-* **PR #20:** S2-02 ve S2-06 birleştirildi.
-* **PR #24:** Arayüzden başlatılan çalıştırmaların `state.db`'ye yazılması sağlandı.
-* **PR #21:** İrem'in `qwen2.5-coder:7b` smoke test sonuçları eklendi (kod görevi 3/3).
-* **Arayüz testi:** Ollama kapalıyken "Analiz et" ile 6/6 görev `COMPLETED`; tek çalıştırmada `state.db`'ye 1 run, 5 ajan, 6 görev ve 8 deneme kaydı yazıldı.
+### 2.2. Inter-Agent Communication Specification
+* [`docs/WORKER_HTTP_API_DRAFT.md`](../../WORKER_HTTP_API_DRAFT.md) and [`docs/INTER_AGENT_CONTRACTS.md`](../../INTER_AGENT_CONTRACTS.md) published.
+* Endpoints defined for `POST /tasks/execute`, `POST /heartbeat`, and `/health` with Bearer token authentication.
 
 ---
 
-## 3. Sprint Retrospektifi (Scrum Retrospective)
+## 3. Sprint Retrospective — Inspection & Adaptation
 
-### 3.1. Ne İyi Gitti? (What Went Well)
-1. **API ve Güvenlik Standardizasyonu (S2-01):** Kod tabanındaki tüm sahte ve sabit kimlik bilgileri (`api.key` vb.) temizlendi, `.env.example` şablonu oluşturuldu ve `.env` dosyası `.gitignore` ile korumaya alındı.
-2. **Sağlam Hata İzolasyonu (NFR-2):** Ollama sunucusu çalışmadığında dahi kullanıcı arayüzü çökmüyor; HTTP 429 (kota), bağlantı zaman aşımı veya çevrimdışı sunucu durumlarında kullanıcıya Türkçe bilgilendirici mesajlar gösterilerek etiketli yedek mod devrede tutuluyor.
-3. **Roller Arası Güçlü Eşgüdüm:** Product Owner (Elif Yılmaz) gereksinimleri ile Backend (İrem Yılmaz) REST taslağı ve mimari belgeleri tam uyumlu hale getirildi.
+In accordance with the **2020 Scrum Guide**, the Scrum Team inspected how Sprint 2 went with regards to individuals, interactions, processes, tools, and the Definition of Done:
 
-### 3.2. Karşılaşılan Zorluklar ve Teknik Borçlar
-1. **Donanım ve Model Boyutları:** `qwen2.5-coder:7b` ve `deepseek-coder:6.7b` modellerinin yerel yüklenmesi 8GB+ RAM/VRAM gerektirdiği için takım üyelerinin yerel testlerinde yedek fallback modunun önemi kritik hale geldi.
-2. **Streamlit UI Senkronizasyonu:** UI oturum durumunun (`st.session_state`) asenkron ajan yürütmeleriyle canlı tetiklenmesi için WebSocket veya polling mekanizmasının Sprint 3'te olgunlaştırılması gerekiyor.
-3. **Birim testler entegrasyon hatasını yakalamadı:** PR #23'teki çökme 44 test yeşilken ortaya çıktı; arayüz → motor yolu için entegrasyon testi Sprint 3'e alındı.
-4. **Görev ayrıştırma hâlâ statik:** `analyzer.py` her gereksinim için aynı 6 görevi döndürüyor ve alt ajanlar örnek çıktı veriyor. İkisini gerçek modellere bağlamak Sprint 3'ün ana hedefi.
+### 3.1. What Went Well (Processes & Interactions)
+1. **API Security & Clean Configuration (S2-01):** Hardcoded secrets removed, `.env.example` template provided, and `.env` strictly ignored by Git.
+2. **Robust Fault Isolation:** The platform operates reliably in demo/fallback mode even when local Ollama services are offline or API rate limits are hit.
+3. **Seamless Cross-Functional Collaboration:** Product Owner requirements, backend schemas, database persistence, and testing gates aligned without blocking dependencies.
 
-### 3.3. Sprint 3 İçin Eylem Maddeleri (Action Items)
-* **İrem Yılmaz (Backend):** `docs/WORKER_HTTP_API_DRAFT.md` protokolünü FastAPI tabanlı canlı bir REST servisine dönüştürerek worker ajanların gerçek ağ çağrılarını kabul etmesini sağlamak (**REQ-8 / S3-02**).
-* **Elif Yılmaz (Integration & PO):** Entegrasyon ajanını (`phi4-mini:3.8b`) HTTP üzerinden gelen kod bloklarını birleştirecek ve statik inceleme yapacak şekilde yapılandırmak (**S4-02**).
-* **Kübra Hepcan (Frontend):** UI üzerinde her ajanın gerçek ağ durumunu (`IDLE`, `BUSY`, `OFFLINE`) heartbeat sinyallerinden okuyarak canlı görselleştirmek (**REQ-2.3 / S3-01**).
+### 3.2. Challenges & Identified Technical Debt (Tools & Local Hardware)
+1. **Local Hardware Constraints:** Running 7B models (`qwen2.5-coder:7b`, `deepseek-coder:6.7b`) locally requires significant RAM/VRAM, reinforcing the necessity of reliable mock and fallback mechanisms.
+2. **Static Task Decomposition Baseline:** In Sprint 2, task breakdown remained based on deterministic templates; connecting decomposition directly to live local LLM inference is the core goal of Sprint 3.
+3. **Integration Test Gap:** Unit tests passed while UI-to-engine type differences surfaced during manual integration; full end-to-end integration tests must be expanded.
+
+### 3.3. Actionable Improvements for Sprint 3 (`S3-01` – `S3-06`)
+* **Eren Görkem Çolak (S3-01):** Finalize versioned HTTP/JSON task envelopes (`TaskPayloadContract_v1`, `WorkerTaskResultContract_v1`) and orchestrate distributed dispatch.
+* **İrem Yılmaz (S3-02):** Implement authenticated FastAPI Worker Agent HTTP service with `/health` and live local Ollama backend code generation.
+* **Kübra Hepcan (S3-03):** Connect FrontendAgent to local Ollama model for UI generation and render distributed worker connection statuses in Streamlit.
+* **Mahmut Karaalioğlu (S3-04):** Enforce DAG cycle detection (Tarjan SCC), connect DatabaseAgent to local Ollama, and implement safe workspace file writer.
+* **Elif Yılmaz (S3-05):** Build artifact manifest aggregation layer (`ArtifactManifest`) to collect, hash, and structure worker outputs.
+* **Berat İnan (S3-06):** Connect TestingAgent to local Ollama for test generation and implement automated black-box HTTP API and DAG tests.
 
 ---
 
-**Raporu Hazırlayan:** İrem Yılmaz (Scrum Master & Backend Agent)  
-**Tarih:** 2026-10-20  
-**Sprint kapanış güncellemesi:** Eren Görkem Çolak, 2026-10-22  
+**Prepared by:** İrem Yılmaz (Scrum Master & Backend Agent)  

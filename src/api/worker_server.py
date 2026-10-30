@@ -20,6 +20,7 @@ from typing import Dict, Any, List, Optional
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 from src.agents.backend_agent import BackendAgent
 from src.agents.base_agent import BaseAgent
@@ -147,8 +148,8 @@ def create_worker_app(agent: Optional[BaseAgent] = None, auth_token: Optional[st
                 detail="Field 'task_id' is required and must not be empty"
             )
 
-        # 4. Agent Execution
-        result = worker_agent.execute_task(data)
+        # 4. Agent Execution (run in threadpool so event loop stays non-blocking for /health)
+        result = await run_in_threadpool(worker_agent.execute_task, data)
 
         return {
             "contract_version": data.get("contract_version", "1.0"),

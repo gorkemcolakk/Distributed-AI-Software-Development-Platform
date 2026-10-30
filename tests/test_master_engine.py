@@ -31,7 +31,7 @@ class TestMasterEngine(unittest.TestCase):
     def setUp(self):
         self.evaluator = CapabilityEvaluator()
         self.frontend_agent = FrontendAgent()
-        self.backend_agent = BackendAgent()
+        self.backend_agent = BackendAgent(use_ollama=False)
         self.db_agent = DatabaseAgent()
         self.test_agent = TestingAgent(use_ollama=False)
         self.int_agent = IntegrationAgent()
@@ -282,7 +282,7 @@ class TestOrchestratorNegativeScenarios(unittest.TestCase):
 
     def setUp(self):
         self.real_evaluator = CapabilityEvaluator()
-        for agent in (FrontendAgent(), BackendAgent(), DatabaseAgent(),
+        for agent in (FrontendAgent(), BackendAgent(use_ollama=False), DatabaseAgent(),
                       TestingAgent(use_ollama=False), IntegrationAgent()):
             self.real_evaluator.register_agent(agent)
 

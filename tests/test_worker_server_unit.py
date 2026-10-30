@@ -7,6 +7,7 @@ Sorumlu: İrem Yılmaz (Backend Agent — qwen2.5-coder:7b / Scrum Master)
 import ast
 import json
 import os
+from pathlib import Path
 import shutil
 import socket
 import tempfile
@@ -244,7 +245,7 @@ def login(user: UserLogin):
             resolve_safe_output_path(self.temp_dir, "malicious.sh")
 
         safe = resolve_safe_output_path(self.temp_dir, "safe_service.py")
-        self.assertTrue(str(safe).startswith(os.path.abspath(self.temp_dir)))
+        self.assertTrue(str(safe).startswith(str(Path(self.temp_dir).resolve())))
 
 
 class TestLiveWorkerHttpLoopback(unittest.TestCase):
@@ -312,6 +313,33 @@ class TestLiveWorkerHttpLoopback(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as ctx:
             bad_client.execute_task({"task_id": "task-1"}, path="/task")
         self.assertEqual(ctx.exception.code, 401)
+
+    def test_concurrent_health_check_while_task_executing(self):
+        """When a task takes time, GET /health must respond immediately without being blocked (run_in_threadpool)."""
+        client = WorkerHttpClient(base_url=self.base_url, auth_token=self.token)
+        original_process = self.agent._process
+        try:
+            self.agent._process = lambda task, logs: (time.sleep(0.8) or {"files": []})
+            task_started = threading.Event()
+
+            def run_task():
+                task_started.set()
+                client.execute_task({"task_id": "slow-task-1", "title": "Slow Task"}, path="/task")
+
+            t = threading.Thread(target=run_task)
+            t.start()
+            task_started.wait()
+            time.sleep(0.1)
+
+            started = time.monotonic()
+            health = client.health_check()
+            elapsed = time.monotonic() - started
+
+            self.assertEqual(health["status"], "HEALTHY")
+            self.assertLess(elapsed, 0.4, f"Health check blocked on task for {elapsed:.3f}s")
+            t.join()
+        finally:
+            self.agent._process = original_process
 
 
 if __name__ == "__main__":

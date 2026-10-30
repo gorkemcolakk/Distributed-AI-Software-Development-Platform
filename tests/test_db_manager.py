@@ -124,7 +124,7 @@ class TestDbManager(unittest.TestCase):
 
     # --- End-to-end orchestrator persistence ------------------------------
     def test_orchestrator_persists_successful_run(self):
-        evaluator = CapabilityEvaluator([FrontendAgent(), BackendAgent(), DatabaseAgent(),
+        evaluator = CapabilityEvaluator([FrontendAgent(), BackendAgent(use_ollama=False), DatabaseAgent(),
                                          TestingAgent(use_ollama=False), IntegrationAgent()])
         orch = MasterOrchestrator(evaluator=evaluator, db_path=self.db_path)
         result = orch.process_requirement("Library system", "Library")
@@ -162,7 +162,7 @@ class TestDbManager(unittest.TestCase):
         self.assertEqual(run["completed_count"], 0)
 
     def test_consecutive_runs_are_isolated(self):
-        evaluator = CapabilityEvaluator([FrontendAgent(), BackendAgent(), DatabaseAgent(),
+        evaluator = CapabilityEvaluator([FrontendAgent(), BackendAgent(use_ollama=False), DatabaseAgent(),
                                          TestingAgent(use_ollama=False), IntegrationAgent()])
         orch = MasterOrchestrator(evaluator=evaluator, db_path=self.db_path)
         r1 = orch.process_requirement("A", "A")
