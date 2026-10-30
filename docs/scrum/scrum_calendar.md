@@ -17,12 +17,12 @@ Each Trello card is assigned strictly to a single accountable owner:
 
 | Student ID | Full Name | Scrum Accountability | Assigned Local Ollama Model | Primary Technical Focus | Owned Trello Cards |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **2204012296** | **Eren Görkem Çolak** | **Developer** (Lead Architect) | `qwen2.5:3b` (Master Agent) | Master Orchestration, Task Decomposition, Capability Evaluation & Scheduler Lifecycle | **S1-01, S1-07, S2-03, S3-01, S4-01, S5-01** |
+| **2204012296** | **Eren Görkem Çolak** | **Developer** (Lead Architect) | `qwen2.5:7b` (Master Agent) | Master Orchestration, Task Decomposition, Capability Evaluation & Scheduler Lifecycle | **S1-01, S1-07, S2-03, S2-05, S3-01, S4-01, S5-01** |
 | **2204012301** | **İrem Yılmaz** | **Scrum Master & Developer** | `qwen2.5-coder:7b` (Backend Agent) | Scrum Process Facilitation, API Config & Fallback, Worker HTTP Server & Error Classification | **S1-04, S2-01, S3-02, S4-02, S5-02** |
-| **2204012302** | **Kübra Hepcan** | **Developer** | `qwen2.5-coder:3b` / `gemma2:2b` (Frontend Agent) | UI/UX Design, Streamlit Dashboard, Requirements Specification & Distributed Telemetry Visuals | **S1-02, S1-05, S2-02, S3-03, S4-03, S5-03** |
-| **2204012300** | **Mahmut Karaalioğlu** | **Developer** | `llama3.2:3b` (Database Agent) | System Architecture, SQLite Database Layer (`db_manager.py`), DAG Validation & Conflict Resolution | **S1-03, S2-05, S3-04, S4-04, S5-04** |
+| **2204012302** | **Kübra Hepcan** | **Developer** | `qwen2.5-coder:3b` / `gemma2:2b` (Frontend Agent) | UI/UX Design, Streamlit Dashboard, Requirements Specification & Distributed Telemetry Visuals | **S1-02, S1-05, S2-02, S2-06, S3-03, S4-03, S5-03** |
+| **2204012300** | **Mahmut Karaalioğlu** | **Developer** | `llama3.2:3b` (Database Agent) | System Architecture, SQLite Database Layer (`db_manager.py`), DAG Validation & Conflict Resolution | **S1-03, S2-07, S3-04, S4-04, S5-04** |
 | **2204012297** | **Elif Yılmaz** | **Product Owner & Developer** | `phi4-mini:3.8b` (Integration Agent) | Product Backlog Management, Task Schema Validation, Artifact Aggregation & Automated Code Review | **S2-04, S3-05, S4-05, S5-05** *(+ Backlog Setup)* |
-| **2204012303** | **Berat İnan** | **Developer** | `deepseek-coder:6.7b` (Testing & QA Agent) | Local Ollama Research, Automated Unit/Integration Tests, CI Quality Gate & Model Benchmarking | **S1-06, S2-06, S3-06, S4-06, S5-06** |
+| **2204012303** | **Berat İnan** | **Developer** | `deepseek-coder:6.7b` (Testing & QA Agent) | Local Ollama Research, Automated Unit/Integration Tests, CI Quality Gate & Model Benchmarking | **S1-06, S3-06, S4-06, S5-06** |
 
 ---
 
@@ -31,11 +31,11 @@ Each Trello card is assigned strictly to a single accountable owner:
 | Sprint | Iteration Dates (2026) | Detailed Weekly Breakdown | Theme / Focus Area | Trello Cards Included | Story Points | Est. Hours | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Sprint 1** | Oct 01 – Oct 15 | **Week 1:** Oct 01 – Oct 08<br>**Week 2:** Oct 08 – Oct 15 | Foundation & Requirements Baseline | `S1-01` – `S1-07` (7 Cards) | 24 SP | 52h | **Completed** |
-| **Sprint 2** | Oct 15 – Oct 29 | **Week 3:** Oct 15 – Oct 22<br>**Week 4:** Oct 22 – Oct 29 | Agent Registry, Fit Score & Lifecycle Isolation | `S2-01` – `S2-06` (6 Cards) | 20 SP | 38h | **Completed** |
+| **Sprint 2** | Oct 15 – Oct 29 | **Week 3:** Oct 15 – Oct 22<br>**Week 4:** Oct 22 – Oct 29 | Agent Registry, Fit Score & Lifecycle Isolation | `S2-01` – `S2-07` (7 Cards) | 22 SP | 44h | **Completed** |
 | **Sprint 3** | Oct 29 – Nov 12 | **Week 5:** Oct 29 – Nov 05<br>**Week 6:** Nov 05 – Nov 12 | Distributed Execution & DAG Scheduling | `S3-01` – `S3-06` (6 Cards) | 24 SP | 54h | **In Progress** |
 | **Sprint 4** | Nov 12 – Nov 26 | **Week 7:** Nov 12 – Nov 19<br>**Week 8:** Nov 19 – Nov 26 | Error Recovery, Code Review & CI Quality Gate | `S4-01` – `S4-06` (6 Cards) | 24 SP | 52h | Planned |
 | **Sprint 5** | Nov 26 – Dec 10 | **Week 9:** Nov 26 – Dec 03<br>**Week 10:** Dec 03 – Dec 10 | Telemetry Dashboard, Benchmarking & E2E Release | `S5-01` – `S5-06` (6 Cards) | 20 SP | 40h | Planned |
-| **Total** | **Oct 01 – Dec 10** | **10 Weeks (Weeks 1 – 10)** | **Complete Distributed Multi-Agent Platform** | **31 Cards** | **112 SP** | **236h** | **Active Project** |
+| **Total** | **Oct 01 – Dec 10** | **10 Weeks (Weeks 1 – 10)** | **Complete Distributed Multi-Agent Platform** | **32 Cards** | **114 SP** | **242h** | **Active Project** |
 
 ---
 

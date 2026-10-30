@@ -28,15 +28,16 @@ In accordance with project governance, every Trello card is assigned strictly to
 * **Sprint 2 – Week 3:** October 15, 2026 – October 22, 2026
 * **Sprint 2 – Week 4:** October 22, 2026 – October 29, 2026
 * **Sprint Goal:** Standardize runtime API configuration and safe fallback logic, unify the Streamlit UI and core engine under a single canonical agent registry (`agents_config.json`), enforce weighted capability selection with availability filtering (`BUSY`/`OFFLINE`/`ERROR`), validate task decomposition JSON schemas, isolate per-run scheduler lifecycle states (`run_id`), and integrate SQLite persistence with automated unit tests.
-* **Status:** **COMPLETED** (20 / 20 Story Points)
+* **Status:** **COMPLETED** (22 / 22 Story Points)
 
 ### Deliverables & Trello Mapping:
 - [x] **S2-01:** Backend API & Local Ollama Standardization and Safe Fallback (`app.py`, `.env.example`, `tests/test_api_config_fallback.py`) — **Owner: İrem Yılmaz** [3 SP]
 - [x] **S2-02:** Unify Streamlit UI with Shared Agent Registry & Engine Status Monitoring (`config/agents_config.json`, `app.py`) — **Owner: Kübra Hepcan** [5 SP]
-- [x] **S2-03:** Master Agent Weighted Selection Algorithm, Availability Filtering & Scheduler Lifecycle (`src/master/capability_eval.py`, `src/master/scheduler.py`) — **Owner: Eren Görkem Çolak** [3 SP]
+- [x] **S2-03:** Master Agent Weighted Selection Algorithm, Availability Filtering (`src/master/capability_eval.py`, `src/master/orchestrator.py`) — **Owner: Eren Görkem Çolak** [3 SP]
 - [x] **S2-04:** Task Classification Schema Validation & Inter-Agent Integration Contracts (`src/contracts.py`, `docs/INTER_AGENT_CONTRACTS.md`) — **Owner: Elif Yılmaz** [3 SP]
-- [x] **S2-05:** SQLite Database Layer Integration (`db_manager.py`) with Capabilities and Run States (`docs/DATA_MODEL.md`, `tests/test_db_manager.py`) — **Owner: Mahmut Karaalioğlu** [3 SP]
-- [x] **S2-06:** Automated Unit Tests (Pytest/Unittest) for Selection, Schema Validation & Scheduler (`tests/test_master_engine.py`, `.github/workflows/tests.yml`) — **Owner: Berat İnan** [3 SP]
+- [x] **S2-05:** Run-Scoped Scheduler Lifecycle (`run_id`) & Failed/Unassigned Task Reporting (`src/master/scheduler.py`, `src/master/orchestrator.py`) — **Owner: Eren Görkem Çolak** [3 SP]
+- [x] **S2-06:** Bind Visible UI Task Assignments & Statuses to Real Engine Results (`master_agent_projesi/app.py`) — **Owner: Kübra Hepcan** [3 SP]
+- [x] **S2-07:** SQLite Persistence Layer Integration (`db_manager.py`) with Unified Agent Registry & Run Lifecycle (`docs/DATA_MODEL.md`, `tests/test_db_manager.py`) — **Owner: Mahmut Karaalioğlu** [2 SP]
 
 ---
 
