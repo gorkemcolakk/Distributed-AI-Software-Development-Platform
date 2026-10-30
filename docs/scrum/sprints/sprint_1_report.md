@@ -52,13 +52,12 @@ In accordance with the **2020 Scrum Guide**, the Scrum Team inspected how Sprint
 2. **Duplicate API Key Loader:** `app.py` contained two `load_api_key()` definitions requiring a unified, safe fallback configuration path.
 3. **Unconditional Completion Status:** `scheduler.py` retained state across runs on the same instance, and `orchestrator.py` marked tasks `COMPLETED` even when an agent was unavailable.
 
-### 3.3. Actionable Improvements for Sprint 2 (`S2-01` – `S2-06`)
-* **İrem Yılmaz (S2-01):** Remove duplicate `load_api_key()` and enforce safe offline/quota fallback mode.
-* **Kübra Hepcan (S2-02):** Unify Streamlit UI and core engine under `config/agents_config.json` and bind UI views to verified engine outputs.
-* **Eren Görkem Çolak (S2-03):** Enforce weighted task-fitness scoring, filter out `BUSY`/`OFFLINE`/`ERROR` agents, and isolate scheduler state per `run_id`.
-* **Elif Yılmaz (S2-04):** Implement strict JSON schema validation for decomposed tasks and define inter-agent contracts.
-* **Mahmut Karaalioğlu (S2-05):** Align `src/master/db_manager.py` with the unified agent registry and per-run lifecycle states.
-* **Berat İnan (S2-06):** Develop comprehensive unit tests covering agent selection, schema validation, and scheduler lifecycle isolation.
+### 3.3. Actionable Improvements for Sprint 2 (`S2-01` – `S2-07`)
+* **S2-01 (İrem):** Remove duplicate `load_api_key()` and enforce safe demo/fallback mode.
+* **S2-02 & S2-06 (Kübra):** Unify Streamlit UI and core engine under `config/agents_config.json` and bind UI status displays to real engine execution results.
+* **S2-03 & S2-05 (Eren Görkem):** Enforce weighted task-fitness scoring, filter out `BUSY`/`OFFLINE`/`ERROR` agents, and isolate scheduler state per `run_id`.
+* **S2-04 (Mahmut):** Add strict JSON schema validation for decomposed tasks and clearly label fallback demo outputs.
+* **S2-07 (İrem & Mahmut):** Align `src/master/db_manager.py` with the unified agent registry and `run_id` lifecycle.
 
 ---
 
