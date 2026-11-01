@@ -56,3 +56,6 @@ scratch/
 *.db
 *.sqlite3
 state.db
+
+# Generated Workspaces
+workspaces/

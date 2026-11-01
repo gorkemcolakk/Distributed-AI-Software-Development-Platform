@@ -1,8 +1,10 @@
 """
-SQLite Persistence Layer (S1-04, S2-07).
+SQLite Persistence Layer (S1-04, S2-07, S3-04).
 
 Stores run lifecycle (run_id), agent capability profiles, per-run task
-statuses and execution attempts. See docs/DATA_MODEL.md for the schema.
+statuses and execution attempts. S3-04 adds the run workspace directory
+(runs.workspace_path) and the files each task wrote into it (tasks.output_files).
+See docs/DATA_MODEL.md for the schema.
 """
 
 import json
@@ -16,7 +18,8 @@ DEFAULT_DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..
 DB_PATH = os.environ.get("STATE_DB_PATH", DEFAULT_DB_PATH)
 
 # Şema sürümü: PRAGMA user_version içinde tutulur.
-SCHEMA_VERSION = 2
+# v3 (S3-04): runs.workspace_path + tasks.output_files
+SCHEMA_VERSION = 3
 
 AGENT_STATUSES = ("IDLE", "BUSY", "OFFLINE", "ERROR")
 TASK_STATUSES = ("PENDING", "IN_PROGRESS", "COMPLETED", "FAILED", "UNASSIGNED", "BLOCKED")
@@ -62,6 +65,21 @@ def _migrate_legacy_schema(cursor: sqlite3.Cursor):
             cursor.execute(f"ALTER TABLE {table} RENAME TO {table}_legacy_v1")
 
 
+# Columns added after v2. Existing v2 databases get them through ALTER TABLE (data kept).
+_ADDED_COLUMNS = {
+    "runs": [("workspace_path", "TEXT")],
+    "tasks": [("output_files", "TEXT DEFAULT '[]'")],
+}
+
+
+def _add_missing_columns(cursor: sqlite3.Cursor):
+    for table, columns in _ADDED_COLUMNS.items():
+        existing = _table_columns(cursor, table)
+        for name, ddl in columns:
+            if existing and name not in existing:
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+
+
 def init_db(db_path: Optional[str] = None, verbose: bool = True) -> str:
     """Creates all tables idempotently (CREATE TABLE IF NOT EXISTS). Returns DB path."""
     path = _resolve_path(db_path)
@@ -85,6 +103,7 @@ def init_db(db_path: Optional[str] = None, verbose: bool = True) -> str:
                 failed_count INTEGER DEFAULT 0,
                 unassigned_count INTEGER DEFAULT 0,
                 blocked_count INTEGER DEFAULT 0,
+                workspace_path TEXT,
                 started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 finished_at TIMESTAMP
             )
@@ -130,6 +149,7 @@ def init_db(db_path: Optional[str] = None, verbose: bool = True) -> str:
                     CHECK (agent_result_status IS NULL OR agent_result_status IN ('SUCCESS', 'FAILED')),
                 reason TEXT,
                 attempted_agents TEXT DEFAULT '[]',
+                output_files TEXT DEFAULT '[]',
                 execution_time_seconds REAL DEFAULT 0.0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -171,6 +191,7 @@ def init_db(db_path: Optional[str] = None, verbose: bool = True) -> str:
             END
         ''')
 
+        _add_missing_columns(cursor)
         cursor.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         conn.commit()
     finally:
@@ -260,13 +281,14 @@ def upsert_agents(agents: Iterable[Any], db_path: Optional[str] = None):
 
 
 def create_run(run_id: str, project_title: str, requirement_id: Optional[str] = None,
-               total_tasks: int = 0, db_path: Optional[str] = None):
+               total_tasks: int = 0, workspace_path: Optional[str] = None,
+               db_path: Optional[str] = None):
     conn = get_connection(db_path)
     try:
         conn.execute('''
-            INSERT INTO runs (run_id, project_title, requirement_id, total_tasks, system_status)
-            VALUES (?, ?, ?, ?, 'RUNNING')
-        ''', (run_id, project_title, requirement_id, total_tasks))
+            INSERT INTO runs (run_id, project_title, requirement_id, total_tasks, workspace_path, system_status)
+            VALUES (?, ?, ?, ?, ?, 'RUNNING')
+        ''', (run_id, project_title, requirement_id, total_tasks, workspace_path))
         conn.commit()
     finally:
         conn.close()
@@ -291,8 +313,8 @@ def save_task_result(run_id: str, task: Dict[str, Any], record: Dict[str, Any],
             INSERT INTO tasks (run_id, task_id, title, description, category, required_capability,
                                dependencies, assigned_agent_id, assigned_agent_name, model_used,
                                fit_score, status, agent_result_status, reason, attempted_agents,
-                               execution_time_seconds)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               output_files, execution_time_seconds)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(run_id, task_id) DO UPDATE SET
                 assigned_agent_id = excluded.assigned_agent_id,
                 assigned_agent_name = excluded.assigned_agent_name,
@@ -302,6 +324,7 @@ def save_task_result(run_id: str, task: Dict[str, Any], record: Dict[str, Any],
                 agent_result_status = excluded.agent_result_status,
                 reason = excluded.reason,
                 attempted_agents = excluded.attempted_agents,
+                output_files = excluded.output_files,
                 execution_time_seconds = excluded.execution_time_seconds,
                 updated_at = CURRENT_TIMESTAMP
         ''', (
@@ -312,6 +335,7 @@ def save_task_result(run_id: str, task: Dict[str, Any], record: Dict[str, Any],
             record.get("model_used"), record.get("fit_score", 0.0),
             record["status"], record.get("agent_result_status"), record.get("reason"),
             json.dumps(record.get("attempted_agents", [])),
+            json.dumps(record.get("output_files", [])),
             record.get("execution_time_seconds", 0.0),
         ))
 
