@@ -220,6 +220,99 @@ class TestAgentAvailabilityFiltering(unittest.TestCase):
                                                           available_only=True), [])
 
 
+class TestSpecialtyFirstRanking(unittest.TestCase):
+    """A specialist for the required specialty is ranked before any non-specialist."""
+
+    def setUp(self):
+        # Weak specialist vs. strong generalist: the generalist wins on raw score alone
+        self.specialist = FakeAgent("fake-db", "Weak DB Specialist", coding=70.0,
+                                    reasoning=70.0, context=70.0, specialties=["database"])
+        self.generalist = FakeAgent("fake-gen", "Strong Generalist", coding=95.0,
+                                    reasoning=95.0, context=95.0, specialties=["backend"])
+        self.evaluator = build_fake_evaluator(self.generalist, self.specialist)
+
+    def test_specialist_ranks_first_even_with_a_lower_score(self):
+        ranked = self.evaluator.evaluate_and_rank(TaskCategory.DATABASE,
+                                                  required_specialty="database")
+
+        self.assertEqual([c["agent_id"] for c in ranked], ["fake-db", "fake-gen"])
+        self.assertGreater(ranked[1]["fit_score"], ranked[0]["fit_score"])
+        self.assertTrue(ranked[0]["is_specialist"])
+        self.assertFalse(ranked[1]["is_specialist"])
+        self.assertEqual(self.evaluator.select_best_agent(
+            TaskCategory.DATABASE, required_specialty="database").agent_id, "fake-db")
+
+    def test_fit_scores_are_unchanged_by_the_ordering(self):
+        """Only the order changes: the specialist still shows base score + 5."""
+        base = self.evaluator.evaluate_and_rank(TaskCategory.DATABASE)
+        base_by_id = {c["agent_id"]: c["fit_score"] for c in base}
+        ranked = self.evaluator.evaluate_and_rank(TaskCategory.DATABASE,
+                                                  required_specialty="database")
+        for candidate in ranked:
+            expected = base_by_id[candidate["agent_id"]] + (5.0 if candidate["is_specialist"] else 0.0)
+            self.assertEqual(candidate["fit_score"], expected)
+
+    def test_non_specialist_stays_in_the_list_as_failover_candidate(self):
+        ranked = self.evaluator.evaluate_and_rank(TaskCategory.DATABASE,
+                                                  required_specialty="database")
+        self.assertIn("fake-gen", [c["agent_id"] for c in ranked])
+
+    def test_unavailable_specialist_falls_back_to_the_generalist(self):
+        self.specialist.status = AgentStatus.OFFLINE
+        selected = self.evaluator.select_best_agent(TaskCategory.DATABASE,
+                                                    required_specialty="database")
+        self.assertEqual(selected.agent_id, "fake-gen")
+
+    def test_higher_score_decides_between_two_specialists(self):
+        stronger = FakeAgent("fake-db2", "Strong DB Specialist", coding=90.0,
+                             reasoning=90.0, context=90.0, specialties=["database"])
+        self.evaluator.register_agent(stronger)
+        ranked = self.evaluator.evaluate_and_rank(TaskCategory.DATABASE,
+                                                  required_specialty="database")
+        self.assertEqual([c["agent_id"] for c in ranked], ["fake-db2", "fake-db", "fake-gen"])
+
+    def test_without_a_matching_specialist_the_raw_score_decides(self):
+        for specialty in (None, "", "no-such-specialty"):
+            with self.subTest(required_specialty=specialty):
+                ranked = self.evaluator.evaluate_and_rank(TaskCategory.DATABASE,
+                                                          required_specialty=specialty)
+                self.assertEqual([c["agent_id"] for c in ranked], ["fake-gen", "fake-db"])
+                self.assertFalse(any(c["is_specialist"] for c in ranked))
+
+    def test_orchestrator_gives_the_database_task_to_the_specialist(self):
+        """End to end: the database task goes to the specialist; every other task to the generalist."""
+        generalist = FakeAgent("fake-gen", "Strong Generalist", coding=95.0, reasoning=95.0,
+                               context=95.0,
+                               specialties=[s for s in ALL_SPECIALTIES if s != "database"])
+        orchestrator = MasterOrchestrator(
+            evaluator=build_fake_evaluator(generalist, self.specialist), persist=False)
+
+        result = orchestrator.process_requirement("Library system", "Library")
+
+        by_task = {r["task_id"]: r for r in result["task_assignments"]}
+        self.assertEqual(result["system_status"], "COMPLETED")
+        self.assertEqual(by_task["task-db-1"]["assigned_agent"], "Weak DB Specialist")
+        for task_id, record in by_task.items():
+            if task_id != "task-db-1":
+                self.assertEqual(record["assigned_agent"], "Strong Generalist", task_id)
+
+    def test_orchestrator_fails_over_to_the_generalist_when_the_specialist_fails(self):
+        generalist = FakeAgent("fake-gen", "Strong Generalist", coding=95.0, reasoning=95.0,
+                               context=95.0,
+                               specialties=[s for s in ALL_SPECIALTIES if s != "database"])
+        failing = FakeAgent("fake-db", "Weak DB Specialist", coding=70.0, reasoning=70.0,
+                            context=70.0, specialties=["database"], fail_on=["task-db-1"])
+        orchestrator = MasterOrchestrator(
+            evaluator=build_fake_evaluator(generalist, failing), persist=False)
+
+        result = orchestrator.process_requirement("Library system", "Library")
+
+        record = next(r for r in result["task_assignments"] if r["task_id"] == "task-db-1")
+        self.assertEqual(record["status"], "COMPLETED")
+        self.assertEqual(record["assigned_agent"], "Strong Generalist")
+        self.assertEqual(record["attempted_agents"], ["Weak DB Specialist", "Strong Generalist"])
+
+
 class TestTaskSchemaValidation(unittest.TestCase):
     """S2-04: decomposition JSON schema, empty requirements and malformed JSON."""
 
