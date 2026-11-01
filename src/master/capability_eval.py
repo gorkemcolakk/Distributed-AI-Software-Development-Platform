@@ -27,6 +27,11 @@ class CapabilityEvaluator:
         Ranks all active agents for a given task category.
         If available_only=True, excludes agents in BUSY, OFFLINE, or ERROR status.
         Returns a sorted list of agents with fit scores.
+
+        Agents that declare the required specialty are ranked before every agent that does
+        not (each group ordered by fit score). Non-specialists stay in the list as failover
+        candidates. Without this, a generalist with a higher raw score beat the specialist
+        (e.g. the Backend Agent took the database task from the Database Agent).
         """
         unavailable_statuses = {"BUSY", "OFFLINE", "ERROR"}
         rankings = []
@@ -39,7 +44,8 @@ class CapabilityEvaluator:
             fit_score = agent.capabilities.calculate_fit_score(task_category)
             
             # Bonus points for matching domain specialty
-            if required_specialty and required_specialty in agent.capabilities.specialties:
+            is_specialist = bool(required_specialty) and required_specialty in agent.capabilities.specialties
+            if is_specialist:
                 fit_score = min(100.0, fit_score + 5.0)
 
             rankings.append({
@@ -48,12 +54,13 @@ class CapabilityEvaluator:
                 "agent_name": agent.name,
                 "model_name": agent.model_name,
                 "fit_score": fit_score,
+                "is_specialist": is_specialist,
                 "status": raw_status,
                 "active_task_count": len(agent.current_tasks)
             })
 
-        # Sort by fit_score descending, then by active_task_count ascending
-        rankings.sort(key=lambda x: (x["fit_score"], -x["active_task_count"]), reverse=True)
+        # Specialists first, then fit_score descending, then active_task_count ascending
+        rankings.sort(key=lambda x: (x["is_specialist"], x["fit_score"], -x["active_task_count"]), reverse=True)
         return rankings
 
     def select_best_agent(
