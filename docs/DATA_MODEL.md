@@ -1,10 +1,11 @@
 # Data Model and Persistence Design
 
-**Iteration:** Iteration 1 (S1-04) → updated in Iteration 2 (S2-07)  
-**Task ID:** S1-04, S2-07  
-**Assignee:** İrem Yılmaz (Scrum Master)  
-**Reviewer:** Mahmut Karaalioğlu  
-**Source of truth:** [`src/master/db_manager.py`](../src/master/db_manager.py) — schema version `2` (`PRAGMA user_version`)  
+**Iteration:** Iteration 1 (S1-04) → updated in Iteration 2 (S2-07) → updated in Iteration 3 (S3-04)  
+**Task ID:** S1-04, S2-07, S3-04  
+**Assignee:** Mahmut Karaalioğlu (Database Agent)  
+**Reviewer:** İrem Yılmaz (Scrum Master)  
+**Source of truth:** [`src/master/db_manager.py`](../src/master/db_manager.py) — schema version `3` (`PRAGMA user_version`)  
+**Workspace writer:** [`src/master/workspace.py`](../src/master/workspace.py) — isolated output writer at `workspaces/{run_id}/`  
 
 ## 1. Persistent Storage vs. In-Memory State (State Allocation)
 In our distributed AI agent platform, data is categorized into two main storage types:
@@ -34,6 +35,7 @@ All tables are created with `CREATE TABLE IF NOT EXISTS` by `init_db()`, which i
 | `system_status` | TEXT | `RUNNING`, `COMPLETED`, `PARTIALLY_COMPLETED`, `FAILED` (CHECK) |
 | `total_tasks` | INTEGER | |
 | `completed_count`, `failed_count`, `unassigned_count`, `blocked_count` | INTEGER | Final status counters |
+| `workspace_path` | TEXT | S3-04: absolute root directory for this run's artifacts (`workspaces/{run_id}`) |
 | `started_at`, `finished_at` | TIMESTAMP | |
 
 ### `agents` — persistent agent capability profiles
@@ -65,6 +67,7 @@ All tables are created with `CREATE TABLE IF NOT EXISTS` by `init_db()`, which i
 | `agent_result_status` | TEXT | `SUCCESS`, `FAILED` or NULL |
 | `reason` | TEXT | Failure / block explanation |
 | `attempted_agents` | TEXT (JSON array) | Failover order |
+| `output_files` | TEXT (JSON array) | S3-04: relative paths within `workspaces/{run_id}/` written by this task |
 | `execution_time_seconds` | REAL | |
 | `created_at`, `updated_at` | TIMESTAMP | |
 

@@ -4,11 +4,13 @@ Main entrypoint connecting decomposition, capability evaluation, task scheduling
 """
 
 import logging
+import os
 import sqlite3
 from typing import Dict, Any, List, Optional
 from src.master.analyzer import RequirementsAnalyzer
 from src.master.capability_eval import CapabilityEvaluator
-from src.master.scheduler import TaskScheduler
+from src.master.scheduler import TaskScheduler, DagValidationError  # noqa: F401 (re-exported for callers)
+from src.master.workspace import RunWorkspace, UnsafePathError, DEFAULT_WORKSPACE_ROOT
 from src.agents.base_agent import BaseAgent, TaskCategory, TaskResult, AgentStatus
 from src.master import db_manager
 
@@ -19,13 +21,28 @@ class MasterOrchestrator:
     """Master Agent Orchestrator managing distributed multi-agent software development lifecycle."""
 
     def __init__(self, evaluator: Optional[CapabilityEvaluator] = None,
-                 db_path: Optional[str] = None, persist: bool = True):
+                 db_path: Optional[str] = None, persist: bool = True,
+                 workspace_root: Optional[str] = None, write_artifacts: Optional[bool] = None):
         self.persist = persist
         self.db_path = db_manager.init_db(db_path, verbose=False) if persist else None
         self.analyzer = RequirementsAnalyzer()
         self.evaluator = evaluator or CapabilityEvaluator()
         self.scheduler = TaskScheduler()
         self.execution_history: List[TaskResult] = []
+        # S3-04: agent output files are written only under <workspace_root>/<run_id>/.
+        # Default: on for persisted runs, off for in-memory runs unless a root is given.
+        self.write_artifacts = (persist or workspace_root is not None) if write_artifacts is None else write_artifacts
+        self.workspace_root = self._resolve_workspace_root(workspace_root)
+
+    def _resolve_workspace_root(self, workspace_root: Optional[str]) -> str:
+        if workspace_root:
+            return os.path.abspath(workspace_root)
+        if os.environ.get("WORKSPACE_ROOT"):
+            return os.path.abspath(os.environ["WORKSPACE_ROOT"])
+        if self.db_path:
+            # Keep workspaces next to the state DB (repo root in production, temp dir in tests)
+            return os.path.join(os.path.dirname(os.path.abspath(self.db_path)), "workspaces")
+        return DEFAULT_WORKSPACE_ROOT
 
     def _db(self, fn, *args, **kwargs):
         """Runs a persistence call; SQLite I/O errors are logged, never crash the run.
@@ -53,24 +70,48 @@ class MasterOrchestrator:
         Full orchestration pipeline:
         1. Reset ERROR agents to IDLE and initialize isolated run_id
         2. Decompose requirement into task DAG
-        3. Evaluate agent capabilities and match tasks with failover support
-        4. Schedule and execute tasks in topological order
-        5. Apply deadlock protection for unsatisfied dependencies
-        6. Determine dynamic system_status and return comprehensive execution report
+        3. Validate the DAG before execution: structural errors raise DagValidationError;
+           cyclic / undefined-dependency tasks and everything downstream are BLOCKED up front
+        4. Evaluate agent capabilities and match tasks with failover support
+        5. Schedule and execute tasks in topological order; write agent files only
+           into workspaces/{run_id}/ (unsafe paths fail the attempt)
+        6. Apply deadlock protection for unsatisfied dependencies
+        7. Determine dynamic system_status and return comprehensive execution report
         """
         self._reset_error_agents()
         run_id = self.scheduler.reset()
 
         decomposition = self.analyzer.decompose(requirement_text, project_title)
         tasks = decomposition["tasks"]
+        # Rejects the whole run (before anything is persisted or executed) if the graph is malformed
+        dag_report = self.scheduler.validate_graph(tasks)
         task_map = {t["task_id"]: t for t in tasks}
         assignments = []
         assignment_by_id = {}
         agent_ids = self._agent_ids()
+        workspace = RunWorkspace(run_id, root=self.workspace_root) if self.write_artifacts else None
+        project_context = {"project_title": project_title, "requirement": requirement_text}
 
         self._db(db_manager.upsert_agents, self.evaluator.registered_agents)
         self._db(db_manager.create_run, run_id, project_title,
-                 requirement_id=decomposition["requirement_id"], total_tasks=len(tasks))
+                 requirement_id=decomposition["requirement_id"], total_tasks=len(tasks),
+                 workspace_path=str(workspace.path) if workspace else None)
+
+        # Pre-execution DAG rejection: these tasks are never handed to an agent
+        for task in tasks:
+            task_id = task["task_id"]
+            if task_id in dag_report["rejected"]:
+                reasons = dag_report["rejected"][task_id]
+            elif task_id in dag_report["blocked_downstream"]:
+                reasons = [f"bağımlı olduğu görev '{dep}', durum BLOCKED"
+                           for dep in dag_report["blocked_downstream"][task_id]]
+            else:
+                continue
+            self.scheduler.mark_blocked(task_id)
+            record = self._blocked_record(task, "Çalıştırma öncesi DAG doğrulaması: " + "; ".join(reasons))
+            assignments.append(record)
+            assignment_by_id[task_id] = record
+            self._db(db_manager.save_task_result, run_id, task, record, agent_ids=agent_ids)
 
         while not self.scheduler.is_all_finished(tasks):
             executable_tasks = self.scheduler.get_executable_tasks(tasks)
@@ -100,7 +141,8 @@ class MasterOrchestrator:
                         "status": "UNASSIGNED",
                         "agent_result_status": None,
                         "reason": f"No available agent found for category '{category.value}'",
-                        "attempted_agents": []
+                        "attempted_agents": [],
+                        "output_files": []
                     }
                     assignments.append(record)
                     assignment_by_id[task_id] = record
@@ -113,24 +155,46 @@ class MasterOrchestrator:
                 task_succeeded = False
                 last_result = None
                 last_agent = None
+                last_error = None
+                written_files: List[Dict[str, Any]] = []
+                dispatch_task = dict(task, context_artifacts={**project_context,
+                                                              **(task.get("context_artifacts") or {})})
 
                 for candidate in ranked_candidates:
                     agent = candidate["agent"]
                     attempted_agents.append(agent.name)
                     last_agent = agent
 
-                    result = agent.execute_task(task)
+                    result = agent.execute_task(dispatch_task)
                     self.execution_history.append(result)
                     last_result = result
+                    is_successful = result.status == "SUCCESS"
+                    error_message = result.error_message
+
+                    if is_successful and workspace is not None:
+                        try:
+                            written_files = workspace.write_files(
+                                (result.output_artifacts or {}).get("files") or [])
+                        except UnsafePathError as exc:
+                            # The agent answered, but its output cannot be delivered safely
+                            is_successful = False
+                            error_message = f"Güvensiz çıktı yolu reddedildi: {exc}"
+                            written_files = []
+                        except OSError as exc:
+                            is_successful = False
+                            error_message = f"Çıktı dosyaları çalışma alanına yazılamadı: {exc}"
+                            written_files = []
+
+                    last_error = error_message
                     attempt_log.append({
                         "agent_id": agent.agent_id,
                         "agent_name": agent.name,
-                        "is_successful": result.status == "SUCCESS",
-                        "error_message": result.error_message,
+                        "is_successful": is_successful,
+                        "error_message": error_message,
                         "execution_time_seconds": result.execution_time_seconds,
                     })
 
-                    if result.status == "SUCCESS":
+                    if is_successful:
                         task_succeeded = True
                         break
 
@@ -146,13 +210,14 @@ class MasterOrchestrator:
                         "status": "COMPLETED",
                         "agent_result_status": "SUCCESS",
                         "reason": f"Successfully executed by '{last_agent.name}'",
-                        "attempted_agents": attempted_agents
+                        "attempted_agents": attempted_agents,
+                        "output_files": [f["relative_path"] for f in written_files]
                     }
                     assignments.append(record)
                     assignment_by_id[task_id] = record
                 else:
                     self.scheduler.mark_failed(task_id)
-                    err_msg = last_result.error_message if (last_result and last_result.error_message) else "Execution failed"
+                    err_msg = last_error or "Execution failed"
                     record = {
                         "task_id": task_id,
                         "title": task["title"],
@@ -163,7 +228,8 @@ class MasterOrchestrator:
                         "status": "FAILED",
                         "agent_result_status": "FAILED",
                         "reason": f"All eligible candidate agents failed: {err_msg}",
-                        "attempted_agents": attempted_agents
+                        "attempted_agents": attempted_agents,
+                        "output_files": []
                     }
                     assignments.append(record)
                     assignment_by_id[task_id] = record
@@ -201,18 +267,7 @@ class MasterOrchestrator:
 
             reason_str = "; ".join(block_reasons)
             self.scheduler.mark_blocked(task_id)
-            record = {
-                "task_id": task_id,
-                "title": task["title"],
-                "assigned_agent": None,
-                "model_used": None,
-                "fit_score": 0.0,
-                "execution_time_seconds": 0.0,
-                "status": "BLOCKED",
-                "agent_result_status": None,
-                "reason": reason_str,
-                "attempted_agents": []
-            }
+            record = self._blocked_record(task, reason_str)
             assignments.append(record)
             assignment_by_id[task_id] = record
             self._db(db_manager.save_task_result, run_id, task, record, agent_ids=agent_ids)
@@ -252,5 +307,29 @@ class MasterOrchestrator:
                 "FAILED": failed_count,
                 "UNASSIGNED": unassigned_count,
                 "BLOCKED": blocked_count
+            },
+            "workspace_path": str(workspace.path) if workspace else None,
+            "dag_validation": {
+                "is_valid": dag_report["is_valid"],
+                "cycles": dag_report["cycles"],
+                "missing_dependencies": dag_report["missing_dependencies"],
+                "rejected_tasks": sorted(dag_report["rejected"]),
+                "blocked_downstream": sorted(dag_report["blocked_downstream"]),
             }
+        }
+
+    @staticmethod
+    def _blocked_record(task: Dict[str, Any], reason: str) -> Dict[str, Any]:
+        return {
+            "task_id": task["task_id"],
+            "title": task["title"],
+            "assigned_agent": None,
+            "model_used": None,
+            "fit_score": 0.0,
+            "execution_time_seconds": 0.0,
+            "status": "BLOCKED",
+            "agent_result_status": None,
+            "reason": reason,
+            "attempted_agents": [],
+            "output_files": []
         }

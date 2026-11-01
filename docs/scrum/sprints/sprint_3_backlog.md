@@ -20,12 +20,12 @@ Define versioned Master–Worker HTTP/JSON task contracts (`contracts.py`), impl
 | **S3-01** | Define Master–Worker HTTP/JSON Task Contracts & Orchestrate Distributed Dispatch | Eren Görkem Çolak | Highest | 5 | 10h | S2-03, S2-04 | Sprint Backlog |
 | **S3-02** | Develop Authenticated Worker Agent HTTP API Endpoint & BackendAgent Ollama Code Generation | İrem Yılmaz | Highest | 5 | 10h | S3-01, S2-01 | Done |
 | **S3-03** | Connect FrontendAgent Local Ollama UI Code Generation & Display Distributed Agent/File Status in UI | Kübra Hepcan | High | 3 | 8h | S3-01, S2-02 | Sprint Backlog |
-| **S3-04** | Validate Task Dependency Graph (DAG), Generate DatabaseAgent SQL & Establish Secure Workspace Writer | Mahmut Karaalioğlu | Highest | 5 | 10h | S3-01, S2-05 | Sprint Backlog |
+| **S3-04** | Validate Task Dependency Graph (DAG), Generate DatabaseAgent SQL & Establish Secure Workspace Writer | Mahmut Karaalioğlu | Highest | 5 | 10h | S3-01, S2-05 | Done |
 | **S3-05** | Collect Worker Agent Output Files & Artifact Manifest in Common Project Structure | Elif Yılmaz | High | 3 | 8h | S3-01, S3-04 | Sprint Backlog |
 | **S3-06** | Connect TestingAgent Local Ollama Test Generation & Implement Distributed Communication/DAG Unit Tests | Berat İnan | High | 3 | 8h | S3-01, S3-02, S3-04 | Done |
 
 **Total Sprint 3 Capacity:** 24 Story Points (54 Estimated Hours)  
-**Current Progress:** 8 Story Points Completed (S3-02, S3-06) | 16 Story Points In Progress (S3-01, S3-03, S3-04, S3-05)
+**Current Progress:** 13 Story Points Completed (S3-02, S3-04, S3-06) | 11 Story Points In Progress (S3-01, S3-03, S3-05)
 
 ---
 
@@ -50,10 +50,10 @@ Define versioned Master–Worker HTTP/JSON task contracts (`contracts.py`), impl
 - [ ] 4. Empty or malformed model outputs are not marked as successful in the UI.
 
 ### S3-04: DAG Graph Validation, SQL Generation & Safe Workspace Writer (Mahmut Karaalioğlu)
-- [ ] 1. Dependency cycles (Tarjan SCC) and missing task IDs detected and rejected before execution.
-- [ ] 2. Tasks with failed prerequisites not executed and marked as `BLOCKED`.
-- [ ] 3. DatabaseAgent generates real SQL/schema outputs using local Ollama (`llama3.2:3b`).
-- [ ] 4. File writing restricted strictly to `workspaces/{run_id}/`; path traversal attacks prevented.
+- [x] 1. Dependency cycles (Tarjan SCC) and missing task IDs detected and rejected before execution.
+- [x] 2. Tasks with failed prerequisites not executed and marked as `BLOCKED`.
+- [x] 3. DatabaseAgent generates real SQL/schema outputs using local Ollama (`llama3.2:3b`).
+- [x] 4. File writing restricted strictly to `workspaces/{run_id}/`; path traversal attacks prevented.
 
 ### S3-05: Worker Artifact Manifest Aggregation (Elif Yılmaz)
 - [ ] 1. Standardized artifact manifest created containing file sizes and SHA-256 hashes for all worker outputs.
