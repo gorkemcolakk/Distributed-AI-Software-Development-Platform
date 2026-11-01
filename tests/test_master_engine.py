@@ -32,7 +32,7 @@ class TestMasterEngine(unittest.TestCase):
         self.evaluator = CapabilityEvaluator()
         self.frontend_agent = FrontendAgent()
         self.backend_agent = BackendAgent(use_ollama=False)
-        self.db_agent = DatabaseAgent()
+        self.db_agent = DatabaseAgent(use_ollama=False)
         self.test_agent = TestingAgent(use_ollama=False)
         self.int_agent = IntegrationAgent()
 
@@ -58,7 +58,7 @@ class TestMasterEngine(unittest.TestCase):
 
     def test_full_orchestration_pipeline(self):
         """Test end-to-end execution of requirements decomposition and task scheduling."""
-        orchestrator = MasterOrchestrator(evaluator=self.evaluator)
+        orchestrator = MasterOrchestrator(evaluator=self.evaluator, persist=False)
         sample_requirement = "Develop an online library management system with book catalog, user authentication, and loan tracking."
 
         result = orchestrator.process_requirement(sample_requirement, project_title="Library System")
@@ -282,7 +282,7 @@ class TestOrchestratorNegativeScenarios(unittest.TestCase):
 
     def setUp(self):
         self.real_evaluator = CapabilityEvaluator()
-        for agent in (FrontendAgent(), BackendAgent(use_ollama=False), DatabaseAgent(),
+        for agent in (FrontendAgent(), BackendAgent(use_ollama=False), DatabaseAgent(use_ollama=False),
                       TestingAgent(use_ollama=False), IntegrationAgent()):
             self.real_evaluator.register_agent(agent)
 
