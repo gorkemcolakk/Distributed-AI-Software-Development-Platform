@@ -1,0 +1,98 @@
+{
+  "member": "kubra",
+  "model": "qwen2.5-coder:3b",
+  "date_utc": "2026-11-03T18:23:22+00:00",
+  "options": {
+    "temperature": 0,
+    "seed": 42
+  },
+  "machine": {
+    "os": "Windows 10",
+    "cpu": "Intel64 Family 6 Model 158 Stepping 9, GenuineIntel",
+    "ram_gb": 15.9,
+    "gpu": "NVIDIA GeForce GTX 1050, 4096 MiB",
+    "ollama_version": "ollama version is 0.40.13",
+    "ollama_list": "NAME                ID              SIZE      MODIFIED           \nqwen2.5-coder:3b    f72c60cabf62    1.9 GB    About a minute ago"
+  },
+  "hardware_fit": {
+    "installed": true,
+    "model_size_gb": 1.9,
+    "size_source": "ollama list",
+    "vram_gb": 4.0,
+    "required_vram_gb": 2.9,
+    "required_ram_gb": 4.9,
+    "placement": "gpu"
+  },
+  "summary": {
+    "json_task": {
+      "pass_rate": "3/3",
+      "median_wall_seconds": 14.62
+    },
+    "coding_task": {
+      "pass_rate": "3/3",
+      "median_wall_seconds": 4.86
+    }
+  },
+  "results": [
+    {
+      "task": "json_task",
+      "run": 1,
+      "passed": true,
+      "detail": "8 valid subtasks",
+      "wall_seconds": 51.26,
+      "output_tokens": 343,
+      "tokens_per_second": 27.6,
+      "response_excerpt": "```json\n{\n  \"subtasks\": [\n    {\n      \"id\": \"T1\",\n      \"title\": \"Create User Registration Endpoint\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": []\n    },\n    {\n      \"id\": \"T2\",\n      \"title\": \"Create User Login Endpoint\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": [\"T1\"]\n    },\n    {\n      \"id\": \"T3\",\n      \"title\": \"Implement Note Saving Functionality\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": [\"T1\"]\n    },\n    {\n      \"id\": \"T4\",\n      \"title\": \"Create Note Retrieval Endp"
+    },
+    {
+      "task": "json_task",
+      "run": 2,
+      "passed": true,
+      "detail": "8 valid subtasks",
+      "wall_seconds": 14.62,
+      "output_tokens": 343,
+      "tokens_per_second": 28.2,
+      "response_excerpt": "```json\n{\n  \"subtasks\": [\n    {\n      \"id\": \"T1\",\n      \"title\": \"Create User Registration Endpoint\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": []\n    },\n    {\n      \"id\": \"T2\",\n      \"title\": \"Create User Login Endpoint\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": [\"T1\"]\n    },\n    {\n      \"id\": \"T3\",\n      \"title\": \"Implement Note Saving Functionality\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": [\"T1\"]\n    },\n    {\n      \"id\": \"T4\",\n      \"title\": \"Create Note Retrieval Endp"
+    },
+    {
+      "task": "json_task",
+      "run": 3,
+      "passed": true,
+      "detail": "8 valid subtasks",
+      "wall_seconds": 14.44,
+      "output_tokens": 343,
+      "tokens_per_second": 28.0,
+      "response_excerpt": "```json\n{\n  \"subtasks\": [\n    {\n      \"id\": \"T1\",\n      \"title\": \"Create User Registration Endpoint\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": []\n    },\n    {\n      \"id\": \"T2\",\n      \"title\": \"Create User Login Endpoint\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": [\"T1\"]\n    },\n    {\n      \"id\": \"T3\",\n      \"title\": \"Implement Note Saving Functionality\",\n      \"category\": \"BACKEND\",\n      \"depends_on\": [\"T1\"]\n    },\n    {\n      \"id\": \"T4\",\n      \"title\": \"Create Note Retrieval Endp"
+    },
+    {
+      "task": "coding_task",
+      "run": 1,
+      "passed": true,
+      "detail": "all asserts passed",
+      "wall_seconds": 5.59,
+      "output_tokens": 72,
+      "tokens_per_second": 28.5,
+      "response_excerpt": "```python\nimport re\n\ndef is_palindrome(s: str) -> bool:\n    # Remove non-alphanumeric characters and convert to lowercase\n    cleaned = re.sub(r'[^a-zA-Z0-9]', '', s).lower()\n    # Check if the cleaned string is equal to its reverse\n    return cleaned == cleaned[::-1]\n```"
+    },
+    {
+      "task": "coding_task",
+      "run": 2,
+      "passed": true,
+      "detail": "all asserts passed",
+      "wall_seconds": 4.86,
+      "output_tokens": 72,
+      "tokens_per_second": 28.3,
+      "response_excerpt": "```python\nimport re\n\ndef is_palindrome(s: str) -> bool:\n    # Remove non-alphanumeric characters and convert to lowercase\n    cleaned = re.sub(r'[^a-zA-Z0-9]', '', s).lower()\n    # Check if the cleaned string is equal to its reverse\n    return cleaned == cleaned[::-1]\n```"
+    },
+    {
+      "task": "coding_task",
+      "run": 3,
+      "passed": true,
+      "detail": "all asserts passed",
+      "wall_seconds": 4.79,
+      "output_tokens": 72,
+      "tokens_per_second": 28.2,
+      "response_excerpt": "```python\nimport re\n\ndef is_palindrome(s: str) -> bool:\n    # Remove non-alphanumeric characters and convert to lowercase\n    cleaned = re.sub(r'[^a-zA-Z0-9]', '', s).lower()\n    # Check if the cleaned string is equal to its reverse\n    return cleaned == cleaned[::-1]\n```"
+    }
+  ]
+}
