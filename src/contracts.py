@@ -135,3 +135,23 @@ class IntegrationReportContract_v1(BaseModel):
     findings: List[IntegrationFinding] = Field(default_factory=list)
     package_path: Optional[str] = None
     summary: str = ""
+
+import hashlib
+from typing import Dict, Any, List, Optional
+from pydantic import BaseModel, Field
+
+# (Var olan diğer kodların burada kalacak...)
+
+class ArtifactManifest(BaseModel):
+    """Her bir dosya çıktısı için boyut ve özet (hash) bilgisini tutan yapı."""
+    file_name: str
+    relative_path: str
+    size_bytes: int
+    sha256_hash: str
+
+class ManifestReportContract(BaseModel):
+    """Integration Agent tarafından oluşturulan toplu manifest raporu."""
+    run_id: str
+    manifests: List[ArtifactManifest] = Field(default_factory=list)
+    missing_or_empty_files: List[str] = Field(default_factory=list)
+    catalog_status: str = "PENDING"

@@ -1,6 +1,7 @@
 import os
 import ast
 import time
+import hashlib
 from typing import Dict, Any, List, Optional
 
 try:
@@ -13,6 +14,8 @@ from src.contracts import (
     IntegrationFinding,
     IntegrationReportContract_v1,
     validate_master_tasks,
+    ArtifactManifest,
+    ManifestReportContract
 )
 
 
@@ -77,6 +80,43 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
                     return self.model_dump()
             
             self.capabilities = IntegrationCaps()
+
+    def generate_artifact_manifest(self, run_id: str, artifacts: Dict[str, str]) -> ManifestReportContract:
+        """
+        Gelen dosya içeriklerinin boyutunu ve SHA-256 özetini hesaplar;
+        boş veya geçersiz olanları raporlar ve kataloglar.
+        """
+        manifests = []
+        missing_or_empty = []
+
+        for file_path, content in artifacts.items():
+            if not content or not str(content).strip():
+                missing_or_empty.append(file_path)
+                continue
+
+            content_bytes = str(content).encode('utf-8')
+            size_bytes = len(content_bytes)
+            sha256_hash = hashlib.sha256(content_bytes).hexdigest()
+
+            file_name = os.path.basename(file_path)
+            
+            manifests.append(
+                ArtifactManifest(
+                    file_name=file_name,
+                    relative_path=file_path,
+                    size_bytes=size_bytes,
+                    sha256_hash=sha256_hash
+                )
+            )
+
+        status = "COMPLETED" if not missing_or_empty else "REVIEW_REQUIRED"
+        
+        return ManifestReportContract(
+            run_id=run_id or "unknown_run",
+            manifests=manifests,
+            missing_or_empty_files=missing_or_empty,
+            catalog_status=status
+        )
 
     def _is_safe_path(self, file_path: str) -> bool:
         """Dosya yolunun çalışma alanı (workspace) dışına çıkıp çıkmadığını kontrol eder."""
