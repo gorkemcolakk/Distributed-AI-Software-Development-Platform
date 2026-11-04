@@ -321,7 +321,7 @@ class TestRemoteAgentProxyAndDistributedDispatch(unittest.TestCase):
         - IntegrationAgent receives generated files from DB and Backend agents and succeeds on task-int-1.
         """
         evaluator = CapabilityEvaluator([
-            FrontendAgent(),
+            FrontendAgent(use_ollama=False),
             BackendAgent(use_ollama=False),
             DatabaseAgent(use_ollama=False),
             TestingAgent(use_ollama=False),

@@ -1,9 +1,10 @@
 """
 Master–Worker & Integration Inter-Agent Contracts (v1.0).
 
-S2-04 (Elif Yılmaz) & S3-01 (Eren Görkem Çolak):
+S2-04 (Elif Yılmaz) & S3-01 (Eren Görkem Çolak) & S3-05 (Elif Yılmaz):
 - Versioned Pydantic schemas (contract_version = "1.0") for task envelopes,
-  worker results, orchestrator records, worker errors, and integration reports.
+  worker results, orchestrator records, worker errors, integration reports,
+  and SHA-256 artifact manifests.
 - Explicit run_id, task_id, category, dependencies, payload, timestamps,
   envelope_id, and timeout_seconds in task envelopes.
 - Status normalization between Worker ("SUCCESS" / "COMPLETED") and Orchestrator.
@@ -11,6 +12,7 @@ S2-04 (Elif Yılmaz) & S3-01 (Eren Görkem Çolak):
 """
 
 from enum import Enum
+import hashlib
 import threading
 import time
 from typing import Dict, Any, List, Optional, Tuple
@@ -271,7 +273,7 @@ class OrchestratorTaskRecordContract_v1(BaseModel):
 
 
 # =====================================================================
-# 4. BÜTÜNLEŞTİRME (INTEGRATION) RAPORU SÖZLEŞMESİ
+# 4. BÜTÜNLEŞTİRME (INTEGRATION) & ARTIFACT MANIFEST SÖZLEŞMELERİ
 # =====================================================================
 class IntegrationFinding(BaseModel):
     file_path: str
@@ -290,6 +292,22 @@ class IntegrationReportContract_v1(BaseModel):
     findings: List[IntegrationFinding] = Field(default_factory=list)
     package_path: Optional[str] = None
     summary: str = ""
+
+
+class ArtifactManifest(BaseModel):
+    """Her bir dosya çıktısı için boyut ve özet (hash) bilgisini tutan yapı (S3-05)."""
+    file_name: str
+    relative_path: str
+    size_bytes: int
+    sha256_hash: str
+
+
+class ManifestReportContract(BaseModel):
+    """Integration Agent tarafından oluşturulan toplu manifest raporu (S3-05)."""
+    run_id: str
+    manifests: List[ArtifactManifest] = Field(default_factory=list)
+    missing_or_empty_files: List[str] = Field(default_factory=list)
+    catalog_status: str = "PENDING"
 
 
 # =====================================================================
