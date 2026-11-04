@@ -755,6 +755,13 @@ def run_engine(requirement, live):
             res = _orig(task)
             live.write(
                 f"{'🟢' if res.status == 'SUCCESS' else '🔴'} {_ag.name} → {res.status} ({res.execution_time_seconds} sn)")
+            if res.status == "SUCCESS":
+                names = [f.get("filename") or f.get("path") for f in (res.output_artifacts or {}).get("files") or []
+                         if isinstance(f, dict)]
+                if names:
+                    live.write(f"📄 Üretilen dosya: {', '.join(str(n) for n in names)}")
+            elif res.error_message:
+                live.write(f"↳ Başarısız: {res.error_message}")
             return res
 
         ag.execute_task = wrapped
@@ -793,6 +800,36 @@ def demo_report(requirement):
     return {"run_id": "demo", "total_tasks_processed": len(recs), "task_assignments": recs,
             "system_status": "COMPLETED",
             "status_counts": {"COMPLETED": len(recs), "FAILED": 0, "UNASSIGNED": 0, "BLOCKED": 0}}, meta
+
+
+# Ajanın üretim kipi -> (etiket, renk). Yedek/şablon çıktı asla "model çıktısı" gibi gösterilmez.
+GEN_MODE_LABELS = {
+    "ollama": ("Model çıktısı", "#34D399"),
+    "ollama_inference": ("Model çıktısı", "#34D399"),
+    "fallback": ("Yedek şablon · model çıktısı değil", "#FBBF24"),
+    "safe_fallback": ("Yedek şablon · model çıktısı değil", "#FBBF24"),
+    "template": ("Şablon · Ollama kapalı", "#FBBF24"),
+}
+CODE_LANGUAGES = {".html": "html", ".css": "css", ".js": "javascript", ".py": "python", ".sql": "sql",
+                  ".json": "json", ".md": "markdown"}
+
+
+def generated_file_rows(report, artifacts):
+    """Master'ın workspaces/<run_id>/ altına yazdığı dosyalar (görev kaydındaki output_files)."""
+    workspace = report.get("workspace_path")
+    rows = []
+    for rec in report.get("task_assignments", []):
+        art = ((artifacts or {}).get(rec["task_id"]) or {}).get("artifacts") or {}
+        contents = {}
+        for f in art.get("files") or []:
+            if isinstance(f, dict):
+                contents[str(f.get("filename") or f.get("path") or "").replace("\\", "/")] = f.get("content")
+        mode = art.get("generation_mode") or art.get("synthesis_mode")
+        for rel in rec.get("output_files") or []:
+            rows.append({"task": rec["title"], "agent": rec["assigned_agent"] or "-", "file": rel,
+                         "path": str(Path(workspace) / rel) if workspace else rel,
+                         "mode": mode, "content": contents.get(rel)})
+    return rows
 
 
 def build_log(report, skipped=(), decomp_label="", decomp_demo=False):
@@ -988,6 +1025,25 @@ if state.report:
                 st.json(art["artifacts"])
                 st.code("\n".join(art["logs"]), language="text")
         st.markdown('<div style="height:10px"></div>', unsafe_allow_html=True)
+
+    if state.mode == "engine":
+        st.markdown('<div class="section-title">Üretilen dosyalar</div>', unsafe_allow_html=True)
+        file_rows = generated_file_rows(report, state.artifacts)
+        if file_rows:
+            if report.get("workspace_path"):
+                st.caption(f"Çalışma alanı: {report['workspace_path']}")
+            for i, row in enumerate(file_rows):
+                mode_txt, mode_color = GEN_MODE_LABELS.get(row["mode"], ("Üretim kipi bilinmiyor", "#6B7280"))
+                with st.expander(f"📄 {row['file']} · {row['task']}"):
+                    st.markdown(f'<span class="chip chip-cx" style="--c:{mode_color}">{esc(mode_txt)}</span> '
+                                f'<span class="chip">🤖 {esc(row["agent"])}</span>', unsafe_allow_html=True)
+                    st.caption(row["path"])
+                    if row["content"]:
+                        st.code(row["content"][:20000], language=CODE_LANGUAGES.get(Path(row["file"]).suffix.lower()))
+                        st.download_button("İndir", row["content"], file_name=Path(row["file"]).name,
+                                           key=f"dl-{report['run_id']}-{i}")
+        else:
+            st.caption("Bu çalıştırmada diske yazılmış dosya yok (tamamlanan görev yok ya da çıktı dosya içermiyor).")
 
     if state.decomp:
         with st.expander(f"Master Agent görev ayrıştırması (5 aşama) · {state.decomp_label}"):
