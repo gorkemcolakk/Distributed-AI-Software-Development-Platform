@@ -42,14 +42,14 @@ Deliver a web-based distributed multi-agent software development platform where 
 ### Phase 3: Distributed Execution & DAG Scheduling (Sprint 3: Oct 29 – Nov 12, 2026)
 | PBI ID | Trello Card | Title & Scope Summary | Responsible | Priority | Size (SP) | Est. Hours | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **PBI-15** | **S3-01** | **Master–Worker Communication Contracts & Orchestration:** Define versioned HTTP/JSON task envelopes in `contracts.py`. | Eren Görkem Çolak | Highest | 5 | 10h | Sprint Backlog |
+| **PBI-15** | **S3-01** | **Master–Worker Communication Contracts & Orchestration:** Define versioned HTTP/JSON task envelopes in `contracts.py` and orchestrate distributed dispatch. | Eren Görkem Çolak | Highest | 5 | 10h | Done |
 | **PBI-16** | **S3-02** | **Authenticated Worker HTTP API & Code Generation:** Implement Bearer token worker server and local Ollama backend coding. | İrem Yılmaz | Highest | 5 | 10h | Done |
 | **PBI-17** | **S3-03** | **FrontendAgent Ollama UI Generation & UI Monitoring:** Generate UI code with local model and display worker statuses on dashboard. | Kübra Hepcan | High | 3 | 8h | Sprint Backlog |
-| **PBI-18** | **S3-04** | **DAG Dependency Validation, SQL Generation & Workspace Writer:** Enforce DAG cycle checks, SQL generation, and safe file writer. | Mahmut Karaalioğlu | Highest | 5 | 10h | Sprint Backlog |
+| **PBI-18** | **S3-04** | **DAG Dependency Validation, SQL Generation & Workspace Writer:** Enforce DAG cycle checks, SQL generation, and safe file writer. | Mahmut Karaalioğlu | Highest | 5 | 10h | Done |
 | **PBI-19** | **S3-05** | **Artifact Manifest Aggregation & Directory Assembly:** Aggregate worker outputs, compute SHA-256 hashes, and catalog artifacts. | Elif Yılmaz | High | 3 | 8h | Sprint Backlog |
 | **PBI-20** | **S3-06** | **TestingAgent Ollama Test Generation & Distributed Tests:** Generate tests with local model and write HTTP API/DAG unit tests. | Berat İnan | High | 3 | 8h | Done |
 
-*Phase 3 Total: 6 Items | 24 Story Points | 54 Hours | Active Sprint (2 Done, 4 in Sprint Backlog)*
+*Phase 3 Total: 6 Items | 24 Story Points | 54 Hours | Active Sprint (4 Done [18 SP], 2 in Sprint Backlog [6 SP])*
 
 ---
 
@@ -86,6 +86,6 @@ Deliver a web-based distributed multi-agent software development platform where 
 * **Total Story Points:** 114 SP (242 Estimated Hours)
 * **Sprint 1 Delivered:** 24 SP (100% completed)
 * **Sprint 2 Delivered:** 22 SP (100% completed)
-* **Sprint 3 (In Progress):** 24 SP (8 SP Done, 16 SP in active development)
+* **Sprint 3 (In Progress):** 24 SP (18 SP Done, 6 SP in active development)
 * **Sprint 4 (Planned):** 24 SP
 * **Sprint 5 (Planned):** 20 SP

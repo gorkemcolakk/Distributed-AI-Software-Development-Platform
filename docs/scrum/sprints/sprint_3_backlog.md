@@ -17,7 +17,7 @@ Define versioned Master–Worker HTTP/JSON task contracts (`contracts.py`), impl
 
 | Card ID | Task Title & Scope | Responsible | Priority | Story Points | Est. Hours | Dependencies | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **S3-01** | Define Master–Worker HTTP/JSON Task Contracts & Orchestrate Distributed Dispatch | Eren Görkem Çolak | Highest | 5 | 10h | S2-03, S2-04 | Sprint Backlog |
+| **S3-01** | Define Master–Worker HTTP/JSON Task Contracts & Orchestrate Distributed Dispatch | Eren Görkem Çolak | Highest | 5 | 10h | S2-03, S2-04 | Done |
 | **S3-02** | Develop Authenticated Worker Agent HTTP API Endpoint & BackendAgent Ollama Code Generation | İrem Yılmaz | Highest | 5 | 10h | S3-01, S2-01 | Done |
 | **S3-03** | Connect FrontendAgent Local Ollama UI Code Generation & Display Distributed Agent/File Status in UI | Kübra Hepcan | High | 3 | 8h | S3-01, S2-02 | Sprint Backlog |
 | **S3-04** | Validate Task Dependency Graph (DAG), Generate DatabaseAgent SQL & Establish Secure Workspace Writer | Mahmut Karaalioğlu | Highest | 5 | 10h | S3-01, S2-05 | Done |
@@ -25,17 +25,17 @@ Define versioned Master–Worker HTTP/JSON task contracts (`contracts.py`), impl
 | **S3-06** | Connect TestingAgent Local Ollama Test Generation & Implement Distributed Communication/DAG Unit Tests | Berat İnan | High | 3 | 8h | S3-01, S3-02, S3-04 | Done |
 
 **Total Sprint 3 Capacity:** 24 Story Points (54 Estimated Hours)  
-**Current Progress:** 13 Story Points Completed (S3-02, S3-04, S3-06) | 11 Story Points In Progress (S3-01, S3-03, S3-05)
+**Current Progress:** 18 Story Points Completed (S3-01, S3-02, S3-04, S3-06) | 6 Story Points In Progress (S3-03, S3-05)
 
 ---
 
 ## 3. Sprint 3 Verification Checklist (Trello Synchronized)
 
 ### S3-01: Master–Worker Contracts & Dispatch Orchestration (Eren Görkem Çolak)
-- [ ] 1. Task, result, and error JSON schemas versioned in `src/contracts.py` and `docs/INTER_AGENT_CONTRACTS.md`.
-- [ ] 2. Master Agent includes `run_id` and `task_id` in task envelopes during dispatch.
-- [ ] 3. Timeout and duplicate message handling behaviors specified.
-- [ ] 4. Contract models verified via `tests/test_contracts.py` unit tests.
+- [x] 1. Task, result, and error JSON schemas versioned in `src/contracts.py` and `docs/INTER_AGENT_CONTRACTS.md`.
+- [x] 2. Master Agent includes `run_id` and `task_id` in task envelopes during dispatch.
+- [x] 3. Timeout and duplicate message handling behaviors specified.
+- [x] 4. Contract models verified via `tests/test_contracts.py` unit tests.
 
 ### S3-02: Authenticated Worker API & BackendAgent Generation (İrem Yılmaz)
 - [x] 1. Valid authenticated HTTP/JSON task requests accepted via Bearer Token; unauthorized requests rejected.

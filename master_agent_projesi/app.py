@@ -217,6 +217,7 @@ def load_agents_config():
             "color": style["color"],
             "Model": raw.get("model", tag),
             "ollama_tag": tag,
+        "endpoint_url": (raw.get("deployment") or {}).get("endpoint_url") or "",
             "context_tokens": raw.get("context_tokens"),
             "Coding": _num(caps.get("coding")),
             "Reasoning": _num(caps.get("reasoning")),
@@ -265,6 +266,7 @@ try:
     from src.agents.database_agent import DatabaseAgent
     from src.agents.testing_agent import TestingAgent
     from src.agents.integration_agent import IntegrationAgent
+    from src.agents.remote_agent import wrap_agent_if_remote, RemoteAgentProxy
 
     ENGINE_ERROR = None
 except Exception as _e:  # motor yüklenemezse arayüz DEMO VERİSİ moduna düşer
@@ -731,6 +733,7 @@ def build_agents():
         inst.capabilities = AgentCapabilityProfile(
             coding_score=a["Coding"], reasoning_score=a["Reasoning"], context_capacity=a["Context"],
             specialties=list(a["specialties"]), provenance=dict(a["provenance_map"]))
+        inst = wrap_agent_if_remote(inst, endpoint_url=a.get("endpoint_url"))
         out.append(inst)
     return out, skipped
 

@@ -4,11 +4,12 @@ import time
 from typing import Dict, Any, List, Optional
 
 try:
-    from src.agents.base_agent import BaseAgent, TaskResult, AgentStatus
+    from src.agents.base_agent import BaseAgent, TaskResult, AgentStatus, AgentCapabilityProfile
 except ImportError:
     BaseAgent = object
     TaskResult = None
     AgentStatus = None
+    AgentCapabilityProfile = None
 
 from src.contracts import (
     IntegrationFinding,
@@ -31,54 +32,68 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
         workspace_root: Optional[str] = None,
         **kwargs,
     ):
+        profile = kwargs.pop("capability_profile", None)
+        if profile is None and AgentCapabilityProfile is not None:
+            profile = AgentCapabilityProfile(
+                coding_score=78.0,
+                reasoning_score=95.0,
+                context_capacity=90.0,
+                specialties=["integration", "code_review", "conflict_resolution", "deployment"],
+            )
+
         if isinstance(BaseAgent, type) and BaseAgent is not object:
             try:
-                super().__init__(agent_id=agent_id, name=name, **kwargs)
-            except TypeError:
-                try:
-                    super().__init__(agent_id, **kwargs)
-                except Exception:
-                    pass
-        self.agent_id = agent_id
+                super().__init__(
+                    agent_id=agent_id,
+                    name=name,
+                    model_name=model_name,
+                    capability_profile=profile,
+                )
+            except Exception:
+                pass
+        self.agent_id = agent_id or getattr(self, "agent_id", "integration_agent")
         self.name = name
         self.model_name = model_name
         self.workspace_root = os.path.abspath(workspace_root or os.getcwd())
 
         # Master motorunun ajan durumunu kontrol edebilmesi için.
         # Diğer ajanlarla aynı tip olmalı: arayüz status.value okuyor.
-        if not hasattr(self, "status"):
+        if not hasattr(self, "status") or self.status is None:
             self.status = AgentStatus.IDLE if AgentStatus else "IDLE"
-            
-        # YENİ EKLENEN: Master motorunun aktif görev sayısını okuyabilmesi için
-        if not hasattr(self, "current_tasks"):
+
+        # Master motorunun aktif görev sayısını okuyabilmesi için
+        if not hasattr(self, "current_tasks") or self.current_tasks is None:
             self.current_tasks = []
-            
+
         # Master motorunun DB'ye kaydederken aradığı tüm alanlar eksiksiz eklendi
-        if not hasattr(self, "capabilities"):
-            class IntegrationCaps:
-                def __init__(self):
-                    self.coding_score = 80
-                    self.reasoning_score = 90
-                    self.context_capacity = 100
-                    self.specialties = ["integration", "testing"]
-                    self.provenance = {"source": "mock"}
+        if not hasattr(self, "capabilities") or self.capabilities is None:
+            if profile is not None:
+                self.capabilities = profile
+            else:
+                class IntegrationCaps:
+                    def __init__(self):
+                        self.coding_score = 78.0
+                        self.reasoning_score = 95.0
+                        self.context_capacity = 90.0
+                        self.specialties = ["integration", "code_review", "conflict_resolution", "deployment"]
+                        self.provenance = {"source": "mock"}
 
-                def calculate_fit_score(self, category):
-                    return 0.9
+                    def calculate_fit_score(self, category):
+                        return 89.5
 
-                def model_dump(self):
-                    return {
-                        "coding_score": self.coding_score,
-                        "reasoning_score": self.reasoning_score,
-                        "context_capacity": self.context_capacity,
-                        "specialties": self.specialties,
-                        "provenance": self.provenance
-                    }
+                    def model_dump(self):
+                        return {
+                            "coding_score": self.coding_score,
+                            "reasoning_score": self.reasoning_score,
+                            "context_capacity": self.context_capacity,
+                            "specialties": self.specialties,
+                            "provenance": self.provenance
+                        }
 
-                def dict(self):
-                    return self.model_dump()
-            
-            self.capabilities = IntegrationCaps()
+                    def dict(self):
+                        return self.model_dump()
+
+                self.capabilities = IntegrationCaps()
 
     def _is_safe_path(self, file_path: str) -> bool:
         """Dosya yolunun çalışma alanı (workspace) dışına çıkıp çıkmadığını kontrol eder."""
@@ -241,7 +256,7 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
                 create_package_dir=pkg_dir,
             )
             result_dict = report.model_dump()
-            worker_status = "COMPLETED" if report.status in ("APPROVED", "REVIEW_REQUIRED") else "FAILED"
+            worker_status = "SUCCESS" if report.status in ("APPROVED", "REVIEW_REQUIRED") else "FAILED"
         else:
             report = IntegrationReportContract_v1(
                 run_id=run_id,
@@ -261,7 +276,10 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
                 summary="İncelenecek dosya bildirilmediği için inceleme gerekli olarak işaretlendi.",
             )
             result_dict = report.model_dump()
-            worker_status = "COMPLETED"
+            worker_status = "SUCCESS"
+
+        if AgentStatus is not None:
+            self.status = AgentStatus.IDLE if worker_status == "SUCCESS" else AgentStatus.ERROR
 
         elapsed = round(time.time() - t0, 4)
 
@@ -273,7 +291,7 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
                     status=worker_status,
                     output_artifacts=result_dict,
                     logs=[report.summary],
-                    error_message=None if worker_status == "COMPLETED" else report.summary,
+                    error_message=None if worker_status == "SUCCESS" else report.summary,
                     execution_time_seconds=elapsed,
                 )
             except Exception:
