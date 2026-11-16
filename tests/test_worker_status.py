@@ -121,7 +121,7 @@ class _Tags(BaseHTTPRequestHandler):
 
 
 class TestAgentCardStatus(unittest.TestCase):
-    """Each card shows one status: ONLINE/OFFLINE for local (model installed?) and remote (/health) agents."""
+    """Each card shows one status. Local agents always work (backup mode if the model is missing); only an unreachable remote worker is OFFLINE."""
 
     def setUp(self):
         import streamlit as st
@@ -143,27 +143,41 @@ class TestAgentCardStatus(unittest.TestCase):
                 os.environ[k] = v
         st.cache_data.clear()
 
-    def _statuses(self):
+    def _cards(self):
+        """{agent name: (status, has_backup_note)} read from the sidebar cards."""
         from streamlit.testing.v1 import AppTest
         at = AppTest.from_file(os.path.join(os.path.dirname(__file__), "..", "master_agent_projesi", "app.py"),
                                default_timeout=60).run()
         self.assertFalse(at.exception)
         html = " ".join(m.value for m in at.sidebar.markdown)
-        found = re.findall(r'agent-name"><span class="dot"></span>(\w+) Agent.*?● ([\w -]+)</span>', html)
-        return dict(found)
+        cards = {}
+        for card in html.split('<div class="agent-card"')[1:]:
+            found = re.search(r'dot"></span>(\w+) Agent.*?● ([\w -]+)</span>', card)
+            if found:
+                cards[found.group(1)] = (found.group(2), "yedek mod" in card)
+        return cards
 
-    def test_local_agent_is_online_only_if_its_model_is_installed(self):
-        status = self._statuses()
-        self.assertEqual(status["Frontend"], "ONLINE - IDLE")
-        self.assertEqual(status["Database"], "ONLINE - IDLE")
-        self.assertEqual(status["Backend"], "OFFLINE")
-        self.assertEqual(status["Testing"], "OFFLINE")
+    def test_local_agents_never_show_offline_missing_model_shows_backup_note(self):
+        cards = self._cards()
+        for name in ("Integration", "Frontend", "Backend", "Database", "Testing"):
+            self.assertEqual(cards[name][0], "ONLINE - IDLE", name)
+        self.assertFalse(cards["Frontend"][1])
+        self.assertFalse(cards["Database"][1])
+        for name in ("Integration", "Backend", "Testing"):
+            self.assertTrue(cards[name][1], name)
+
+    def test_ollama_down_local_agents_still_online_in_backup_mode(self):
+        os.environ["OLLAMA_HOST"] = f"http://127.0.0.1:{_closed_port()}"
+        cards = self._cards()
+        for name, (status, backup) in cards.items():
+            self.assertEqual(status, "ONLINE - IDLE", name)
+            self.assertTrue(backup, name)
 
     def test_unreachable_remote_worker_is_offline_even_if_model_is_installed(self):
         os.environ["FRONTEND_AGENT_URL"] = f"http://127.0.0.1:{_closed_port()}"
-        status = self._statuses()
-        self.assertEqual(status["Frontend"], "OFFLINE")
-        self.assertEqual(status["Database"], "ONLINE - IDLE")
+        cards = self._cards()
+        self.assertEqual(cards["Frontend"], ("OFFLINE", False))
+        self.assertEqual(cards["Database"][0], "ONLINE - IDLE")
 
 
 if __name__ == "__main__":

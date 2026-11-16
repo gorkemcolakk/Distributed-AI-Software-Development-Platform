@@ -322,6 +322,13 @@ def probe_workers(endpoints):
         return dict(zip(urls, pool.map(probe_worker, urls)))
 
 
+def backup_note(a):
+    """Yerel ajanın modeli bu bilgisayarda yoksa kartta kısa not: ajan yine çalışır ama yedek modda."""
+    if agent_endpoint(a) or model_available(a["ollama_tag"], ollama_models()):
+        return ""
+    return "↳ model yok · yedek mod"
+
+
 def machine_label(a):
     """Kartta tek kısa satır: sadece uzak işçide hangi makinede çalıştığı; yerel ajanda boş."""
     url = agent_endpoint(a)
@@ -740,15 +747,14 @@ def agent_by_name():
 
 
 def agent_status(a):
-    """Tek durum: uzak işçide /health, yerel ajanda modelin bu bilgisayarın Ollama'sında yüklü olması."""
+    """Tek durum, motorun gerçekten yapacağı şeye göre: uzak işçi /health cevap vermiyorsa OFFLINE (görev almaz);
+    yerel ajan her zaman çalışır (model yoksa etiketli yedek modda), bu yüzden OFFLINE olmaz."""
     url = agent_endpoint(a)
     if url:
         probe = probe_workers((url,)).get(url)
         if not probe["online"]:
             return "OFFLINE"
         raw = state.snapshot.get(a["id"]) or probe["agent_status"]
-    elif not model_available(a["ollama_tag"], ollama_models()):
-        return "OFFLINE"  # model bu bilgisayarda yok (ya da Ollama kapalı)
     else:
         raw = state.snapshot.get(a["id"]) or "IDLE"
     raw = "FAILED" if raw == "ERROR" else raw
@@ -960,10 +966,10 @@ CARD_SLOTS, CARD_STATUS = {}, {}
 
 
 def agent_card_html(a, ast_name):
-    """Sidebar ajan kartı; tek durum: ONLINE - IDLE, ONLINE - BUSY, OFFLINE (ya da FAILED)."""
+    """Sidebar ajan kartı; tek durum: ONLINE - IDLE, ONLINE - BUSY, OFFLINE (ya da FAILED). Modeli olmayan yerel ajanda ek not: yedek mod."""
     ast_color = STATUS_STYLE[ast_name][0]
     label = f"ONLINE - {ast_name}" if ast_name in ("IDLE", "BUSY") else ast_name  # bağlı: ONLINE - IDLE / ONLINE - BUSY
-    machine = machine_label(a)
+    machine = machine_label(a) or backup_note(a)
     return (
         f'<div class="agent-card" style="--c:{a["color"]}">'
         f'<div class="agent-name"><span class="dot"></span>{esc(a["Agent ID"])}'
