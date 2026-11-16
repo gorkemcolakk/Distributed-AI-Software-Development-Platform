@@ -6,7 +6,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **CM6453 Software Engineering Process and DevOps**  
-> **Instructor:** Prof. Dr. Ensar Gül  
+> **Product Owner & Course Instructor:** Prof. Dr. Ensar Gül  
+> **Scrum Master:** İrem Yılmaz  
 > A web-based software development platform powered by a distributed multi-agent architecture and capability-based task allocation algorithms.
 
 ---
@@ -20,22 +21,25 @@ A web-based platform where a **Master Agent** receives long software requirement
 ## 🎯 Key Principles
 
 - 🧠 **Capability-Based Allocation:** Master agent evaluates agents by *Coding capability*, *Reasoning capability*, and *Context capacity* to optimize task distribution.
-- 🔗 **Distributed Multi-Agent Architecture:** Ajanlar yerel veya uzak sunucularda (Ollama / LLM API) bağımsız çalışır ve Master Agent ile REST API / Bearer Token üzerinden haberleşir.
-- ⚡ **Automated Task Decomposition (DAG):** Gelen karmaşık gereksinimleri Veritabanı, Backend, Frontend, Test ve Entegrasyon aşamalarına böler.
-- 🔄 **Agile & Scrum Governance:** 5 Sprint × 2 Hafta = 10 Haftalık Scrum yönetimi, Trello panosu ve GitHub Pull Request / Code Review iş akışı.
+- 🔗 **Distributed Multi-Agent Architecture:** Agents run independently across distributed or local environments (Ollama / LLM API) and communicate with the Master Agent via authenticated REST API / Bearer Token protocols.
+- ⚡ **Automated Task Decomposition (DAG):** Decomposes complex user requirements into a validated Directed Acyclic Graph across Database, Backend, Frontend, Testing, and Integration stages.
+- 🔄 **Agile & Scrum Governance:** 5 Sprints × 2 Weeks = 10-week Scrum project lifecycle, managed transparently with Trello and GitHub Pull Request / Code Review workflows adhering to the 2020 Scrum Guide.
 
 ---
 
-## 👥 Team & Roles
+## 👥 Scrum Team & Roles
 
-| Student No. | Member Name | Scrum Role | Agent & Model | Primary Focus Area |
+* **Product Owner:** Prof. Dr. Ensar Gül (Course Instructor)
+* **Scrum Master:** İrem Yılmaz (Backend Agent — `qwen2.5-coder:7b`)
+
+| Student No. | Member Name | Scrum Accountability | Agent & Model | Primary Focus Area |
 | :--- | :--- | :--- | :--- | :--- |
-| **2204012296** | **Eren Görkem Çolak** | Developer · Technical Lead | Master Agent · Qwen 2.5 7B | Architecture, Routing & Engine Setup |
-| **2204012297** | **Elif Yılmaz** | Product Owner · Developer | Integration Agent · Phi-4 Mini 3.8B | Code Review, Integration & Product Backlog |
-| **2204012300** | **Mahmut Karaalioğlu** | Developer | Database Agent · Llama 3.2 3B | Database, Schema & Migration Design |
-| **2204012301** | **İrem Yılmaz** | Scrum Master · Developer | Backend Agent · Qwen2.5-Coder 7B | Backend APIs, Business Logic & Scrum Facilitation |
-| **2204012302** | **Kübra Hepcan** | Developer | Frontend Agent · Qwen2.5-Coder 3B | Frontend UI / UX Components & State |
-| **2204012303** | **Berat İnan** | Developer | Testing Agent · DeepSeek-Coder 6.7B | Automated Testing, Assertion Checks & QA |
+| **2204012296** | **Eren Görkem Çolak** | Developer · Technical Lead | Master Agent · Qwen 2.5 3B | Architecture, Routing, Bounded Retry & Engine Setup |
+| **2204012297** | **Elif Yılmaz** | Developer | Integration Agent · Phi-4 Mini 3.8B | Code Review, Inter-Agent Contracts & Integration Packaging |
+| **2204012300** | **Mahmut Karaalioğlu** | Developer | Database Agent · Llama 3.2 3B | Database, Schema, Safe Workspace Writer & Migration Design |
+| **2204012301** | **İrem Yılmaz** | Scrum Master · Developer | Backend Agent · Qwen2.5-Coder 7B | Backend APIs, Business Logic, Error Classification & Scrum Facilitation |
+| **2204012302** | **Kübra Hepcan** | Developer | Frontend Agent · Qwen2.5-Coder 3B | Frontend UI / UX Components, State & Telemetry Dashboard |
+| **2204012303** | **Berat İnan** | Developer | Testing Agent · DeepSeek-Coder 6.7B | Automated Testing, Assertion Checks, CI Quality Gate & QA |
 
 ---
 
@@ -46,7 +50,7 @@ A web-based platform where a **Master Agent** receives long software requirement
 - ⚙️ **Master Agent Engine:** REST API Gateway, gereksinim analizi ve Ajan Kayıt Sistemi (`src/master/analyzer.py`).
 - 🤖 **Agent Capability Matrix:** Model puanlama sistemi ve yapılandırması (`config/agents_config.json`).
 - 📐 **DAG Task Decomposition:** Gereksinimleri *Requirement Analysis → DB / Backend / Frontend → QA → Integration* bağımlılık grafiğine bölen mekanizma.
-- 📜 **System Architecture & Sprint Docs:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) ve [`docs/SPRINTS.md`](docs/SPRINTS.md) kılavuzları.
+- 📜 **System Architecture & Sprint Docs:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/scrum/product_backlog.md`](docs/scrum/product_backlog.md).
 
 ### 🔮 Planned for Sprints 2–5
 - **Sprint 2:** Capability evaluation algorithms, dynamic agent selection UI, and status monitoring.
@@ -61,9 +65,9 @@ A web-based platform where a **Master Agent** receives long software requirement
 ```text
 ├── config/                  # Agent capability profiles & configuration
 │   └── agents_config.json
-├── docs/                    # Architectural & Sprint documentation
+├── docs/                    # Architectural & Scrum documentation
 │   ├── ARCHITECTURE.md      # Multi-Agent Architecture Specification
-│   └── SPRINTS.md           # 5-Sprint Agile Roadmap
+│   └── scrum/               # Scrum Governance (Product Backlog, Backlogs, DoD)
 ├── src/                     # Core Python Engine
 │   ├── agents/              # BaseAgent & Specialized Worker Agents
 │   │   ├── base_agent.py
