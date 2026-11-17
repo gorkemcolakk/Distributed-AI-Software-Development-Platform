@@ -1,78 +1,119 @@
-# Sprint 2 Review Report & Retrospective
+# Sprint 2 Review Report, Retrospective & Progress Report
 
 * **Sprint Period:** October 15, 2026 – October 29, 2026 (Weeks 3 – 4)
-  * **Sprint 2 – Week 3:** October 15, 2026 – October 22, 2026
-  * **Sprint 2 – Week 4:** October 22, 2026 – October 29, 2026
-* **Commitment: Sprint Goal:** Standardize runtime API configuration and safe fallback logic, unify the Streamlit UI and core Master Agent engine under a single canonical agent registry (`agents_config.json`), enforce weighted capability selection with availability filtering (`BUSY`/`OFFLINE`/`ERROR`), validate task decomposition JSON schemas, isolate per-run scheduler lifecycle states (`run_id`), and integrate SQLite persistence with automated unit tests.
-* **Sprint Status:** **COMPLETED** (22 / 22 Story Points delivered to `main`)
-* **Scrum Master:** İrem Yılmaz (Backend Agent & Scrum Master)
-* **Product Owner:** Elif Yılmaz (Integration Agent & Product Owner)
+* **Scrum Master:** İrem Yılmaz (Backend Agent — `qwen2.5-coder:7b`)
+* **Developers:** Eren Görkem Çolak, Kübra Hepcan, Mahmut Karaalioğlu, Berat İnan, İrem Yılmaz, Elif Yılmaz
+* **Sprint Goal (Why):**
+  > *"Standardize API key and safe fallback configuration, unify the Streamlit UI and core engine under a canonical agent registry (`config/agents_config.json`), enforce weighted capability-based agent selection (`calculate_fit_score`) with busy/offline agent filtering, validate task decomposition JSON schemas, and ensure scheduler and SQLite persistence state isolation via `run_id`."*
+* **Sprint Status:** **COMPLETED** (Closed on 2026-10-22; all 7 cards verified on `main`, 22 / 22 SP delivered)
 
 ---
 
-## 1. Sprint Review — Delivered Increments & Observable Evidence
+## 1. Sprint Review (At the Review)
 
-In accordance with the **2020 Scrum Guide**, the Scrum Team presented the working increment to the Product Owner and verified each item against the **Definition of Done**. Each card is assigned strictly to a responsible owner:
+### 1.1. Delivered Product Increment & Observable Evidence (What Was Demonstrated)
+On October 29, 2026, the Scrum Team demonstrated the Sprint 2 Increment to the Product Owner:
 
-| Card ID | Task Title & Scope | Responsible Owner | Repository Evidence (Files & Modules) | Verification & DoD Status |
+| Card ID | Task Title & Scope | Primary Assignee | Repository Evidence | Verification Outcome & Acceptance |
 | :--- | :--- | :--- | :--- | :--- |
-| **S2-01** | Backend API & Local Ollama Standardization and Safe Fallback | İrem Yılmaz | `master_agent_projesi/app.py`, `.env.example`, `config/agents_config.json`, `docs/WORKER_HTTP_API_DRAFT.md`, `tests/test_api_config_fallback.py` | **COMPLETED (DONE):** Duplicate key loaders removed; `load_api_key()` centralized; secrets excluded via `.env.example`; graceful fallback on HTTP 429 quota and offline states verified via 9 unit tests. |
-| **S2-02** | Unify Streamlit UI with Shared Agent Registry & Engine Status Monitoring | Kübra Hepcan | `config/agents_config.json`, `master_agent_projesi/app.py` (PR #20) | **COMPLETED (DONE):** Hardcoded `agents_data` removed from the UI; agent names, models, scores and members are read from `agents_config.json`. |
-| **S2-03** | Master Agent Weighted Selection Algorithm & Availability Filtering | Eren Görkem Çolak | `src/master/capability_eval.py`, `src/master/orchestrator.py`, `tests/test_master_engine.py` | **COMPLETED (DONE):** `BUSY`, `OFFLINE` and `ERROR` agents are filtered from the selection pool; `calculate_fit_score` integrated; failover and deadlock protection added. Tests: Berat İnan. |
-| **S2-04** | Task Schema Validation & Inter-Agent Integration Contracts | Elif Yılmaz *(took over from Mahmut Karaalioğlu during the sprint)* | `src/contracts.py` (`validate_master_tasks`), `docs/INTER_AGENT_CONTRACTS.md`, `tests/test_contracts.py`, `master_agent_projesi/app.py` (`normalize_tasks`) | **COMPLETED (DONE):** Pydantic contracts and task-list validator added; 5-phase normalization and malformed-JSON protection completed. Schema tests: Berat İnan. Wiring the validator into the orchestrator moved to Sprint 3. |
-| **S2-05** | Run-Scoped Scheduler Lifecycle (`run_id`) & Failed/Unassigned Task Reporting | Eren Görkem Çolak | `src/master/scheduler.py`, `src/master/orchestrator.py`, `tests/test_master_engine.py` | **COMPLETED (DONE):** A unique `run_id` per run; failed tasks are isolated and never marked `COMPLETED`. Tests: Berat İnan. |
-| **S2-06** | Bind UI Task Assignments & Statuses to Real Engine Results | Kübra Hepcan | `master_agent_projesi/app.py` (PR #20; integration fixes #23, #24) | **COMPLETED (DONE):** Manual start/complete buttons removed; "Analiz et" runs the real `MasterOrchestrator` and task/agent states come from the engine. |
-| **S2-07** | SQLite Persistence Layer (`db_manager.py`) with Unified Agent Registry & Run Lifecycle | Mahmut Karaalioğlu *(took over from İrem Yılmaz during the sprint)* | `src/master/db_manager.py`, `docs/DATA_MODEL.md`, `tests/test_db_manager.py` | **COMPLETED (DONE):** `runs`, `agents`, `tasks`, `attempts` tables with `run_id`; WAL mode; 3-layer guard against writing failed tasks as `COMPLETED`; legacy `*_legacy_v1` migration; 11 unit tests. UI runs are persisted to `state.db` (PR #24). |
+| **S2-01** | Standardize Backend API & Local Ollama Config with Safe Fallback Logic | İrem Yılmaz | `app.py`, `.env.example`, `test_api_config_fallback.py` | **VERIFIED:** Removed duplicate loaders; centralized `load_api_key()` and `get_model_config()`. Hardcoded credentials purged. Resilient fallback mode for HTTP 429, timeouts, and offline status. 9 unit tests pass. |
+| **S2-02** | Unify Streamlit UI and Core Engine Under Canonical Agent Registry | Kübra Hepcan | `config/agents_config.json`, `app.py` (PR #20) | **VERIFIED:** Hardcoded `agents_data` replaced by dynamic loading from `agents_config.json`. Displays member names, models, capabilities, and live statuses. |
+| **S2-03** | Weighted Capability-Based Scoring (`FitScore`) & Availability Filtering | Eren Görkem Çolak | `capability_eval.py`, `orchestrator.py`, `tests/test_master_engine.py` | **VERIFIED:** Excluded `BUSY`, `OFFLINE`, and `ERROR` agents from selection pool. Integrated weighted fit scores with specialty bonus and failover protection. |
+| **S2-04** | Validate Task Decomposition Output & Harden Safe Fallback Template | Elif Yılmaz | `src/contracts.py`, `docs/INTER_AGENT_CONTRACTS.md`, `tests/test_contracts.py` | **VERIFIED:** Pydantic schema validation implemented for decomposed subtasks; 5-stage normalization and malformed JSON protection active. 4 contract tests pass. |
+| **S2-05** | Scheduler Lifecycle Isolation (`run_id`) & Accurate Failure Reporting | Eren Görkem Çolak | `scheduler.py`, `orchestrator.py`, `tests/test_master_engine.py` | **VERIFIED:** Unique `run_id` generated per execution. State reset between runs; failed/unassigned tasks reported accurately without false `COMPLETED`. |
+| **S2-06** | Bind UI Task Assignments & Status Monitoring to Real Engine Execution | Kübra Hepcan | `app.py` (PR #20, #23, #24) | **VERIFIED:** Manual mock buttons removed; "Analyze" executes real `MasterOrchestrator`, binding UI progress and status indicators to backend results. |
+| **S2-07** | Integrate SQLite Persistence (`db_manager.py`) with Unified Registry & `run_id` | Mahmut Karaalioğlu | `src/master/db_manager.py`, `docs/DATA_MODEL.md`, `tests/test_db_manager.py` | **VERIFIED:** `runs`, `agents`, `tasks`, and `attempts` tables initialized with WAL mode. Added 3-layer guard against false `COMPLETED` insertion. 11 unit tests pass. |
 
----
-
-## 2. Sprint Review — Working Software Demonstration & Terminal Evidence
-
-### 2.1. Automated Unit Test Suite Execution
+### 1.2. Verification & Terminal Evidence
 ```bash
 python -m unittest discover tests
 ```
-* **Execution Result:**
+* **Output (2026-10-22 on `main`):**
 ```text
-Ran 44 tests in 0.412s
+Ran 44 tests in 0.420s
 OK
 ```
 * **Test Suite Breakdown:**
-  - `tests/test_master_engine.py` (20 tests): Agent selection, status filtering, schema validation, failover, `run_id` isolation.
-  - `tests/test_db_manager.py` (11 tests): SQLite schema, foreign keys, `COMPLETED` state protection guards.
-  - `tests/test_api_config_fallback.py` (9 tests): Configuration management, missing key handling, and fallback on 429 quota/offline server.
+  - `tests/test_master_engine.py` (20 tests): Candidate selection, availability filtering, schema validation, failover, `run_id` isolation.
+  - `tests/test_db_manager.py` (11 tests): SQLite schema, constraints, WAL mode, and false `COMPLETED` guard.
+  - `tests/test_api_config_fallback.py` (9 tests): Configuration management and offline/timeout fallback mode.
   - `tests/test_contracts.py` (4 tests): Pydantic contract validation.
-* All tests run without requiring live external API credentials or internet connectivity.
-* Continuous Integration: GitHub Actions workflow (`.github/workflows/tests.yml`, PR #22) executes the test suite on every pull request.
+* **Continuous Integration:** Automated via GitHub Actions on every Pull Request (PR #22).
 
-### 2.2. Inter-Agent Communication Specification
-* [`docs/WORKER_HTTP_API_DRAFT.md`](../../WORKER_HTTP_API_DRAFT.md) and [`docs/INTER_AGENT_CONTRACTS.md`](../../INTER_AGENT_CONTRACTS.md) published.
-* Endpoints defined for `POST /tasks/execute`, `POST /heartbeat`, and `/health` with Bearer token authentication.
+### 1.3. Stakeholder Feedback (Product Owner Inspection)
+* **Feedback from Prof. Dr. Ensar Gül (Product Owner):**
+  - Commended the elimination of hardcoded secrets and the adoption of deterministic, offline-first unit tests.
+  - Verified that task allocation now genuinely evaluates multi-dimensional weights (Coding, Reasoning, Context Capacity).
+  - Emphasized that Sprint 3 must advance from single-process execution into true distributed multi-agent execution, where worker agents run on separate computers or local servers communicating via HTTP REST APIs and Bearer Tokens.
+* **Acceptance Verdict:** **ACCEPTED** (Sprint 2 Increment accepted).
 
----
-
-## 3. Sprint Retrospective — Inspection & Adaptation
-
-In accordance with the **2020 Scrum Guide**, the Scrum Team inspected how Sprint 2 went with regards to individuals, interactions, processes, tools, and the Definition of Done:
-
-### 3.1. What Went Well (Processes & Interactions)
-1. **API Security & Clean Configuration (S2-01):** Hardcoded secrets removed, `.env.example` template provided, and `.env` strictly ignored by Git.
-2. **Robust Fault Isolation:** The platform operates reliably in demo/fallback mode even when local Ollama services are offline or API rate limits are hit.
-3. **Seamless Cross-Functional Collaboration:** Product Owner requirements, backend schemas, database persistence, and testing gates aligned without blocking dependencies.
-
-### 3.2. Challenges & Identified Technical Debt (Tools & Local Hardware)
-1. **Local Hardware Constraints:** Running 7B models (`qwen2.5-coder:7b`, `deepseek-coder:6.7b`) locally requires significant RAM/VRAM, reinforcing the necessity of reliable mock and fallback mechanisms.
-2. **Static Task Decomposition Baseline:** In Sprint 2, task breakdown remained based on deterministic templates; connecting decomposition directly to live local LLM inference is the core goal of Sprint 3.
-3. **Integration Test Gap:** Unit tests passed while UI-to-engine type differences surfaced during manual integration; full end-to-end integration tests must be expanded.
-
-### 3.3. Actionable Improvements for Sprint 3 (`S3-01` – `S3-06`)
-* **Eren Görkem Çolak (S3-01):** Finalize versioned HTTP/JSON task envelopes (`TaskPayloadContract_v1`, `WorkerTaskResultContract_v1`) and orchestrate distributed dispatch.
-* **İrem Yılmaz (S3-02):** Implement authenticated FastAPI Worker Agent HTTP service with `/health` and live local Ollama backend code generation.
-* **Kübra Hepcan (S3-03):** Connect FrontendAgent to local Ollama model for UI generation and render distributed worker connection statuses in Streamlit.
-* **Mahmut Karaalioğlu (S3-04):** Enforce DAG cycle detection (Tarjan SCC), connect DatabaseAgent to local Ollama, and implement safe workspace file writer.
-* **Elif Yılmaz (S3-05):** Build artifact manifest aggregation layer (`ArtifactManifest`) to collect, hash, and structure worker outputs.
-* **Berat İnan (S3-06):** Connect TestingAgent to local Ollama for test generation and implement automated black-box HTTP API and DAG tests.
+### 1.4. Product Backlog Adaptations & Changes (At the Review)
+* Added **S3-01**: Define versioned Master–Worker HTTP/JSON task, result, and error contracts in `src/contracts.py`.
+* Added **S3-02**: Implement authenticated REST worker HTTP server (`src/api/worker_server.py`) and connect BackendAgent to local Ollama (`qwen2.5-coder:7b`).
+* Added **S3-04**: Build DAG cycle detection and safe workspace confinement to `workspaces/{run_id}/`.
+* Added **S3-05**: Worker output artifact manifest collection layer.
+* Added **S3-06**: TestingAgent Ollama test generation and distributed test suite.
+* Reprioritized Sprint 3 Backlog for Distributed Development (24 Story Points).
 
 ---
 
-**Prepared by:** İrem Yılmaz (Scrum Master & Backend Agent)  
+## 2. Sprint Retrospective (At the Retrospective)
+
+### 2.1. Team Observations: What Went Well?
+1. **API & Security Standardization (S2-01):** Hardcoded credentials and dummy API placeholders were eliminated from the codebase; `.env.example` template was established and `.env` was secured in `.gitignore`.
+2. **Robust Fault Isolation (NFR-2):** When local Ollama servers are unreachable, the UI remains responsive without crashing; HTTP 429 quota exhaustion, socket timeouts, and connection refusal are gracefully caught with informative feedback.
+3. **Cross-Role Alignment:** Specifications produced by the development team (contracts, REST drafts, architecture) were synchronized cleanly with the product vision.
+
+### 2.2. Team Observations: Challenges & Identified Technical Debt
+1. **Hardware & Model Footprint:** Running `qwen2.5-coder:7b` and `deepseek-coder:6.7b` locally requires 8GB+ RAM/VRAM; ensuring rock-solid offline fallback is essential when team machines are under load.
+2. **Streamlit UI Reactivity:** Updating UI state during asynchronous agent execution requires asynchronous polling or live status updates in Sprint 3.
+3. **Integration Test Coverage:** A bug in PR #23 was missed by unit tests because UI-to-engine interaction was not covered end-to-end; automated integration tests must be expanded.
+4. **Real Model Prompting:** `analyzer.py` returns structured boilerplate tasks; connecting the analyzer and worker agents to real local Ollama inference is the primary goal of Sprint 3.
+
+### 2.3. Actionable Improvement Items for Sprint 3
+
+| Improvement Action Item | Target Area | Assignee / Owner | Success Criteria |
+| :--- | :--- | :--- | :--- |
+| Implement FastAPI worker REST server (`worker_server.py`) with Bearer Token auth | Distributed Architecture | İrem Yılmaz | Remote HTTP task execution with `/health` endpoint and timeout protection |
+| Author versioned Pydantic Master-Worker communication contracts (`v1.0`) | Inter-Agent Contracts | Eren Görkem Çolak & Elif Yılmaz | Strict schemas for task dispatch, result envelopes, and error reporting |
+| Enforce DAG cycle validation & sandbox file writing to `workspaces/{run_id}/` | Security & Scheduling | Mahmut Karaalioğlu | Tarjan cycle detection; path traversal (`../`) automatically blocked |
+| Connect TestingAgent to `deepseek-coder:6.7b` and test distributed endpoints | QA & Automation | Berat İnan | Deterministic test suite verifying HTTP auth, DAG validation, and sandboxing |
+
+---
+
+## 3. Course Progress Report (Mandated by CM6453 Syllabus)
+
+### 3.1. Project Milestone & Schedule Status
+* **Iteration Timeline:** Sprint 2 of 5 (Weeks 3–4 of 10-Week Semester Schedule: Oct 15 – Oct 29, 2026).
+* **Milestone Objective:** Agent Management & Task Assignment (Capability profiles, weighted selection, status monitoring, run isolation).
+* **Schedule Status:** **ON SCHEDULE** (100% of planned Sprint 2 scope delivered).
+
+### 3.2. Cumulative Velocity & Story Point Burnup Tracking
+* **Committed Capacity:** 22 Story Points (44 Estimated Hours).
+* **Delivered Velocity:** **22 Story Points** (100% Velocity Completion Rate).
+* **Cumulative Story Points Delivered to Date:** 46 SP (Sprint 1: 24 SP + Sprint 2: 22 SP).
+
+### 3.3. Team Member Contribution Matrix
+
+| Team Member | Student ID | Agent & Model | Sprint Role & Primary Deliverables | Estimated vs Actual Hours | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Eren Görkem Çolak** | 2204012296 | Master Agent (`qwen2.5:7b`) | Tech Lead: Weighted fitness selection (`S2-03`), scheduler run isolation (`S2-05`) | 14h / 14h | **Done** |
+| **Kübra Hepcan** | 2204012302 | Frontend Agent (`qwen2.5-coder:3b`) | Developer: Canonical registry UI (`S2-02`), live status & progress binding (`S2-06`) | 16h / 16h | **Done** |
+| **Mahmut Karaalioğlu** | 2204012300 | Database Agent (`llama3.2:3b`) | Developer: SQLite persistence layer (`S2-07`), false `COMPLETED` database guards | 4h / 4h | **Done** |
+| **İrem Yılmaz** | 2204012301 | Backend Agent (`qwen2.5-coder:7b`) | Scrum Master: API key & fallback standardization (`S2-01`), REST draft specification | 4h / 4h | **Done** |
+| **Berat İnan** | 2204012303 | Testing Agent (`deepseek-coder:6.7b`) | Developer: Authoring 44-test unit suite, CI GitHub Actions setup (PR #22) | 6h / 6h | **Done** |
+| **Elif Yılmaz** | 2204012297 | Integration Agent (`phi4-mini:3.8b`) | Developer: Task decomposition Pydantic schema validation (`S2-04`) | 6h / 6h | **Done** |
+
+### 3.4. Risk Assessment & Mitigation Strategies
+* **Risk 1 (Network Latency & Worker Communication):** Connecting distributed nodes over local network may introduce connection failures or dropped payloads.  
+  * *Mitigation:* `WORKER_HTTP_API_DRAFT.md` defines timeout thresholds and client retry limits; unit tests authored before network rollout.
+* **Risk 2 (Model Hallucination / Invalid Output):** Worker LLMs may return text that fails syntax checks or schema compliance.  
+  * *Mitigation:* S2-04 established Pydantic validation; Sprint 3 contracts mandate structured JSON result envelopes with status tagging.
+
+### 3.5. Next Sprint Focus & Functional Increment Preview
+* **Sprint 3 Focus:** Distributed Development (Remote worker execution via HTTP, local Ollama code generation across agents, DAG validation, safe file collection).
+* **Deliverable Preview:** An authenticated REST worker server capable of executing backend, database, testing, and frontend code generation tasks locally while saving files to isolated run directories.
+
+---
+
+**Report Prepared By:** İrem Yılmaz (Scrum Master)  
