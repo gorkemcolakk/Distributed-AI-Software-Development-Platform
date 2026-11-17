@@ -1,7 +1,7 @@
 # Sprint 4 Backlog & Task Distribution
 
-* **Sprint Period:** 2026-11-05 – 2026-11-18 (Weeks 7 – 8)
-* **Sprint Planning Date:** 2026-11-05
+* **Sprint Period:** 2026-11-12 – 2026-11-26 (Weeks 7 – 8)
+* **Sprint Planning Date:** 2026-11-12
 * **Product Owner:** Prof. Dr. Ensar Gül (Course Instructor)
 * **Scrum Master:** İrem Yılmaz (Backend Agent — `qwen2.5-coder:7b`)
 * **Developers:** Eren Görkem Çolak, Kübra Hepcan, Mahmut Karaalioğlu, Berat İnan, İrem Yılmaz, Elif Yılmaz
@@ -11,13 +11,13 @@
 
 ## 1. Commitment: Sprint Goal (Topic One: Why is this Sprint valuable?)
 
-> *"Implement bounded task retry and automatic failover reassignment for failed tasks, build automated Python AST syntax and LLM code review into the Integration Agent, resolve file path and schema conflicts with SQLite attempt history persistence, enforce a deterministic CI quality gate on GitHub Actions, and complete the rolled-over distributed UI status monitor and artifact manifest aggregation."*
+> *"Implement bounded task retry and automatic failover reassignment for failed tasks, build automated Python AST syntax and LLM code review into the Integration Agent, resolve file path and schema conflicts with SQLite attempt history persistence, and enforce a deterministic CI quality gate on GitHub Actions."*
 
 ---
 
 ## 2. Selected Product Backlog Items & Owners (Topic Two: What can be done this Sprint?)
 
-During Sprint Planning on November 05, 2026, the Developers selected 8 Product Backlog Items (6 newly committed PBIs from Epic 4 and 2 rolled-over items from Sprint 3), committed to a total capacity of **30 Story Points**, and assigned primary technical owners:
+During Sprint Planning on November 12, 2026, the Developers selected 6 Product Backlog Items from Epic 4 (no carry-over from Sprint 3), committed to a total capacity of **24 Story Points**, and assigned primary technical owners:
 
 | Card ID | PBI Title & Technical Scope | Primary Assignee | Priority | Story Points | Est. Hours | Status on Trello |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -95,6 +95,6 @@ Before any item is certified for the Sprint 4 Increment:
 
 ---
 
-**Plan Created By:** Scrum Team at Sprint Planning (Nov 16, 2026)  
+**Plan Created By:** Scrum Team at Sprint Planning (Nov 12, 2026)  
 **Facilitated By:** İrem Yılmaz (Scrum Master)  
 **Reviewed By:** Prof. Dr. Ensar Gül (Product Owner)  

@@ -1,6 +1,6 @@
 # Sprint 2 Review Report, Retrospective & Progress Report
 
-* **Sprint Period:** October 08, 2026 – October 21, 2026 (Weeks 3 – 4)
+* **Sprint Period:** October 15, 2026 – October 29, 2026 (Weeks 3 – 4)
 * **Scrum Master:** İrem Yılmaz (Backend Agent — `qwen2.5-coder:7b`)
 * **Developers:** Eren Görkem Çolak, Kübra Hepcan, Mahmut Karaalioğlu, Berat İnan, İrem Yılmaz, Elif Yılmaz
 * **Sprint Goal (Why):**
@@ -12,7 +12,7 @@
 ## 1. Sprint Review (At the Review)
 
 ### 1.1. Delivered Product Increment & Observable Evidence (What Was Demonstrated)
-On October 21, 2026, the Scrum Team demonstrated the Sprint 2 Increment to the Product Owner:
+On October 29, 2026, the Scrum Team demonstrated the Sprint 2 Increment to the Product Owner:
 
 | Card ID | Task Title & Scope | Primary Assignee | Repository Evidence | Verification Outcome & Acceptance |
 | :--- | :--- | :--- | :--- | :--- |
@@ -84,7 +84,7 @@ OK
 ## 3. Course Progress Report (Mandated by CM6453 Syllabus)
 
 ### 3.1. Project Milestone & Schedule Status
-* **Iteration Timeline:** Sprint 2 of 5 (Weeks 3–4 of 10-Week Semester Schedule: Oct 08 – Oct 21, 2026).
+* **Iteration Timeline:** Sprint 2 of 5 (Weeks 3–4 of 10-Week Semester Schedule: Oct 15 – Oct 29, 2026).
 * **Milestone Objective:** Agent Management & Task Assignment (Capability profiles, weighted selection, status monitoring, run isolation).
 * **Schedule Status:** **ON SCHEDULE** (100% of planned Sprint 2 scope delivered).
 

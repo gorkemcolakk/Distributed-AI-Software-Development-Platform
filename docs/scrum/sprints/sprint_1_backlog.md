@@ -1,6 +1,6 @@
 # Sprint 1 Backlog & Task Distribution
 
-* **Sprint Period:** 2026-09-24 – 2026-10-07 (Weeks 1 – 2)
+* **Sprint Period:** 2026-10-01 – 2026-10-15 (Weeks 1 – 2)
 * **Scrum Master:** İrem Yılmaz 
 * **Developers:** Eren Görkem Çolak, Kübra Hepcan, Mahmut Karaalioğlu, Berat İnan, İrem Yılmaz, Elif Yılmaz
 * **Sprint Status:** **COMPLETED** (7 of 7 cards completed, 24 SP delivered)
@@ -15,7 +15,7 @@
 
 ## 2. Selected Product Backlog Items & Owners (What & Who - At Sprint Planning)
 
-During Sprint Planning on Sept 24, 2026, the Developers selected the following 7 PBIs from the Product Backlog, estimated their sizing, and assigned primary owners:
+During Sprint Planning on Oct 01, 2026, the Developers selected the following 7 PBIs from the Product Backlog, estimated their sizing, and assigned primary owners:
 
 | Card ID | Task Title & Scope | Primary Assignee | Collaboration & Support | Priority | Story Points | Est. Hours | Dependencies | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |

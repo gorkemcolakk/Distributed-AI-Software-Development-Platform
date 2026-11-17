@@ -5,7 +5,7 @@
 * **Product Owner:** Prof. Dr. Ensar Gül (Course Instructor)
 * **Scrum Master:** İrem Yılmaz
 * **Team:** Team 3 (6 Members)
-* **Cadence:** 5 Sprints × 2 Weeks (Total 10 Weeks: Sept 24, 2026 – Dec 02, 2026)
+* **Cadence:** 5 Sprints × 2 Weeks (Total 10 Weeks: Oct 01, 2026 – Dec 10, 2026)
 
 ---
 
@@ -28,11 +28,11 @@ Within the Scrum Team, there are no sub-teams or hierarchies. In accordance with
 
 | Sprint | Iteration Dates (2026) | Theme / Focus Area | Trello Cards Included | Total Story Points | Est. Hours | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Sprint 1** | 8 – 21 Oct | Foundation & Requirements | `S1-01` – `S1-07` (7 Cards) | 24 SP | 52h | **Completed** |
-| **Sprint 2** | 22 Oct – 4 Nov | Agent Management & Task Assignment | `S2-01` – `S2-06` (6 Cards) | 22 SP | 44h | **Completed** |
-| **Sprint 3** | 5 – 18 Nov | Distributed Development | `S3-01` – `S3-06` (6 Cards) | 24 SP (18 SP Done, 6 SP Carried Over) | 52h | **Completed** (4 of 6 Done) |
-| **Sprint 4** | 19 Nov – 2 Dec | Integration & Quality Assurance | `S4-01` – `S4-06` + Carried Over `S3-03`, `S3-05` (8 Cards) | 30 SP (24 new + 6 rollover) | 60h | **In Progress** |
-| **Sprint 5** | 3 – 16 Dec | Complete System & Evaluation | `S5-01` – `S5-06` (6 Cards) | 20 SP | 42h | Planned |
+| **Sprint 1** | 1 – 15 Oct | Foundation & Requirements | `S1-01` – `S1-07` (7 Cards) | 24 SP | 52h | **Completed** |
+| **Sprint 2** | 15 – 29 Oct | Agent Management & Task Assignment | `S2-01` – `S2-07` (7 Cards) | 22 SP | 44h | **Completed** |
+| **Sprint 3** | 29 Oct – 12 Nov | Distributed Development | `S3-01` – `S3-06` (6 Cards) | 24 SP | 52h | **Completed** (6 of 6 Done) |
+| **Sprint 4** | 12 – 26 Nov | Integration & Quality Assurance | `S4-01` – `S4-06` (6 Cards) | 24 SP | 52h | **In Progress** |
+| **Sprint 5** | 26 Nov – 10 Dec | Complete System & Evaluation | `S5-01` – `S5-06` (6 Cards) | 20 SP | 42h | Planned |
 
 ---
 

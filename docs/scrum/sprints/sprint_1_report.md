@@ -1,6 +1,6 @@
 # Sprint 1 Review Report, Retrospective & Progress Report
 
-* **Sprint Period:** September 24, 2026 – October 07, 2026 (Weeks 1 – 2)
+* **Sprint Period:** October 01, 2026 – October 15, 2026 (Weeks 1 – 2)
 * **Scrum Master:** İrem Yılmaz (Backend Agent — `qwen2.5-coder:7b`)
 * **Developers:** Eren Görkem Çolak, Kübra Hepcan, Mahmut Karaalioğlu, Berat İnan, İrem Yılmaz, Elif Yılmaz
 * **Sprint Goal (Why):**
@@ -12,7 +12,7 @@
 ## 1. Sprint Review (At the Review)
 
 ### 1.1. Delivered Product Increment & Observable Evidence (What Was Demonstrated)
-On October 07, 2026, the Scrum Team presented the working prototype Increment to the Product Owner:
+On October 15, 2026, the Scrum Team presented the working prototype Increment to the Product Owner:
 
 | Card ID | Deliverable Summary | Primary Assignee | Repository Evidence | Verification Outcome & Acceptance |
 | :--- | :--- | :--- | :--- | :--- |
@@ -79,7 +79,7 @@ Ran 4 tests in 0.045s - OK
 ## 3. Course Progress Report (Mandated by CM6453 Syllabus)
 
 ### 3.1. Project Milestone & Schedule Status
-* **Iteration Timeline:** Sprint 1 of 5 (Weeks 1–2 of 10-Week Semester Schedule: Sept 24 – Oct 07, 2026).
+* **Iteration Timeline:** Sprint 1 of 5 (Weeks 1–2 of 10-Week Semester Schedule: Oct 01 – Oct 15, 2026).
 * **Milestone Objective:** Foundation & Requirements (Establish repository, define architecture, create initial prototypes).
 * **Schedule Status:** **ON SCHEDULE** (100% of planned Sprint 1 scope delivered).
 

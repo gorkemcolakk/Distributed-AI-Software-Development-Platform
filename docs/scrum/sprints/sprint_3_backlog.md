@@ -1,8 +1,8 @@
 # Sprint 3 Backlog & Task Distribution
 
-- **Sprint Period:** October 22, 2026 – November 04, 2026 (Weeks 5 – 6)
-  * **Sprint 3 – Week 5:** October 22, 2026 – October 28, 2026
-  * **Sprint 3 – Week 6:** October 29, 2026 – November 04, 2026
+- **Sprint Period:** October 29, 2026 – November 12, 2026 (Weeks 5 – 6)
+  * **Sprint 3 – Week 5:** October 29, 2026 – November 04, 2026
+  * **Sprint 3 – Week 6:** November 05, 2026 – November 12, 2026
 - **Sprint Status:** **COMPLETED (6 of 6 Cards Done)**
 - **Scrum Master:** İrem Yılmaz (Backend Agent & Scrum Master)
 

@@ -99,7 +99,7 @@ Measurable process, tool, or quality improvements prioritized for immediate adop
 ### 4.2. Cumulative Velocity & Story Point Burnup Tracking
 * **Sprint 1 Velocity:** 24 SP (Completed)
 * **Sprint 2 Velocity:** 22 SP (Completed)
-* **Sprint 3 Velocity:** 18 SP Completed (6 SP Rolled Over)
+* **Sprint 3 Velocity:** 24 SP (Completed)
 * **Total Cumulative Story Points Delivered to Date:** [Total] SP
 * **Sprint 4 Committed Capacity:** [X] SP
 

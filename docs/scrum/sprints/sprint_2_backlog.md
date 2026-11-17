@@ -1,9 +1,9 @@
 # Sprint 2 Backlog & Task Distribution
 
-* **Sprint Period:** 2026-10-08 – 2026-10-21 (Weeks 3 – 4)
+* **Sprint Period:** 2026-10-15 – 2026-10-29 (Weeks 3 – 4)
 * **Scrum Master:** İrem Yılmaz (Backend Agent — `qwen2.5-coder:7b`)
 * **Developers:** Eren Görkem Çolak, Kübra Hepcan, Mahmut Karaalioğlu, Berat İnan, İrem Yılmaz, Elif Yılmaz
-* **Sprint Status:** **COMPLETED** (Closed on 2026-10-22; 6 of 6 cards completed, 22 SP delivered)
+* **Sprint Status:** **COMPLETED** (Closed on 2026-10-22; 7 of 7 cards completed, 22 SP delivered)
 
 ---
 
@@ -15,7 +15,7 @@
 
 ## 2. Selected Product Backlog Items & Owners (What & Who - At Sprint Planning)
 
-During Sprint Planning on Oct 08, 2026, the Developers selected the following items from the Product Backlog, assigned primary owners, and mapped estimated hours:
+During Sprint Planning on Oct 15, 2026, the Developers selected the following items from the Product Backlog, assigned primary owners, and mapped estimated hours:
 
 | Card ID | Task Title & Scope | Primary Assignee | Priority | Story Points | Est. Hours | Dependencies | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -74,4 +74,4 @@ During Sprint Planning on Oct 08, 2026, the Developers selected the following it
 ---
 
 ## 4. Definition of Done Compliance
-All 6 Sprint 2 deliverables were verified against the [Definition of Done](../definition_of_done.md). The automated test suite (`python -m unittest discover tests`) passed with 44/44 tests green on `main`.
+All 7 Sprint 2 deliverables were verified against the [Definition of Done](../definition_of_done.md). The automated test suite (`python -m unittest discover tests`) passed with 44/44 tests green on `main`.

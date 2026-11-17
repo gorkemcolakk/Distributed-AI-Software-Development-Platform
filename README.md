@@ -52,7 +52,7 @@ Sprint 1 (1–15 Oct) and Sprint 2 (15–29 Oct) are completed. Details: [`docs/
 - 🗄️ **SQLite Persistence:** Her çalıştırma `state.db`'ye (`runs`, `agents`, `tasks`, `attempts`) kaydedilir; başarısız görevler `COMPLETED` olarak yazılamaz.
 - 🌐 **Worker HTTP API:** Bearer token ile korunan FastAPI worker sunucusu (`/health`, `/task`) — [`src/api/worker_server.py`](src/api/worker_server.py).
 - 🤖 **Local LLM Agents:** BackendAgent (`qwen2.5-coder:7b`) ve TestingAgent (`deepseek-coder:6.7b`) yerel Ollama'ya kod/test ürettirir; Ollama kapalıysa etiketli yedek moda geçer.
-- ✅ **CI:** Her pull request'te GitHub Actions ile 111 birim testi çalışır.
+- ✅ **CI:** Her pull request'te GitHub Actions ile 196 birim testi çalışır.
 
 ### 🚧 Not Yet
 - Görev ayrıştırma (`src/master/analyzer.py`) henüz sabit bir şablon kullanıyor; Master modeline bağlanması planlanıyor.
