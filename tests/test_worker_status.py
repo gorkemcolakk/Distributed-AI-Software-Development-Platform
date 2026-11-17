@@ -120,6 +120,9 @@ class _Tags(BaseHTTPRequestHandler):
         pass
 
 
+_AGENT_URL_VARS = tuple(f"{r}_AGENT_URL" for r in ("INTEGRATION", "FRONTEND", "BACKEND", "DATABASE", "TESTING"))
+
+
 class TestAgentCardStatus(unittest.TestCase):
     """Each card shows one status. Local agents always work (backup mode if the model is missing); only an unreachable remote worker is OFFLINE."""
 
@@ -127,9 +130,12 @@ class TestAgentCardStatus(unittest.TestCase):
         import streamlit as st
         self.server = HTTPServer(("127.0.0.1", 0), _Tags)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
-        self._env = {k: os.environ.get(k) for k in ("OLLAMA_HOST", "FRONTEND_AGENT_URL")}
+        self._env = {k: os.environ.get(k) for k in ("OLLAMA_HOST",) + _AGENT_URL_VARS}
         os.environ["OLLAMA_HOST"] = f"http://127.0.0.1:{self.server.server_address[1]}"
-        os.environ.pop("FRONTEND_AGENT_URL", None)
+        # app.py loads .env on every run; an empty value here keeps a local .env (real Tailscale
+        # worker addresses) from turning these local agents into remote ones during the test.
+        for k in _AGENT_URL_VARS:
+            os.environ[k] = ""
         st.cache_data.clear()
 
     def tearDown(self):

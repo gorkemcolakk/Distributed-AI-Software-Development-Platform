@@ -32,6 +32,28 @@ from src.master import db_manager
 
 logger = logging.getLogger(__name__)
 
+# How much generated code the Testing task sees (enough for signatures, short enough for small models)
+TEST_CONTEXT_MAX_FILES = 2
+TEST_CONTEXT_MAX_CHARS = 1500
+
+
+def code_excerpts_for_testing(generated_files: Dict[str, str]) -> Dict[str, str]:
+    """First part of each generated Python module (test files excluded), so TestingAgent
+    writes tests against the real code instead of generic ones."""
+    excerpts: Dict[str, str] = {}
+    for path in sorted(generated_files):
+        name = path.replace("\\", "/").rsplit("/", 1)[-1]
+        content = generated_files[path]
+        if not name.endswith(".py") or name.startswith("test_") or not isinstance(content, str):
+            continue
+        excerpt = content[:TEST_CONTEXT_MAX_CHARS]
+        if len(content) > TEST_CONTEXT_MAX_CHARS:
+            excerpt += "\n# ... (truncated)"
+        excerpts[path] = excerpt
+        if len(excerpts) >= TEST_CONTEXT_MAX_FILES:
+            break
+    return excerpts
+
 
 class MasterOrchestrator:
     """Master Agent Orchestrator managing distributed multi-agent software development lifecycle."""
@@ -192,21 +214,39 @@ class MasterOrchestrator:
                     self._db(db_manager.save_task_result, run_id, task, record, agent_ids=agent_ids)
                     continue
 
-                # Build upstream context from completed dependency tasks
+                # Build concise upstream context from completed dependency tasks (excluding bulky raw code strings)
                 deps = task.get("dependencies", [])
-                upstream_ctx = {
-                    dep_id: completed_task_artifacts[dep_id]
-                    for dep_id in deps
-                    if dep_id in completed_task_artifacts
-                }
+                upstream_ctx = {}
+                for dep_id in deps:
+                    if dep_id in completed_task_artifacts:
+                        raw_art = completed_task_artifacts[dep_id] or {}
+                        compact_art = {
+                            k: v for k, v in raw_art.items()
+                            if k not in ("files", "generated_code", "generated_sql", "generated_html")
+                        }
+                        if "files" in raw_art and isinstance(raw_art["files"], list):
+                            compact_art["files_generated"] = [
+                                f.get("filename") or f.get("path")
+                                for f in raw_art["files"]
+                                if isinstance(f, dict)
+                            ]
+                        upstream_ctx[dep_id] = compact_art
+
                 merged_context = {
                     **project_context,
                     **(task.get("context_artifacts") or {}),
                 }
-                if upstream_ctx:
-                    merged_context["upstream_artifacts"] = upstream_ctx
-                if generated_files_by_path:
-                    merged_context["generated_files"] = dict(generated_files_by_path)
+                if category != TaskCategory.DATABASE:
+                    if upstream_ctx:
+                        merged_context["upstream_artifacts"] = upstream_ctx
+                    if generated_files_by_path:
+                        merged_context["generated_files"] = sorted(generated_files_by_path.keys())
+                # Testing needs to see the code it tests: send a short excerpt of the generated
+                # Python modules (not the full files, so small models stay within their timeout)
+                if category == TaskCategory.TESTING:
+                    excerpts = code_excerpts_for_testing(generated_files_by_path)
+                    if excerpts:
+                        merged_context["code_under_test"] = excerpts
 
                 # Build versioned S3-01 task envelope (includes run_id, task_id, timeout_seconds)
                 envelope = build_task_envelope(
