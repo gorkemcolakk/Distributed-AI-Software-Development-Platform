@@ -266,7 +266,7 @@ try:
     from src.agents.database_agent import DatabaseAgent
     from src.agents.testing_agent import TestingAgent
     from src.agents.integration_agent import IntegrationAgent
-    from src.agents.remote_agent import wrap_agent_if_remote, RemoteAgentProxy
+    from src.agents.remote_agent import wrap_agent_if_remote, RemoteAgentProxy, get_agent_endpoint_url
 
     ENGINE_ERROR = None
 except Exception as _e:  # motor yüklenemezse arayüz DEMO VERİSİ moduna düşer
@@ -288,6 +288,51 @@ def ollama_models():
         return sorted(m.get("name", "") for m in data.get("models", []))
     except Exception:
         return None
+
+
+def agent_endpoint(a):
+    """Ajanın uzak işçi adresi (config ya da <ROL>_AGENT_URL ortam değişkeni); yerel ajanda None."""
+    if ENGINE_ERROR is not None:
+        return None
+    return get_agent_endpoint_url(a["id"], a.get("endpoint_url"))
+
+
+def probe_worker(endpoint_url, timeout=2.0):
+    """Uzak işçinin /health adresine bakar. Asla hata fırlatmaz.
+    Dönen: {"online": bool, "agent_status": "IDLE"/"BUSY"/..., "reason": str}"""
+    try:
+        req = urllib.request.Request(f"{endpoint_url.rstrip('/')}/health", headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        if not isinstance(data, dict) or str(data.get("status", "")).upper() != "HEALTHY":
+            return {"online": False, "agent_status": "OFFLINE", "reason": "sağlıklı değil"}
+        return {"online": True, "agent_status": str(data.get("agent_status", "IDLE")).upper(), "reason": ""}
+    except Exception:
+        return {"online": False, "agent_status": "OFFLINE", "reason": "bağlanılamıyor"}
+
+
+@st.cache_data(ttl=10, show_spinner=False)
+def probe_workers(endpoints):
+    """Birden çok uzak işçiyi paralel yoklar: {url: probe_worker sonucu}. 10 sn önbellekli."""
+    urls = list(endpoints)
+    if not urls:
+        return {}
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=len(urls)) as pool:
+        return dict(zip(urls, pool.map(probe_worker, urls)))
+
+
+def backup_note(a):
+    """Yerel ajanın modeli bu bilgisayarda yoksa kartta kısa not: ajan yine çalışır ama yedek modda."""
+    if agent_endpoint(a) or model_available(a["ollama_tag"], ollama_models()):
+        return ""
+    return "↳ model yok · yedek mod"
+
+
+def machine_label(a):
+    """Kartta tek kısa satır: sadece uzak işçide hangi makinede çalıştığı; yerel ajanda boş."""
+    url = agent_endpoint(a)
+    return "🖥 " + url.split("://", 1)[-1].rstrip("/") if url else ""
 
 
 def _norm(tag):
@@ -693,18 +738,27 @@ for _k, _v in {"report": None, "meta": {}, "artifacts": {}, "snapshot": {}, "mod
 state = st.session_state
 
 
+def agent_by_id():
+    return {a["id"]: a for a in agents_data}
+
+
 def agent_by_name():
     return {a["name"]: a for a in agents_data}
 
 
 def agent_status(a):
-    """Ajan durumu: son motor çalıştırmasından (snapshot); yoksa Ollama'da modelin yüklü olup olmadığından."""
-    raw = state.snapshot.get(a["id"])
-    if raw is None:
-        raw = "IDLE"
-        if state.get("reflect_ollama", REFLECT_DEFAULT) and not model_available(a["ollama_tag"], ollama_models()):
-            raw = "OFFLINE"
-    return "FAILED" if raw == "ERROR" else raw
+    """Tek durum, motorun gerçekten yapacağı şeye göre: uzak işçi /health cevap vermiyorsa OFFLINE (görev almaz);
+    yerel ajan her zaman çalışır (model yoksa etiketli yedek modda), bu yüzden OFFLINE olmaz."""
+    url = agent_endpoint(a)
+    if url:
+        probe = probe_workers((url,)).get(url)
+        if not probe["online"]:
+            return "OFFLINE"
+        raw = state.snapshot.get(a["id"]) or probe["agent_status"]
+    else:
+        raw = state.snapshot.get(a["id"]) or "IDLE"
+    raw = "FAILED" if raw == "ERROR" else raw
+    return raw if raw in STATUS_STYLE else "IDLE"
 
 
 def is_real_agent(agent):
@@ -714,11 +768,6 @@ def is_real_agent(agent):
         return "ollama" in inspect.getsource(fn).lower()
     except (OSError, TypeError):
         return False
-
-
-# Varsayılan kapalı: herkesin makinesinde her ajanın modeli yüklü değil. Açık başlarsa
-# Ollama kapalıyken ya da model eksikken ajanlar OFFLINE sayılır ve hiçbir görev atanmaz.
-REFLECT_DEFAULT = False
 
 
 def build_agents():
@@ -741,18 +790,27 @@ def build_agents():
 def run_engine(requirement, live):
     """Gerçek MasterOrchestrator'ı çalıştırır; sonucu session_state'e yazar."""
     agents, skipped = build_agents()
-    if state.get("reflect_ollama", REFLECT_DEFAULT):
-        models = ollama_models()
-        for ag in agents:
-            if not model_available(ag.model_name, models):
-                ag.status = AgentStatus.OFFLINE
-                live.write(f"⚪ {ag.name}: model '{ag.model_name}' Ollama'da yok → OFFLINE")
+    for ag in agents:  # uzak işçiler: görev dağıtılmadan önce /health kontrolü
+        if isinstance(ag, RemoteAgentProxy):
+            ag.check_health()
+            if ag.status == AgentStatus.OFFLINE:
+                if ag.fallback_to_local:
+                    ag.status = AgentStatus.IDLE  # yerel yedek devreye girer
+                    live.write(f"⚪ {ag.name}: {ag.endpoint_url} yanıt vermiyor → yerel yedek kullanılacak")
+                else:
+                    live.write(f"⚪ {ag.name}: {ag.endpoint_url} yanıt vermiyor → OFFLINE, görev almayacak")
+            else:
+                live.write(f"🔗 {ag.name}: {ag.endpoint_url} → ONLINE")
     for ag in agents:  # canlı BUSY/sonuç satırları için sarmalayıcı
         orig = ag.execute_task
 
         def wrapped(task, _ag=ag, _orig=orig):
             live.write(f"🟡 {_ag.name} → BUSY ({task.get('title')})")
-            res = _orig(task)
+            set_card_status(_ag.agent_id, "BUSY")
+            try:
+                res = _orig(task)
+            finally:
+                set_card_status(_ag.agent_id, CARD_STATUS.get(_ag.agent_id, "IDLE"))
             live.write(
                 f"{'🟢' if res.status == 'SUCCESS' else '🔴'} {_ag.name} → {res.status} ({res.execution_time_seconds} sn)")
             if res.status == "SUCCESS":
@@ -904,6 +962,31 @@ def burndown_df(assignments):
     return pd.DataFrame({"İdeal": ideal, "Gerçek": actual}, index=pd.Index(range(n + 1), name="Tamamlanan görev"))
 
 
+CARD_SLOTS, CARD_STATUS = {}, {}
+
+
+def agent_card_html(a, ast_name):
+    """Sidebar ajan kartı; tek durum: ONLINE - IDLE, ONLINE - BUSY, OFFLINE (ya da FAILED). Modeli olmayan yerel ajanda ek not: yedek mod."""
+    ast_color = STATUS_STYLE[ast_name][0]
+    label = f"ONLINE - {ast_name}" if ast_name in ("IDLE", "BUSY") else ast_name  # bağlı: ONLINE - IDLE / ONLINE - BUSY
+    machine = machine_label(a) or backup_note(a)
+    return (
+        f'<div class="agent-card" style="--c:{a["color"]}">'
+        f'<div class="agent-name"><span class="dot"></span>{esc(a["Agent ID"])}'
+        f'<span class="chip chip-cx" style="--c:{ast_color};float:right;font-size:.7em">● {label}</span></div>'
+        f'<div class="agent-spec">{esc(a["Role"])} · <span style="color:#9CA3AF">Üye: {esc(a["Member"])}</span></div>'
+        + (f'<div class="agent-spec" style="color:#9CA3AF">{esc(machine)}</div>' if machine else "")
+        + skill_bar("Coding", a["Coding"]) + skill_bar("Reasoning", a["Reasoning"]) + skill_bar("Context", a["Context"])
+        + f'<div class="agent-spec" style="margin-top:10px">Puanlar: {a["provenance"]} · kayıt: {esc(a["config_status"])}</div></div>')
+
+
+def set_card_status(agent_id, ast_name):
+    """Çalışma sırasında kartı canlı günceller (kart yoksa sessizce geçer)."""
+    slot, a = CARD_SLOTS.get(agent_id), agent_by_id().get(agent_id)
+    if slot is not None and a is not None:
+        slot.markdown(agent_card_html(a, ast_name), unsafe_allow_html=True)
+
+
 # ==========================================
 # 5. SIDEBAR (ajanlar config'ten, durumlar motor/Ollama'dan)
 # ==========================================
@@ -911,9 +994,6 @@ with st.sidebar:
     st.markdown("## 🌐 Nexus Core")
     st.caption("Dağıtık multi-agent orkestrasyon motoru")
     st.caption(f"📄 {CONFIG['path_name']} · v{CONFIG['version']} · {CONFIG['retrieved']}")
-    st.checkbox("Ollama'da yüklü olmayan modeli OFFLINE say", value=REFLECT_DEFAULT, key="reflect_ollama",
-                help="Açıkken modeli Ollama'da yüklü olmayan ajanlar OFFLINE sayılır ve görev almaz. Herkeste her model yüklü olmadığı için varsayılan kapalı.")
-
     st.markdown("### Master Agent")
     m = MASTER
     st.markdown(
@@ -925,18 +1005,14 @@ with st.sidebar:
         unsafe_allow_html=True)
 
     st.markdown(f"### 🤖 Alt Ajan Havuzu ({len(agents_data)} Worker)")
+    _urls = tuple(u for u in (agent_endpoint(x) for x in agents_data) if u)
+    if _urls:
+        _p = probe_workers(_urls)
+        st.caption(f"🔗 Uzak işçiler: {sum(1 for u in _urls if _p[u]['online'])}/{len(_urls)} ONLINE")
     for a in agents_data:
-        ast_name = agent_status(a)
-        ast_color = STATUS_STYLE[ast_name][0]
-        st.markdown(
-            f'<div class="agent-card" style="--c:{a["color"]}">'
-            f'<div class="agent-name"><span class="dot"></span>{esc(a["Agent ID"])}'
-            f'<span class="chip chip-cx" style="--c:{ast_color};float:right;font-size:.7em">● {ast_name}</span></div>'
-            f'<div class="agent-spec">{esc(a["Role"])} · <span style="color:#9CA3AF">Üye: {esc(a["Member"])}</span></div>'
-            + skill_bar("Coding", a["Coding"]) + skill_bar("Reasoning", a["Reasoning"]) + skill_bar("Context",
-                                                                                                    a["Context"])
-            + f'<div class="agent-spec" style="margin-top:10px">Puanlar: {a["provenance"]} · kayıt: {esc(a["config_status"])}</div></div>',
-            unsafe_allow_html=True)
+        CARD_SLOTS[a["id"]] = st.empty()  # çalışma sırasında kart BUSY'ye döner, bitince geri döner
+        CARD_STATUS[a["id"]] = agent_status(a)
+        CARD_SLOTS[a["id"]].markdown(agent_card_html(a, CARD_STATUS[a["id"]]), unsafe_allow_html=True)
 
 # ==========================================
 # 6. ANA EKRAN
@@ -1047,11 +1123,24 @@ if state.report:
 
     if state.decomp:
         with st.expander(f"Master Agent görev ayrıştırması (5 aşama) · {state.decomp_label}"):
-            st.dataframe(pd.DataFrame([
-                {"Aşama": p.replace("_", " "), "Zorluk": d.get("complexity", ""),
-                 "Yetenek": d.get("primary_skill_required", ""),
-                 "Puan": d.get("story_points", ""), "Açıklama": d.get("description", "")}
-                for p, d in state.decomp.items()]), use_container_width=True, hide_index=True)
+            # Küçük sütunlar tek satır, açıklama kısaltılır (tamamı fareyle üstüne gelince), tablo yana kayar
+            def _short(t, n=110):
+                t = " ".join(str(t).split())
+                return t if len(t) <= n else t[:n].rstrip() + "…"
+
+            _td = "padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.08);vertical-align:top;"
+            rows = "".join(
+                f'<tr><td style="{_td}white-space:nowrap;font-weight:600">{esc(p.replace("_", " "))}</td>'
+                f'<td style="{_td}white-space:nowrap">{esc(d.get("complexity", ""))}</td>'
+                f'<td style="{_td}white-space:nowrap">{esc(d.get("primary_skill_required", ""))}</td>'
+                f'<td style="{_td}white-space:nowrap;text-align:center">{esc(d.get("story_points", ""))}</td>'
+                f'<td style="{_td}min-width:320px;color:#D1D5DB" title="{esc(d.get("description", ""))}">'
+                f'{esc(_short(d.get("description", "")))}</td></tr>'
+                for p, d in state.decomp.items())
+            head = "".join(f'<th style="{_td}text-align:left;color:#9CA3AF;white-space:nowrap">{h}</th>'
+                           for h in ("Aşama", "Zorluk", "Yetenek", "Puan", "Açıklama"))
+            st.markdown('<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.9em">'
+                        f'<thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table></div>', unsafe_allow_html=True)
 
     st.markdown('<div class="section-title">Sprint burndown</div>', unsafe_allow_html=True)
     st.caption("Gri çizgi ideal hız, turkuaz çizgi gerçek ilerleme (her görev 1 birim).")
