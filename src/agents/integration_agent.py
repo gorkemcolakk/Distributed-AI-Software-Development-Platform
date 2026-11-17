@@ -296,6 +296,9 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
                 create_package_dir=pkg_dir,
             )
             result_dict = report.model_dump()
+            # S3-05: incelenen dosyaların boyut ve SHA-256 kataloğu sonuca eklenir
+            manifest = self.generate_artifact_manifest(run_id or "unknown", artifacts)
+            result_dict["artifact_manifest"] = manifest.model_dump()
             worker_status = "SUCCESS" if report.status in ("APPROVED", "REVIEW_REQUIRED") else "FAILED"
         else:
             report = IntegrationReportContract_v1(
