@@ -96,7 +96,7 @@
       "context_tokens": 32768,
       "capabilities": { "coding": 96.0, "reasoning": 88.0, "context_capacity": 84.0 },
       "capability_provenance": { "coding": "estimated", "reasoning": "estimated", "context_capacity": "estimated" },
-      "specialties": ["backend", "api", "fastapi", "rest_services"],
+      "specialties": ["backend", "api", "fastapi", "rest_services", "architecture"],
       "max_concurrent_tasks": 1,
       "status": "registered"
     },
