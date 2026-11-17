@@ -5,6 +5,7 @@ and RemoteAgentProxy Distributed Dispatch (S2-04 & S3-01).
 
 import os
 import socket
+import hashlib
 import unittest
 import urllib.error
 
@@ -154,6 +155,25 @@ class TestContracts(unittest.TestCase):
         self.assertEqual(normalize_worker_status("COMPLETED"), "SUCCESS")
         self.assertEqual(normalize_worker_status("FAILED"), "FAILED")
         self.assertEqual(normalize_worker_status("REJECTED"), "FAILED")
+
+    def test_integration_artifact_manifest(self):
+        """S3-05: manifest boyut ve SHA-256 hesaplar, boş dosyayı ayrı listeler, görev sonucuna eklenir."""
+        agent = IntegrationAgent()
+        code = "def hello():\n    return 42\n"
+        manifest = agent.generate_artifact_manifest("run-m", {"src/app.py": code, "empty.py": ""})
+        self.assertEqual(len(manifest.manifests), 1)
+        entry = manifest.manifests[0]
+        self.assertEqual(entry.file_name, "app.py")
+        self.assertEqual(entry.size_bytes, len(code.encode("utf-8")))
+        self.assertEqual(entry.sha256_hash, hashlib.sha256(code.encode("utf-8")).hexdigest())
+        self.assertEqual(manifest.missing_or_empty_files, ["empty.py"])
+        self.assertEqual(manifest.catalog_status, "REVIEW_REQUIRED")
+
+        result = agent.execute_task({"task_id": "task-int-1", "run_id": "run-m",
+                                     "output_artifacts": {"app.py": code}})
+        out = getattr(result, "output_artifacts", result)
+        self.assertEqual(out["artifact_manifest"]["catalog_status"], "COMPLETED")
+        self.assertEqual(out["artifact_manifest"]["manifests"][0]["relative_path"], "app.py")
 
 
 class TestDuplicateTaskTracker(unittest.TestCase):
