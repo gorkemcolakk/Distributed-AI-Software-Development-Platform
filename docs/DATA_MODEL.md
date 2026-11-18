@@ -1,11 +1,11 @@
 # Data Model and Persistence Design
 
-**Iteration:** Iteration 1 (S1-04) → updated in Iteration 2 (S2-07) → updated in Iteration 3 (S3-04)  
-**Task ID:** S1-04, S2-07, S3-04  
+**Iteration:** Iteration 1 (S1-04) → updated in Iteration 2 (S2-07) → updated in Iteration 3 (S3-04) → updated in Iteration 4 (S4-04)  
+**Task ID:** S1-04, S2-07, S3-04, S4-04  
 **Assignee:** Mahmut Karaalioğlu (Database Agent)  
 **Reviewer:** İrem Yılmaz (Scrum Master)  
-**Source of truth:** [`src/master/db_manager.py`](../src/master/db_manager.py) — schema version `3` (`PRAGMA user_version`)  
-**Workspace writer:** [`src/master/workspace.py`](../src/master/workspace.py) — isolated output writer at `workspaces/{run_id}/`  
+**Source of truth:** [`src/master/db_manager.py`](../src/master/db_manager.py) — schema version `4` (`PRAGMA user_version`)  
+**Workspace & conflict modules:** [`src/master/workspace.py`](../src/master/workspace.py) (`workspaces/{run_id}/`) and [`src/master/conflicts.py`](../src/master/conflicts.py)  
 
 ## 1. Persistent Storage vs. In-Memory State (State Allocation)
 In our distributed AI agent platform, data is categorized into two main storage types:
@@ -81,6 +81,33 @@ All tables are created with `CREATE TABLE IF NOT EXISTS` by `init_db()`, which i
 | `is_successful` | INTEGER | `0` / `1` (CHECK) |
 | `error_message` | TEXT | Exception message on failure |
 | `execution_time_seconds` | REAL | |
+| `model_used` | TEXT | S4-04: model tag used in this attempt |
+| `created_at` | TIMESTAMP | |
+
+### `output_files` — generated file metadata (S4-04)
+Actual file contents live on disk under `workspaces/{run_id}/`; SQLite stores only metadata and review verdicts (`UNIQUE(run_id, task_id, relative_path)`):
+| Column | Type | Notes |
+| :--- | :--- | :--- |
+| `file_id` | INTEGER **PK** AUTOINCREMENT | |
+| `run_id`, `task_id` | TEXT **FK** → `tasks(run_id, task_id)` | `ON DELETE CASCADE` |
+| `agent_name` | TEXT | Producing agent |
+| `relative_path`, `requested_path` | TEXT | Actual path in workspace vs. originally requested path |
+| `size_bytes` | INTEGER | `>= 0` (CHECK) |
+| `sha256` | TEXT | 64-char hex digest (or NULL) |
+| `review_status` | TEXT | `PENDING`, `APPROVED`, `REVIEW_REQUIRED`, `REJECTED` (CHECK) |
+| `conflict_resolution` | TEXT | `RENAMED`, `DEDUPLICATED`, `REPORTED`, or NULL (CHECK) |
+| `created_at`, `updated_at` | TIMESTAMP | |
+
+### `file_conflicts` — path and schema conflicts (S4-04)
+| Column | Type | Notes |
+| :--- | :--- | :--- |
+| `conflict_id` | INTEGER **PK** AUTOINCREMENT | |
+| `run_id`, `task_id` | TEXT **FK** → `tasks(run_id, task_id)` | `ON DELETE CASCADE` |
+| `conflict_type` | TEXT | `PATH` (same target path) or `SCHEMA` (different `CREATE TABLE` columns) |
+| `file_path`, `resolved_path` | TEXT | Conflicting path and where the file was written |
+| `other_task_id` | TEXT | Earlier task holding the path or canonical table |
+| `resolution` | TEXT | `DEDUPLICATED` (same SHA-256), `RENAMED` (`<stem>.<task_id><ext>`), `REPORTED` (schema mismatch) |
+| `detail` | TEXT | Human-readable explanation |
 | `created_at` | TIMESTAMP | |
 
 ### Integrity rules — "never silently COMPLETED"
@@ -90,14 +117,7 @@ Failed, blocked or unassigned tasks are prevented from being stored as `COMPLETE
 3. **Trigger `trg_tasks_no_failed_to_completed`:** aborts any `UPDATE` from `FAILED` / `UNASSIGNED` / `BLOCKED` to `COMPLETED`.
 
 ### Legacy migration
-If `init_db()` finds the Sprint 1 schema (`tasks` without `run_id`, `agents` without `agent_id`), those tables are renamed to `tasks_legacy_v1` / `agents_legacy_v1` and the new schema is created. No data is deleted.
-
-### Output File (planned — not yet implemented)
-* `file_id` (PK): Unique file identifier
-* `task_id` (FK): The task that generated this file
-* `file_name`: Name of the generated file (e.g., `login.py`)
-* `file_path`: Physical relative path within the shared repository
-* `content_hash`: File hash to detect unauthorized or conflicting modifications
+If `init_db()` finds the Sprint 1 schema (`tasks` without `run_id`, `agents` without `agent_id`), those tables are renamed to `tasks_legacy_v1` / `agents_legacy_v1` and the new schema is created. Existing v2/v3 databases are upgraded in-place via `_add_missing_columns()` and `CREATE TABLE IF NOT EXISTS`. No data is deleted.
 
 ## 3. Storage Options Comparison
 Currently, agent capabilities are stored statically in `config/agents_config.json`. However, this is insufficient for asynchronous task management.
@@ -115,6 +135,8 @@ erDiagram
     RUNS ||--o{ TASKS : "contains"
     AGENTS ||--o{ TASKS : "assigned to"
     TASKS ||--o{ ATTEMPTS : "has"
+    TASKS ||--o{ OUTPUT_FILES : "produces"
+    TASKS ||--o{ FILE_CONFLICTS : "records"
     RUNS {
         TEXT run_id PK
         TEXT system_status

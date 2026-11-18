@@ -17,6 +17,7 @@ from src.master.workspace import (
     DEFAULT_WORKSPACE_ROOT,
     normalize_relative_path,
 )
+from src.master.conflicts import SchemaConflictDetector
 from src.agents.base_agent import BaseAgent, TaskCategory, TaskResult, AgentStatus
 from src.contracts import (
     CONTRACT_VERSION,
@@ -143,10 +144,12 @@ class MasterOrchestrator:
         workspace = RunWorkspace(run_id, root=self.workspace_root) if self.write_artifacts else None
         project_context = {"project_title": project_title, "requirement": requirement_text}
 
-        # Track upstream task outputs & generated file contents across the DAG (S3-01 / S3-05)
+        # Track upstream task outputs & generated file contents across the DAG (S3-01 / S3-05 / S4-04)
         completed_task_artifacts: Dict[str, Dict[str, Any]] = {}
         generated_files_by_path: Dict[str, str] = {}
         artifact_sources_by_path: Dict[str, List[str]] = {}
+        schema_detector = SchemaConflictDetector()
+        run_conflicts: List[Dict[str, Any]] = []
 
         self._db(db_manager.upsert_agents, self.evaluator.registered_agents)
         self._db(db_manager.create_run, run_id, project_title,
@@ -268,6 +271,8 @@ class MasterOrchestrator:
                         "artifact_sources",
                         {p: list(srcs) for p, srcs in artifact_sources_by_path.items()},
                     )
+                    if run_conflicts:
+                        dispatch_task.setdefault("conflicts_log", list(run_conflicts))
 
                 self.dispatched_envelopes.append(dict(dispatch_task))
 
@@ -297,7 +302,7 @@ class MasterOrchestrator:
                     raw_files = ((getattr(result, "output_artifacts", None) or {}).get("files")) or []
                     if is_successful and workspace is not None:
                         try:
-                            written_files = workspace.write_files(raw_files)
+                            written_files = workspace.write_files(raw_files, owner=task_id)
                         except UnsafePathError as exc:
                             # The agent answered, but its output cannot be delivered safely
                             is_successful = False
@@ -328,6 +333,7 @@ class MasterOrchestrator:
                     attempt_log.append({
                         "agent_id": agent.agent_id,
                         "agent_name": agent.name,
+                        "model_used": getattr(agent, "model_name", None),
                         "is_successful": is_successful,
                         "error_message": error_message,
                         "execution_time_seconds": getattr(result, "execution_time_seconds", 0.0),
@@ -337,22 +343,62 @@ class MasterOrchestrator:
                         task_succeeded = True
                         break
 
+                task_conflicts: List[Dict[str, Any]] = []
                 if task_succeeded:
                     self.scheduler.mark_completed(task_id)
                     artifacts_dict = getattr(last_result, "output_artifacts", None) or {}
                     completed_task_artifacts[task_id] = artifacts_dict
 
-                    # Record generated files for downstream tasks and IntegrationAgent inspection
+                    # Record generated files (using resolved paths if workspace renamed/deduplicated them)
                     raw_files = artifacts_dict.get("files") or []
+                    content_by_req = {}
                     for entry in raw_files:
                         if isinstance(entry, dict) and isinstance(entry.get("content"), str):
                             rel_raw = entry.get("filename") or entry.get("path")
                             try:
-                                clean_rel = normalize_relative_path(rel_raw).as_posix()
-                                generated_files_by_path[clean_rel] = entry["content"]
-                                artifact_sources_by_path.setdefault(clean_rel, []).append(last_agent.name)
+                                content_by_req[normalize_relative_path(rel_raw).as_posix()] = entry["content"]
                             except UnsafePathError:
                                 pass
+
+                    if written_files:
+                        for wf in written_files:
+                            resolved_rel = wf["relative_path"]
+                            req_rel = wf.get("requested_path") or resolved_rel
+                            content = wf.get("content") if "content" in wf else content_by_req.get(req_rel, "")
+                            conflict = wf.get("conflict")
+                            if conflict:
+                                task_conflicts.append(conflict)
+                            if not (conflict and conflict.get("resolution") == "DEDUPLICATED"):
+                                generated_files_by_path[resolved_rel] = content
+                                artifact_sources_by_path[resolved_rel] = [last_agent.name]
+                            if resolved_rel.endswith(".sql") and content:
+                                task_conflicts.extend(schema_detector.check(task_id, resolved_rel, content))
+                    else:
+                        for clean_rel, content in content_by_req.items():
+                            generated_files_by_path[clean_rel] = content
+                            artifact_sources_by_path.setdefault(clean_rel, []).append(last_agent.name)
+                            if clean_rel.endswith(".sql") and content:
+                                task_conflicts.extend(schema_detector.check(task_id, clean_rel, content))
+
+                    run_conflicts.extend(task_conflicts)
+
+                    # Update SQLite review_status on output_files after IntegrationAgent inspects them
+                    if category == TaskCategory.INTEGRATION and isinstance(artifacts_dict, dict):
+                        review_map: Dict[str, str] = {}
+                        for p in artifacts_dict.get("inspected_files") or []:
+                            review_map[p] = "APPROVED"
+                        for finding in artifacts_dict.get("findings") or []:
+                            if not isinstance(finding, dict):
+                                continue
+                            fp = finding.get("file_path")
+                            sev = finding.get("severity")
+                            if fp in review_map:
+                                if sev == "CRITICAL":
+                                    review_map[fp] = "REJECTED"
+                                elif sev == "WARNING" and review_map[fp] != "REJECTED":
+                                    review_map[fp] = "REVIEW_REQUIRED"
+                        if review_map:
+                            self._db(db_manager.update_output_file_reviews, run_id, review_map)
 
                     record = self._validate_record(run_id, {
                         "contract_version": CONTRACT_VERSION,
@@ -395,7 +441,9 @@ class MasterOrchestrator:
                     assignment_by_id[task_id] = record
 
                 self._db(db_manager.save_task_result, run_id, task, record,
-                         attempts=attempt_log, agent_ids=agent_ids)
+                         attempts=attempt_log, agent_ids=agent_ids,
+                         file_records=written_files if workspace is not None else None,
+                         conflicts=task_conflicts)
 
         # Deadlock protection for remaining unfinished tasks
         processed = self.scheduler.get_processed_tasks()
@@ -470,6 +518,7 @@ class MasterOrchestrator:
                 "BLOCKED": blocked_count
             },
             "workspace_path": str(workspace.path) if workspace else None,
+            "conflicts": run_conflicts,
             "dag_validation": {
                 "is_valid": dag_report["is_valid"],
                 "cycles": dag_report["cycles"],
