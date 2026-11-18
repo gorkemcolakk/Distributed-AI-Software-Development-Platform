@@ -7,6 +7,7 @@ contract envelope packaging (S3-01), and local/distributed agent execution.
 import logging
 import os
 import sqlite3
+import time
 from typing import Dict, Any, List, Optional
 from src.master.analyzer import RequirementsAnalyzer
 from src.master.capability_eval import CapabilityEvaluator
@@ -18,6 +19,7 @@ from src.master.workspace import (
     normalize_relative_path,
 )
 from src.master.conflicts import SchemaConflictDetector
+from src.master.retry_policy import RetryPolicy, TRANSIENT, classify_failure, failure_code
 from src.agents.base_agent import BaseAgent, TaskCategory, TaskResult, AgentStatus
 from src.contracts import (
     CONTRACT_VERSION,
@@ -25,6 +27,7 @@ from src.contracts import (
     DuplicateTaskTracker,
     OrchestratorTaskRecordContract_v1,
     OrchestratorTaskStatus,
+    WorkerErrorCode,
     build_task_envelope,
     normalize_worker_status,
     validate_master_tasks,
@@ -62,7 +65,8 @@ class MasterOrchestrator:
     def __init__(self, evaluator: Optional[CapabilityEvaluator] = None,
                  db_path: Optional[str] = None, persist: bool = True,
                  workspace_root: Optional[str] = None, write_artifacts: Optional[bool] = None,
-                 task_timeout: float = DEFAULT_TASK_TIMEOUT_SECONDS):
+                 task_timeout: float = DEFAULT_TASK_TIMEOUT_SECONDS,
+                 retry_policy: Optional[RetryPolicy] = None, sleep=None):
         self.persist = persist
         self.db_path = db_manager.init_db(db_path, verbose=False) if persist else None
         self.analyzer = RequirementsAnalyzer()
@@ -70,6 +74,9 @@ class MasterOrchestrator:
         self.scheduler = TaskScheduler()
         self.duplicate_tracker = DuplicateTaskTracker()
         self.task_timeout = float(task_timeout)
+        # S4-01: TRANSIENT failures (remote TIMEOUT / UNREACHABLE) are retried on the same agent
+        self.retry_policy = retry_policy or RetryPolicy.from_env()
+        self._sleep = sleep or time.sleep
         self.execution_history: List[TaskResult] = []
         self.dispatched_envelopes: List[Dict[str, Any]] = []
         # S3-04: agent output files are written only under <workspace_root>/<run_id>/.
@@ -287,61 +294,81 @@ class MasterOrchestrator:
 
                 for candidate in ranked_candidates:
                     agent = candidate["agent"]
-                    attempted_agents.append(agent.name)
-                    last_agent = agent
+                    retry_no = 0
+                    while True:
+                        attempted_agents.append(agent.name)
+                        last_agent = agent
 
-                    result = agent.execute_task(dispatch_task)
-                    norm_status = normalize_worker_status(getattr(result, "status", "FAILED"))
-                    if hasattr(result, "status") and norm_status == "SUCCESS":
-                        result.status = "SUCCESS"
-                    self.execution_history.append(result)
-                    last_result = result
-                    is_successful = norm_status == "SUCCESS"
-                    error_message = getattr(result, "error_message", None)
+                        result = agent.execute_task(dispatch_task)
+                        norm_status = normalize_worker_status(getattr(result, "status", "FAILED"))
+                        if hasattr(result, "status") and norm_status == "SUCCESS":
+                            result.status = "SUCCESS"
+                        self.execution_history.append(result)
+                        last_result = result
+                        is_successful = norm_status == "SUCCESS"
+                        error_message = getattr(result, "error_message", None)
 
-                    raw_files = ((getattr(result, "output_artifacts", None) or {}).get("files")) or []
-                    if is_successful and workspace is not None:
-                        try:
-                            written_files = workspace.write_files(raw_files, owner=task_id)
-                        except UnsafePathError as exc:
-                            # The agent answered, but its output cannot be delivered safely
-                            is_successful = False
-                            error_message = f"Güvensiz çıktı yolu reddedildi: {exc}"
-                            written_files = []
-                        except OSError as exc:
-                            is_successful = False
-                            error_message = f"Çıktı dosyaları çalışma alanına yazılamadı: {exc}"
-                            written_files = []
-                    elif is_successful and raw_files:
-                        # Validate relative paths even in in-memory mode (persist=False)
-                        try:
-                            in_mem_files = []
-                            for entry in raw_files:
-                                rel_raw = entry.get("filename") or entry.get("path")
-                                clean_rel = normalize_relative_path(rel_raw).as_posix()
-                                in_mem_files.append({
-                                    "relative_path": clean_rel,
-                                    "content": str(entry.get("content", "")),
-                                })
-                            written_files = in_mem_files
-                        except UnsafePathError as exc:
-                            is_successful = False
-                            error_message = f"Güvensiz çıktı yolu reddedildi: {exc}"
-                            written_files = []
+                        raw_files = ((getattr(result, "output_artifacts", None) or {}).get("files")) or []
+                        if is_successful and workspace is not None:
+                            try:
+                                written_files = workspace.write_files(raw_files, owner=task_id)
+                            except UnsafePathError as exc:
+                                # The agent answered, but its output cannot be delivered safely
+                                is_successful = False
+                                error_message = f"Güvensiz çıktı yolu reddedildi: {exc}"
+                                written_files = []
+                            except OSError as exc:
+                                is_successful = False
+                                error_message = f"Çıktı dosyaları çalışma alanına yazılamadı: {exc}"
+                                written_files = []
+                        elif is_successful and raw_files:
+                            # Validate relative paths even in in-memory mode (persist=False)
+                            try:
+                                in_mem_files = []
+                                for entry in raw_files:
+                                    rel_raw = entry.get("filename") or entry.get("path")
+                                    clean_rel = normalize_relative_path(rel_raw).as_posix()
+                                    in_mem_files.append({
+                                        "relative_path": clean_rel,
+                                        "content": str(entry.get("content", "")),
+                                    })
+                                written_files = in_mem_files
+                            except UnsafePathError as exc:
+                                is_successful = False
+                                error_message = f"Güvensiz çıktı yolu reddedildi: {exc}"
+                                written_files = []
 
-                    last_error = error_message
-                    attempt_log.append({
-                        "agent_id": agent.agent_id,
-                        "agent_name": agent.name,
-                        "model_used": getattr(agent, "model_name", None),
-                        "is_successful": is_successful,
-                        "error_message": error_message,
-                        "execution_time_seconds": getattr(result, "execution_time_seconds", 0.0),
-                    })
+                        last_error = error_message
+                        error_code = None if is_successful else failure_code(result, error_message)
+                        error_kind = None if is_successful else classify_failure(result, error_message)
+                        attempt_log.append({
+                            "agent_id": agent.agent_id,
+                            "agent_name": agent.name,
+                            "model_used": getattr(agent, "model_name", None),
+                            "is_successful": is_successful,
+                            "error_message": error_message,
+                            "execution_time_seconds": getattr(result, "execution_time_seconds", 0.0),
+                            "error_kind": error_kind,
+                            "error_code": error_code,
+                            "retry_no": retry_no,
+                        })
+
+                        if is_successful or error_kind != TRANSIENT or retry_no >= self.retry_policy.max_retries:
+                            break
+                        # TRANSIENT: same agent once more after a short pause (bounded by max_retries)
+                        retry_no += 1
+                        logger.info("Retrying %s on %s after %s (retry %d/%d)", task_id, agent.name,
+                                    error_code, retry_no, self.retry_policy.max_retries)
+                        agent.status = AgentStatus.IDLE
+                        self._sleep(self.retry_policy.delay_for(retry_no))
 
                     if is_successful:
                         task_succeeded = True
                         break
+                    # A worker that only timed out stays usable for later tasks of this run;
+                    # unreachable or permanently failing agents keep their ERROR status until the next run.
+                    if error_code == WorkerErrorCode.TIMEOUT.value:
+                        agent.status = AgentStatus.IDLE
 
                 task_conflicts: List[Dict[str, Any]] = []
                 if task_succeeded:
