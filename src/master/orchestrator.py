@@ -370,7 +370,11 @@ class MasterOrchestrator:
                                 task_conflicts.append(conflict)
                             if not (conflict and conflict.get("resolution") == "DEDUPLICATED"):
                                 generated_files_by_path[resolved_rel] = content
-                                artifact_sources_by_path[resolved_rel] = [last_agent.name]
+                                # append, not overwrite: in-memory mode (no workspace) does not rename,
+                                # so two producers of one path must stay visible to the IntegrationAgent
+                                producers = artifact_sources_by_path.setdefault(resolved_rel, [])
+                                if last_agent.name not in producers:
+                                    producers.append(last_agent.name)
                             if resolved_rel.endswith(".sql") and content:
                                 task_conflicts.extend(schema_detector.check(task_id, resolved_rel, content))
                     else:
