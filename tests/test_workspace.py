@@ -12,6 +12,8 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from src.master.conflicts import SchemaConflictDetector
+from src.agents.integration_agent import IntegrationAgent
 from src.master.workspace import (
     RunWorkspace,
     UnsafePathError,
@@ -165,6 +167,66 @@ class TestRunWorkspaceWriting(unittest.TestCase):
         with self.assertRaises(UnsafePathError) as ctx:
             ws.write_files(files)
         self.assertIn("çok büyük", str(ctx.exception).lower())
+
+    # --- S4-04: Path & Schema Conflict Resolution -------------------------
+    def test_path_conflict_different_content_renames_and_preserves_both(self):
+        ws = RunWorkspace("run-conflict-01", root=self.temp_root)
+        r1 = ws.write_files([{"filename": "api/main.py", "content": "v = 1\n"}], owner="task-1")
+        r2 = ws.write_files([{"filename": "api/main.py", "content": "v = 2\n"}], owner="task-2")
+
+        self.assertIsNone(r1[0]["conflict"])
+        self.assertEqual(r2[0]["relative_path"], "api/main.task-2.py")
+        self.assertEqual(r2[0]["requested_path"], "api/main.py")
+        self.assertEqual(r2[0]["conflict"]["resolution"], "RENAMED")
+        self.assertEqual(r2[0]["conflict"]["other_task_id"], "task-1")
+        self.assertEqual((ws.path / "api/main.py").read_text(encoding="utf-8"), "v = 1\n")
+        self.assertEqual((ws.path / "api/main.task-2.py").read_text(encoding="utf-8"), "v = 2\n")
+        self.assertEqual(len(ws.conflicts), 1)
+
+    def test_path_conflict_identical_content_deduplicates(self):
+        ws = RunWorkspace("run-conflict-02", root=self.temp_root)
+        ws.write_files([{"filename": "database/schema.sql", "content": "CREATE TABLE t (id INT);\n"}], owner="task-1")
+        r2 = ws.write_files([{"filename": "database/schema.sql", "content": "CREATE TABLE t (id INT);\n"}], owner="task-2")
+
+        self.assertEqual(r2[0]["relative_path"], "database/schema.sql")
+        self.assertEqual(r2[0]["conflict"]["resolution"], "DEDUPLICATED")
+        self.assertEqual(r2[0]["conflict"]["other_task_id"], "task-1")
+
+    def test_schema_conflict_detector_flags_different_columns_and_allows_identical(self):
+        detector = SchemaConflictDetector()
+        sql_a = "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL);"
+        sql_b_same = "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL);"
+        sql_b_diff = "CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT NOT NULL);"
+
+        self.assertEqual(detector.check("t1", "database/a.sql", sql_a), [])
+        self.assertEqual(detector.check("t2", "database/b.sql", sql_b_same), [])
+        conflicts = detector.check("t3", "database/c.sql", sql_b_diff)
+        self.assertEqual(len(conflicts), 1)
+        self.assertEqual(conflicts[0]["conflict_type"], "SCHEMA")
+        self.assertEqual(conflicts[0]["resolution"], "REPORTED")
+        self.assertEqual(conflicts[0]["table"], "users")
+        self.assertEqual(conflicts[0]["other_task_id"], "t1")
+
+    def test_integration_agent_reports_resolved_and_schema_conflicts(self):
+        agent = IntegrationAgent()
+        report = agent.inspect_artifacts(
+            artifacts={
+                "api/main.py": "x = 1\n",
+                "api/main.task-2.py": "x = 2\n",
+                "database/c.sql": "CREATE TABLE users (id INT);",
+            },
+            run_id="run-int-1",
+            conflicts_log=[
+                {"conflict_type": "PATH", "file_path": "api/main.py", "resolved_path": "api/main.task-2.py",
+                 "resolution": "RENAMED", "detail": "renamed"},
+                {"conflict_type": "SCHEMA", "file_path": "database/c.sql",
+                 "resolution": "REPORTED", "detail": "schema mismatch"},
+            ],
+        )
+        self.assertEqual(report.conflicts_resolved, 1)
+        self.assertIn("api/main.py", report.conflicts_detected)
+        self.assertIn("database/c.sql", report.conflicts_detected)
+        self.assertEqual(report.status, "REVIEW_REQUIRED")
 
 
 if __name__ == "__main__":

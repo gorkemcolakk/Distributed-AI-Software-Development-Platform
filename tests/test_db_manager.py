@@ -171,6 +171,98 @@ class TestDbManager(unittest.TestCase):
         self.assertEqual(len(db_manager.get_tasks_for_run(r1["run_id"], self.db_path)), 6)
         self.assertEqual(len(db_manager.get_tasks_for_run(r2["run_id"], self.db_path)), 6)
 
+    # --- S4-04: output_files, file_conflicts, attempts.model_used ---------
+    def test_output_files_and_attempts_model_used_persisted_across_run(self):
+        evaluator = CapabilityEvaluator([
+            FrontendAgent(use_ollama=False), BackendAgent(use_ollama=False),
+            DatabaseAgent(use_ollama=False), TestingAgent(use_ollama=False),
+            IntegrationAgent(),
+        ])
+        orch = MasterOrchestrator(evaluator=evaluator, db_path=self.db_path)
+        result = orch.process_requirement("Kütüphane yönetim sistemi", "Library")
+        run_id = result["run_id"]
+
+        files = db_manager.get_output_files_for_run(run_id, self.db_path)
+        self.assertTrue(len(files) >= 1)
+        for f in files:
+            self.assertEqual(len(f["sha256"]), 64)
+            self.assertGreater(f["size_bytes"], 0)
+            self.assertIn(f["review_status"], db_manager.REVIEW_STATUSES)
+
+        # IntegrationAgent worked on the generated files so at least one should be APPROVED
+        self.assertTrue(any(f["review_status"] == "APPROVED" for f in files))
+
+        attempts = db_manager.get_attempts_for_task(run_id, "task-db-1", self.db_path)
+        if attempts:
+            self.assertEqual(attempts[0]["model_used"], "llama3.2:3b")
+
+    def test_file_conflicts_table_persisted_and_review_updated(self):
+        db_manager.init_db(self.db_path, verbose=False)
+        db_manager.create_run("run-s4-1", "Test Project", total_tasks=1, db_path=self.db_path)
+        task = {"task_id": "t-2", "title": "DB", "category": "DATABASE", "dependencies": []}
+        record = {
+            "task_id": "t-2", "title": "DB", "assigned_agent": "Database Schema Agent",
+            "model_used": "llama3.2:3b", "fit_score": 90.0, "execution_time_seconds": 1.2,
+            "status": "COMPLETED", "agent_result_status": "SUCCESS",
+            "reason": "ok", "attempted_agents": ["Database Schema Agent"],
+            "output_files": ["database/schema.t-2.sql"],
+        }
+        conflict = {
+            "conflict_type": "PATH", "file_path": "database/schema.sql",
+            "resolved_path": "database/schema.t-2.sql", "task_id": "t-2",
+            "other_task_id": "t-1", "resolution": "RENAMED",
+            "detail": "renamed to avoid overwrite",
+        }
+        file_rec = {
+            "relative_path": "database/schema.t-2.sql",
+            "requested_path": "database/schema.sql",
+            "size_bytes": 42,
+            "sha256": "a" * 64,
+            "conflict": conflict,
+        }
+        db_manager.save_task_result(
+            "run-s4-1", task, record,
+            attempts=[{"agent_id": "agent-db", "agent_name": "Database Schema Agent",
+                       "model_used": "llama3.2:3b", "is_successful": True, "execution_time_seconds": 1.2}],
+            file_records=[file_rec],
+            db_path=self.db_path,
+        )
+
+        files = db_manager.get_output_files_for_run("run-s4-1", self.db_path)
+        self.assertEqual(len(files), 1)
+        self.assertEqual(files[0]["conflict_resolution"], "RENAMED")
+        self.assertEqual(files[0]["review_status"], "PENDING")
+
+        conflicts = db_manager.get_conflicts_for_run("run-s4-1", self.db_path)
+        self.assertEqual(len(conflicts), 1)
+        self.assertEqual(conflicts[0]["conflict_type"], "PATH")
+        self.assertEqual(conflicts[0]["other_task_id"], "t-1")
+
+        db_manager.update_output_file_reviews("run-s4-1", {"database/schema.t-2.sql": "REVIEW_REQUIRED"}, db_path=self.db_path)
+        updated = db_manager.get_output_files_for_run("run-s4-1", self.db_path)
+        self.assertEqual(updated[0]["review_status"], "REVIEW_REQUIRED")
+
+    def test_v3_database_migrates_cleanly_to_v4(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("CREATE TABLE runs (run_id TEXT PRIMARY KEY, project_title TEXT, system_status TEXT)")
+        conn.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY, run_id TEXT, task_id TEXT, status TEXT)")
+        conn.execute("CREATE TABLE attempts (attempt_id INTEGER PRIMARY KEY, run_id TEXT, task_id TEXT, attempt_no INTEGER, is_successful INTEGER)")
+        conn.execute("PRAGMA user_version = 3")
+        conn.commit()
+        conn.close()
+
+        db_manager.init_db(self.db_path, verbose=False)
+        conn = sqlite3.connect(self.db_path)
+        attempt_cols = {r[1] for r in conn.execute("PRAGMA table_info(attempts)")}
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
+        conn.close()
+
+        self.assertIn("model_used", attempt_cols)
+        self.assertIn("output_files", tables)
+        self.assertIn("file_conflicts", tables)
+        self.assertEqual(version, 4)
+
 
 if __name__ == "__main__":
     unittest.main()

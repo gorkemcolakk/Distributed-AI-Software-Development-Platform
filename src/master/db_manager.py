@@ -1,9 +1,12 @@
 """
-SQLite Persistence Layer (S1-04, S2-07, S3-04).
+SQLite Persistence Layer (S1-04, S2-07, S3-04, S4-04).
 
 Stores run lifecycle (run_id), agent capability profiles, per-run task
 statuses and execution attempts. S3-04 adds the run workspace directory
 (runs.workspace_path) and the files each task wrote into it (tasks.output_files).
+S4-04 adds the output_files table (path, size, SHA-256, review status),
+the file_conflicts table (path / schema conflicts and how they were resolved)
+and attempts.model_used.
 See docs/DATA_MODEL.md for the schema.
 """
 
@@ -19,14 +22,18 @@ DB_PATH = os.environ.get("STATE_DB_PATH", DEFAULT_DB_PATH)
 
 # Şema sürümü: PRAGMA user_version içinde tutulur.
 # v3 (S3-04): runs.workspace_path + tasks.output_files
-SCHEMA_VERSION = 3
+# v4 (S4-04): output_files + file_conflicts tabloları, attempts.model_used
+SCHEMA_VERSION = 4
 
 AGENT_STATUSES = ("IDLE", "BUSY", "OFFLINE", "ERROR")
 TASK_STATUSES = ("PENDING", "IN_PROGRESS", "COMPLETED", "FAILED", "UNASSIGNED", "BLOCKED")
 TERMINAL_FAILURE_STATUSES = ("FAILED", "UNASSIGNED", "BLOCKED")
 RUN_STATUSES = ("RUNNING", "COMPLETED", "PARTIALLY_COMPLETED", "FAILED")
+REVIEW_STATUSES = ("PENDING", "APPROVED", "REVIEW_REQUIRED", "REJECTED")
+CONFLICT_TYPES = ("PATH", "SCHEMA")
+CONFLICT_RESOLUTIONS = ("RENAMED", "DEDUPLICATED", "REPORTED")
 
-EXPECTED_TABLES = ("runs", "agents", "tasks", "attempts")
+EXPECTED_TABLES = ("runs", "agents", "tasks", "attempts", "output_files", "file_conflicts")
 
 
 def _sql_in(values: Iterable[str]) -> str:
@@ -65,10 +72,11 @@ def _migrate_legacy_schema(cursor: sqlite3.Cursor):
             cursor.execute(f"ALTER TABLE {table} RENAME TO {table}_legacy_v1")
 
 
-# Columns added after v2. Existing v2 databases get them through ALTER TABLE (data kept).
+# Columns added after v2. Existing databases get them through ALTER TABLE (data kept).
 _ADDED_COLUMNS = {
     "runs": [("workspace_path", "TEXT")],
     "tasks": [("output_files", "TEXT DEFAULT '[]'")],
+    "attempts": [("model_used", "TEXT")],
 }
 
 
@@ -173,6 +181,46 @@ def init_db(db_path: Optional[str] = None, verbose: bool = True) -> str:
                 is_successful INTEGER NOT NULL CHECK (is_successful IN (0, 1)),
                 error_message TEXT,
                 execution_time_seconds REAL DEFAULT 0.0,
+                model_used TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (run_id, task_id) REFERENCES tasks (run_id, task_id) ON DELETE CASCADE
+            )
+        ''')
+
+        # S4-04: Üretilen dosya özetleri (içerik diske yazılır, burada yalnızca özet tutulur)
+        cursor.execute(f'''
+            CREATE TABLE IF NOT EXISTS output_files (
+                file_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                task_id TEXT NOT NULL,
+                agent_name TEXT,
+                relative_path TEXT NOT NULL,
+                requested_path TEXT,
+                size_bytes INTEGER NOT NULL DEFAULT 0 CHECK (size_bytes >= 0),
+                sha256 TEXT CHECK (sha256 IS NULL OR length(sha256) = 64),
+                review_status TEXT NOT NULL DEFAULT 'PENDING'
+                    CHECK (review_status IN ({_sql_in(REVIEW_STATUSES)})),
+                conflict_resolution TEXT
+                    CHECK (conflict_resolution IS NULL OR conflict_resolution IN ({_sql_in(CONFLICT_RESOLUTIONS)})),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (run_id, task_id, relative_path),
+                FOREIGN KEY (run_id, task_id) REFERENCES tasks (run_id, task_id) ON DELETE CASCADE
+            )
+        ''')
+
+        # S4-04: Dosya yolu / şema çakışmaları ve nasıl çözüldükleri
+        cursor.execute(f'''
+            CREATE TABLE IF NOT EXISTS file_conflicts (
+                conflict_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                task_id TEXT NOT NULL,
+                conflict_type TEXT NOT NULL CHECK (conflict_type IN ({_sql_in(CONFLICT_TYPES)})),
+                file_path TEXT NOT NULL,
+                resolved_path TEXT,
+                other_task_id TEXT,
+                resolution TEXT NOT NULL CHECK (resolution IN ({_sql_in(CONFLICT_RESOLUTIONS)})),
+                detail TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (run_id, task_id) REFERENCES tasks (run_id, task_id) ON DELETE CASCADE
             )
@@ -180,6 +228,8 @@ def init_db(db_path: Optional[str] = None, verbose: bool = True) -> str:
 
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_run_status ON tasks (run_id, status)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_attempts_run_task ON attempts (run_id, task_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_output_files_run ON output_files (run_id, relative_path)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_file_conflicts_run ON file_conflicts (run_id)')
 
         # Başarısız/engellenmiş bir görevin aynı run içinde sonradan COMPLETED'a çekilmesini engeller
         cursor.execute(f'''
@@ -297,15 +347,19 @@ def create_run(run_id: str, project_title: str, requirement_id: Optional[str] = 
 def save_task_result(run_id: str, task: Dict[str, Any], record: Dict[str, Any],
                      attempts: Optional[List[Dict[str, Any]]] = None,
                      agent_ids: Optional[Dict[str, str]] = None,
+                     file_records: Optional[List[Dict[str, Any]]] = None,
+                     conflicts: Optional[List[Dict[str, Any]]] = None,
                      db_path: Optional[str] = None):
     """
-    Persists a task's terminal record (and its attempts) for a run.
+    Persists a task's terminal record (and its attempts, output file metadata,
+    and detected conflicts) for a run.
     `record` is the assignment dict produced by MasterOrchestrator.
     Raises ValueError if the record would wrongly mark a task COMPLETED.
     """
     validate_task_record(record)
     agent_ids = agent_ids or {}
     agent_name = record.get("assigned_agent")
+    task_id = record["task_id"]
 
     conn = get_connection(db_path)
     try:
@@ -328,7 +382,7 @@ def save_task_result(run_id: str, task: Dict[str, Any], record: Dict[str, Any],
                 execution_time_seconds = excluded.execution_time_seconds,
                 updated_at = CURRENT_TIMESTAMP
         ''', (
-            run_id, record["task_id"], record.get("title") or task.get("title"),
+            run_id, task_id, record.get("title") or task.get("title"),
             task.get("description"), task.get("category"), task.get("required_specialty"),
             json.dumps(task.get("dependencies", [])),
             agent_ids.get(agent_name) if agent_name else None, agent_name,
@@ -342,13 +396,84 @@ def save_task_result(run_id: str, task: Dict[str, Any], record: Dict[str, Any],
         for i, att in enumerate(attempts or [], start=1):
             conn.execute('''
                 INSERT INTO attempts (run_id, task_id, agent_id, agent_name, attempt_no,
-                                      is_successful, error_message, execution_time_seconds)
+                                      is_successful, error_message, execution_time_seconds, model_used)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                run_id, task_id, att.get("agent_id"), att.get("agent_name"), i,
+                1 if att.get("is_successful") else 0, att.get("error_message"),
+                att.get("execution_time_seconds", 0.0), att.get("model_used"),
+            ))
+
+        all_conflicts: List[Dict[str, Any]] = list(conflicts or [])
+        for f_rec in file_records or []:
+            rel_path = f_rec.get("relative_path")
+            if not rel_path:
+                continue
+            conflict = f_rec.get("conflict")
+            resolution = conflict.get("resolution") if isinstance(conflict, dict) else f_rec.get("conflict_resolution")
+            if isinstance(conflict, dict) and conflict not in all_conflicts:
+                all_conflicts.append(conflict)
+            review_status = f_rec.get("review_status", "PENDING")
+            if review_status not in REVIEW_STATUSES:
+                review_status = "PENDING"
+            conn.execute('''
+                INSERT INTO output_files (run_id, task_id, agent_name, relative_path, requested_path,
+                                          size_bytes, sha256, review_status, conflict_resolution)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(run_id, task_id, relative_path) DO UPDATE SET
+                    agent_name = excluded.agent_name,
+                    requested_path = excluded.requested_path,
+                    size_bytes = excluded.size_bytes,
+                    sha256 = excluded.sha256,
+                    review_status = excluded.review_status,
+                    conflict_resolution = excluded.conflict_resolution,
+                    updated_at = CURRENT_TIMESTAMP
+            ''', (
+                run_id, task_id, agent_name, rel_path,
+                f_rec.get("requested_path") or rel_path,
+                int(f_rec.get("size_bytes", 0)),
+                f_rec.get("sha256"),
+                review_status,
+                resolution,
+            ))
+
+        for conf in all_conflicts:
+            conn.execute('''
+                INSERT INTO file_conflicts (run_id, task_id, conflict_type, file_path,
+                                            resolved_path, other_task_id, resolution, detail)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
-                run_id, record["task_id"], att.get("agent_id"), att.get("agent_name"), i,
-                1 if att.get("is_successful") else 0, att.get("error_message"),
-                att.get("execution_time_seconds", 0.0),
+                run_id,
+                conf.get("task_id") or task_id,
+                conf["conflict_type"],
+                conf["file_path"],
+                conf.get("resolved_path"),
+                conf.get("other_task_id"),
+                conf["resolution"],
+                conf.get("detail"),
             ))
+
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def update_output_file_reviews(run_id: str, status_by_path: Dict[str, str],
+                               db_path: Optional[str] = None):
+    """Updates review_status (APPROVED / REVIEW_REQUIRED / REJECTED) on output_files for a run."""
+    if not status_by_path:
+        return
+    for rel_path, st in status_by_path.items():
+        if st not in REVIEW_STATUSES:
+            raise ValueError(f"Invalid review_status '{st}' for '{rel_path}'")
+    conn = get_connection(db_path)
+    try:
+        for rel_path, st in status_by_path.items():
+            conn.execute('''
+                UPDATE output_files
+                SET review_status = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE run_id = ? AND relative_path = ?
+            ''', (st, run_id, rel_path))
         conn.commit()
     finally:
         conn.close()
@@ -401,6 +526,30 @@ def get_attempts_for_task(run_id: str, task_id: str, db_path: Optional[str] = No
         rows = conn.execute(
             "SELECT * FROM attempts WHERE run_id = ? AND task_id = ? ORDER BY attempt_no",
             (run_id, task_id),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_output_files_for_run(run_id: str, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    conn = get_connection(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM output_files WHERE run_id = ? ORDER BY file_id",
+            (run_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_conflicts_for_run(run_id: str, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    conn = get_connection(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM file_conflicts WHERE run_id = ? ORDER BY conflict_id",
+            (run_id,),
         ).fetchall()
         return [dict(r) for r in rows]
     finally:

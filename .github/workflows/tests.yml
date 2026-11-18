@@ -1,25 +1,54 @@
 name: Tests
 
-# Her PR'da ve main'e her push'ta birim testleri calistirir.
-# Amac: specialties silinmesi, eksik bagimlilik, bozuk import gibi
-# gecmiste merge sonrasi fark edilen hatalari merge oncesinde yakalamak.
+# S4-06 CI kalite kapısı.
+# Her PR'da (ve main'e her push'ta) tüm test paketi çalışır. Testler canlı LLM,
+# API anahtarı veya ağ gerektirmez: Ollama adresi kapalı bir porta yönlendirilir,
+# ajanlar yedek/şablon kipine düşer, model çağrıları testlerde mock'lanır.
+#
+# Birleştirmeyi engellemek için: GitHub > Settings > Branches > main kuralında
+# "Require status checks to pass" açılıp zorunlu kontrol olarak "CI Gate" seçilir
+# (ayrıntılar: docs/CI_QUALITY_GATE.md).
 on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUNBUFFERED: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+  # Erişilemeyen adres: bir test yanlışlıkla gerçek modele giderse hızlıca düşer
+  OLLAMA_HOST: "http://127.0.0.1:9"
+  OLLAMA_TIMEOUT: "2"
+  FALLBACK_ENABLED: "true"
+  RUN_OLLAMA_SMOKE: "0"
+  GEMINI_API_KEY: ""
 
 jobs:
   unittest:
+    name: unittest (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.13
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python-version }}
           cache: pip
 
       - name: Install dependencies
@@ -27,5 +56,21 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Run unit tests
-        run: python -m unittest discover tests -v
+      - name: Syntax check (compileall)
+        run: python -m compileall -q src master_agent_projesi scripts tests
+
+      - name: Run unit and integration tests
+        run: python -m unittest discover -s tests -v
+
+  gate:
+    # Branch protection'da zorunlu tek kontrol: matris sonuçlarını birleştirir.
+    name: CI Gate
+    needs: unittest
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every test job to pass
+        run: |
+          echo "unittest result: ${{ needs.unittest.result }}"
+          test "${{ needs.unittest.result }}" = "success"

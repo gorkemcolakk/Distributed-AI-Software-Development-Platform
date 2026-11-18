@@ -25,7 +25,7 @@ from src.contracts import (
 
 class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
     """
-    S3-05 & S4-05: Gerçek çıktı dosyalarını (Python, SQL, UI/HTML/CSS/JS) okuyan,
+    S3-05, S4-04 & S4-05: Gerçek çıktı dosyalarını (Python, SQL, UI/HTML/CSS/JS) okuyan,
     sözdizimi/statik analiz, dosya çakışması kontrolü, SHA-256 manifest üretimi
     ve yerel Ollama modeli (phi4-mini:3.8b) ile otomatik kod incelemesi (Code Review)
     ve paket birleştirme yapan Bütünleştirme Ajanı.
@@ -305,24 +305,54 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
         run_id: Optional[str] = None,
         artifact_sources: Optional[Dict[str, List[str]]] = None,
         create_package_dir: Optional[str] = None,
+        conflicts_log: Optional[List[Dict[str, Any]]] = None,
         use_llm: Optional[bool] = None,
         task_description: str = "",
     ) -> IntegrationReportContract_v1:
         """
-        S4-05: Gerçek çıktı dosyalarını (Python, SQL, UI) okur, çakışmaları ve sentaks
+        S4-04 & S4-05: Gerçek çıktı dosyalarını (Python, SQL, UI) okur, çakışmaları ve sentaks
         hatalarını denetler, yerel model (phi4-mini:3.8b) ile kod inceleme raporu üretir
         ve tüm zorunlu denetimler geçtiğinde birleştirilmiş paketi onaylar.
         """
         findings: List[IntegrationFinding] = []
         inspected: List[str] = []
         conflicts: List[str] = []
+        resolved_count = 0
         valid_files_for_llm: Dict[str, str] = {}
 
-        # 1. Çakışma Kontrolü
+        # 1a. Workspace / Şema Çakışma Kayıtları (S4-04)
+        for conf in conflicts_log or []:
+            c_path = conf.get("file_path") or "UNKNOWN"
+            if c_path not in conflicts:
+                conflicts.append(c_path)
+            resolution = conf.get("resolution")
+            detail = conf.get("detail") or f"{conf.get('conflict_type', 'PATH')} çakışması ({resolution})."
+            if resolution in ("RENAMED", "DEDUPLICATED"):
+                resolved_count += 1
+                findings.append(
+                    IntegrationFinding(
+                        file_path=conf.get("resolved_path") or c_path,
+                        severity="INFO",
+                        issue=f"Çakışma çözüldü ({resolution}): {detail}",
+                        actionable_suggestion="Çalışma alanında her iki sürüm de korundu; birleştirme gerekip gerekmediğini kontrol edin.",
+                    )
+                )
+            else:
+                findings.append(
+                    IntegrationFinding(
+                        file_path=c_path,
+                        severity="WARNING",
+                        issue=f"Şema/Dosya çakışması tespit edildi: {detail}",
+                        actionable_suggestion="Çakışan tablo veya dosya tanımlarını tek şemada hizalayın.",
+                    )
+                )
+
+        # 1b. Çakışma Kontrolü (çözülmemiş çoklu üretici durumu)
         if artifact_sources:
             for path, producers in artifact_sources.items():
                 if len(producers) > 1:
-                    conflicts.append(path)
+                    if path not in conflicts:
+                        conflicts.append(path)
                     findings.append(
                         IntegrationFinding(
                             file_path=path,
@@ -347,7 +377,7 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
                 status="REJECTED",
                 inspected_files=[],
                 conflicts_detected=conflicts,
-                conflicts_resolved=0,
+                conflicts_resolved=resolved_count,
                 findings=findings,
                 package_path=None,
                 summary="Çıktı dosyası bulunamadığı için bütünleştirme reddedildi.",
@@ -468,7 +498,7 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
             status=final_status,
             inspected_files=inspected,
             conflicts_detected=conflicts,
-            conflicts_resolved=0,
+            conflicts_resolved=resolved_count,
             findings=findings,
             package_path=package_path,
             summary=full_summary,
@@ -506,6 +536,7 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
         artifacts = self._extract_artifacts_from_task(task)
         sources = task.get("artifact_sources")
         pkg_dir = task.get("package_dir")
+        conflicts_log = task.get("conflicts_log")
         task_desc = str(task.get("description") or task.get("title") or "")
 
         if AgentStatus is not None:
@@ -530,10 +561,12 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
                     run_id=run_id,
                     artifact_sources=sources,
                     create_package_dir=pkg_dir,
+                    conflicts_log=conflicts_log,
                     use_llm=bool(use_llm_flag),
                     task_description=task_desc,
                 )
                 result_dict = report.model_dump()
+                # S3-05: incelenen dosyaların boyut ve SHA-256 kataloğu sonuca eklenir
                 manifest = self.generate_artifact_manifest(run_id or "unknown", artifacts)
                 result_dict["artifact_manifest"] = manifest.model_dump()
                 worker_status = "SUCCESS" if report.status in ("APPROVED", "REVIEW_REQUIRED") else "FAILED"
