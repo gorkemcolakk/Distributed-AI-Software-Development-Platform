@@ -1,7 +1,7 @@
 """
 Master–Worker & Integration Inter-Agent Contracts (v1.0).
 
-S2-04 (Elif Yılmaz) & S3-01 (Eren Görkem Çolak) & S3-05 (Elif Yılmaz):
+S2-04 (Elif Yılmaz) & S3-01 (Eren Görkem Çolak) & S3-05 (Elif Yılmaz) & S4-05 (Elif Yılmaz):
 - Versioned Pydantic schemas (contract_version = "1.0") for task envelopes,
   worker results, orchestrator records, worker errors, integration reports,
   and SHA-256 artifact manifests.
@@ -27,7 +27,7 @@ DEFAULT_TASK_TIMEOUT_SECONDS = 180.0
 # 1. DURUM VE HATA KODU TANIMLARI (Worker vs Orchestrator Ayrımı)
 # =====================================================================
 class WorkerTaskStatus(str, Enum):
-    """İşçi ajanın (BaseAgent / TaskResult / HTTP Worker) döndürebileceği durumlar."""
+    """İşçi ajanın (BaseAgent / TaskResult / HTTP Worker) döndürebceği durumlar."""
     PENDING = "PENDING"
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
@@ -102,7 +102,6 @@ def validate_master_tasks(tasks_data: Any) -> Tuple[bool, Optional[str], List[Di
         return False, "Görev listesi boş veya geçersiz.", []
 
     try:
-        # 1. Durum: Master Motoru formatı (Liste halinde görevler veya {"tasks": [...]})
         task_list = tasks_data.get("tasks") if isinstance(tasks_data, dict) and "tasks" in tasks_data else tasks_data
 
         if isinstance(task_list, list):
@@ -111,7 +110,6 @@ def validate_master_tasks(tasks_data: Any) -> Tuple[bool, Optional[str], List[Di
             validated = [MasterSubTaskSchema(**item).model_dump() for item in task_list]
             return True, None, validated
 
-        # 2. Durum: app.py 5'li sabit kategori sözlüğü
         if isinstance(tasks_data, dict):
             validated_dict = {}
             for k, v in tasks_data.items():
@@ -134,8 +132,6 @@ def validate_master_tasks(tasks_data: Any) -> Tuple[bool, Optional[str], List[Di
 class TaskPayloadContract_v1(BaseModel):
     """
     Master Agent -> Worker Agent Görev Gönderim Zarfı (Task Envelope v1.0).
-    S3-01 kapsamında run_id, task_id, category, dependencies, payload, timestamps,
-    timeout_seconds ve context_artifacts alanlarını içerir.
     """
     contract_version: str = Field(default=CONTRACT_VERSION)
     envelope_id: str = Field(default_factory=lambda: f"env-{uuid.uuid4().hex[:12]}")
@@ -163,11 +159,6 @@ def build_task_envelope(
     context_artifacts: Optional[Dict[str, Any]] = None,
     timeout_seconds: Optional[float] = None,
 ) -> TaskPayloadContract_v1:
-    """
-    Ham görev sözlüğünü run_id, task_id, category, dependencies, payload, timestamps,
-    timeout_seconds ve birleştirilmiş context_artifacts alanlarıyla doğrulanmış
-    bir TaskPayloadContract_v1 zarfına dönüştürür.
-    """
     merged_context = dict(task.get("context_artifacts") or {})
     if context_artifacts:
         merged_context.update(context_artifacts)
@@ -213,7 +204,6 @@ def build_task_envelope(
 class WorkerTaskResultContract_v1(BaseModel):
     """
     Worker Agent -> Master Agent Sonuç Sözleşmesi (v1.0).
-    src/agents/base_agent.py içindeki TaskResult ile birebir dönüştürülebilir.
     """
     contract_version: str = Field(default=CONTRACT_VERSION)
     run_id: Optional[str] = None
@@ -229,18 +219,15 @@ class WorkerTaskResultContract_v1(BaseModel):
     )
 
     def is_success(self) -> bool:
-        """Hem SUCCESS hem COMPLETED durumlarını başarılı kabul eder."""
         return self.status in (WorkerTaskStatus.SUCCESS, WorkerTaskStatus.COMPLETED)
 
     def normalized_status(self) -> str:
-        """Motor ve veritabanı için durumu 'SUCCESS' veya 'FAILED' olarak döndürür."""
         return normalize_worker_status(self.status)
 
 
 class WorkerErrorContract_v1(BaseModel):
     """
     Worker Agent -> Master Agent Standart Hata Zarfı (v1.0 - S3-01).
-    Zaman aşımı, yetkisiz erişim, mükerrer görev ve şema ihlallerini sürümlü raporlar.
     """
     contract_version: str = Field(default=CONTRACT_VERSION)
     run_id: Optional[str] = None
@@ -258,7 +245,6 @@ class WorkerErrorContract_v1(BaseModel):
 class OrchestratorTaskRecordContract_v1(BaseModel):
     """
     Master Orchestrator Sonuç Sözleşmesi (v1.0).
-    src/master/orchestrator.py çıktısı ile birebir uyumlu.
     """
     contract_version: str = Field(default=CONTRACT_VERSION)
     run_id: str = Field(..., min_length=1)
@@ -273,9 +259,10 @@ class OrchestratorTaskRecordContract_v1(BaseModel):
 
 
 # =====================================================================
-# 4. BÜTÜNLEŞTİRME (INTEGRATION) & ARTIFACT MANIFEST SÖZLEŞMELERİ
+# 4. BÜTÜNLEŞTİRME (INTEGRATION) & ARTIFACT MANIFEST SÖZLEŞMELERİ (S3-05 & S4-05)
 # =====================================================================
 class IntegrationFinding(BaseModel):
+    """S4-05: Dosya yoluyla birlikte uygulanabilir kod inceleme (Code Review) ve statik analiz bulgusu."""
     file_path: str
     severity: str  # "CRITICAL", "WARNING", "INFO"
     issue: str
@@ -283,6 +270,7 @@ class IntegrationFinding(BaseModel):
 
 
 class IntegrationReportContract_v1(BaseModel):
+    """S4-05: Nihai entegrasyon, sözdizimi denetimi ve phi4-mini:3.8b kod inceleme raporu."""
     contract_version: str = Field(default=CONTRACT_VERSION)
     run_id: Optional[str] = None
     status: str  # "APPROVED", "REVIEW_REQUIRED", "REJECTED"
@@ -292,10 +280,11 @@ class IntegrationReportContract_v1(BaseModel):
     findings: List[IntegrationFinding] = Field(default_factory=list)
     package_path: Optional[str] = None
     summary: str = ""
+    llm_review_summary: str = ""
 
 
 class ArtifactManifest(BaseModel):
-    """Her bir dosya çıktısı için boyut ve özet (hash) bilgisini tutan yapı (S3-05)."""
+    """S3-05: Her bir dosya çıktısı için boyut ve özet (hash) bilgisini tutan yapı."""
     file_name: str
     relative_path: str
     size_bytes: int
@@ -303,7 +292,7 @@ class ArtifactManifest(BaseModel):
 
 
 class ManifestReportContract(BaseModel):
-    """Integration Agent tarafından oluşturulan toplu manifest raporu (S3-05)."""
+    """S3-05: Integration Agent tarafından oluşturulan toplu manifest raporu."""
     run_id: str
     manifests: List[ArtifactManifest] = Field(default_factory=list)
     missing_or_empty_files: List[str] = Field(default_factory=list)
@@ -317,13 +306,6 @@ class DuplicateTaskTracker:
     """
     Aynı (run_id, task_id) veya envelope_id ile gelen mükerrer görev isteklerini
     yakalayan iş parçacığı güvenli (thread-safe) idempotency izleyicisi.
-
-    Davranış:
-    - Görev şu an çalışıyorsa ('IN_PROGRESS'): yeni isteği reddeder -> ('IN_PROGRESS', None)
-    - Görev aynı run içinde zaten başarıyla tamamlandıysa ('COMPLETED'):
-      modeli tekrar çalıştırmadan önbellekteki sonucu döner -> ('COMPLETED', cached_result)
-    - Görev ilk kez geliyorsa (veya önceki deneme başarısız olup serbest bırakıldıysa):
-      durumu 'IN_PROGRESS' işaretler -> ('NEW', None)
     """
 
     def __init__(self):
@@ -381,7 +363,6 @@ class DuplicateTaskTracker:
         task_id: str,
         envelope_id: Optional[str] = None,
     ) -> None:
-        """Başarısız denemelerde kilidi kaldırır ki failover / yeniden deneme çalışabilsin."""
         key = self.make_key(run_id, task_id, envelope_id)
         if key is None:
             return
