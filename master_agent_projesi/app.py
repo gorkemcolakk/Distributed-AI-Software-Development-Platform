@@ -12,6 +12,11 @@ import streamlit as st
 import pandas as pd
 import streamlit.components.v1 as components
 
+try:  # S4-03: yeniden deneme / kod inceleme paneli
+    import review_panel as rp
+except ImportError:  # app.py repo kökünden import edildiğinde (testler)
+    from master_agent_projesi import review_panel as rp
+
 try:
     from dotenv import load_dotenv
 
@@ -732,7 +737,7 @@ def esc(x):
 
 for _k, _v in {"report": None, "meta": {}, "artifacts": {}, "snapshot": {}, "mode": None,
                "elapsed": None, "log": [], "fresh": False, "requirement": "",
-               "decomp": None, "decomp_demo": False, "decomp_label": ""}.items():
+               "decomp": None, "decomp_demo": False, "decomp_label": "", "history": [], "attempt_rows": {}}.items():
     st.session_state.setdefault(_k, _v)
 state = st.session_state
 
@@ -874,6 +879,8 @@ def run_engine(requirement, live):
     state.meta = {t["task_id"]: t for t in RequirementsAnalyzer().decompose(requirement, title)["tasks"]}
     state.artifacts = {r.task_id: {"artifacts": r.output_artifacts, "logs": r.logs}
                        for r in orch.execution_history if r.status == "SUCCESS"}
+    state.history = list(orch.execution_history)  # başarısız denemeler dahil (S4-03)
+    state.attempt_rows = rp.attempt_rows(state.history, agents)
     state.snapshot = {ag.agent_id: ag.status.value for ag in agents}
     state.report, state.mode, state.elapsed, state.requirement = report, "engine", elapsed, requirement
     state.log = build_log(report, skipped, state.decomp_label, state.decomp_demo)
@@ -1108,6 +1115,7 @@ if st.button("🚀 Analiz et ve ajanlara dağıt", use_container_width=True):
         else:
             rep, meta = demo_report(requirement_input)
             state.report, state.meta, state.artifacts, state.snapshot = rep, meta, {}, {}
+            state.history, state.attempt_rows = [], {}
             state.mode, state.elapsed, state.requirement = "demo", None, requirement_input
             state.log = build_log(rep, (), state.decomp_label, state.decomp_demo)
         state.fresh = True
@@ -1136,6 +1144,7 @@ if state.report:
     for i, rec in enumerate(assignments):
         agent = by_name.get(rec["assigned_agent"])
         st.markdown(task_card(rec, state.meta.get(rec["task_id"], {}), agent, i, state.fresh), unsafe_allow_html=True)
+        rp.render_task_attempts(st, rec["task_id"], state.attempt_rows, rec.get("attempted_agents"))
         art = state.artifacts.get(rec["task_id"])
         if art:
             label = output_label(art["artifacts"])
@@ -1162,6 +1171,9 @@ if state.report:
                                            key=f"dl-{report['run_id']}-{i}")
         else:
             st.caption("Bu çalıştırmada diske yazılmış dosya yok (tamamlanan görev yok ya da çıktı dosya içermiyor).")
+
+    if state.mode == "engine":
+        rp.render_review_panel(st, report, state.history)
 
     if state.decomp:
         with st.expander(f"Master Agent görev ayrıştırması (5 aşama) · {state.decomp_label}"):
