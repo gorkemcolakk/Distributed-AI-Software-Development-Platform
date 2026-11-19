@@ -7,7 +7,9 @@ contract envelope packaging (S3-01), and local/distributed agent execution.
 import logging
 import os
 import sqlite3
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, List, Optional
 from src.master.analyzer import RequirementsAnalyzer
 from src.master.capability_eval import CapabilityEvaluator
@@ -67,7 +69,8 @@ class MasterOrchestrator:
                  workspace_root: Optional[str] = None, write_artifacts: Optional[bool] = None,
                  task_timeout: float = DEFAULT_TASK_TIMEOUT_SECONDS,
                  retry_policy: Optional[RetryPolicy] = None, sleep=None,
-                 analyzer: Optional[RequirementsAnalyzer] = None):
+                 analyzer: Optional[RequirementsAnalyzer] = None, parallel: Optional[bool] = None,
+                 max_parallel: Optional[int] = None):
         self.persist = persist
         self.db_path = db_manager.init_db(db_path, verbose=False) if persist else None
         # S4-07: the UI passes RequirementsAnalyzer(use_llm=True); the default is the fixed template
@@ -79,6 +82,17 @@ class MasterOrchestrator:
         # S4-01: TRANSIENT failures (remote TIMEOUT / UNREACHABLE) are retried on the same agent
         self.retry_policy = retry_policy or RetryPolicy.from_env()
         self._sleep = sleep or time.sleep
+        # S4-07: independent ready tasks go to their agents at the same time (MASTER_PARALLEL_DISPATCH=false: one by one)
+        env_parallel = os.environ.get("MASTER_PARALLEL_DISPATCH", "true").strip().lower() not in ("0", "false", "no", "off")
+        self.parallel = env_parallel if parallel is None else bool(parallel)
+        try:
+            env_max = int(os.environ.get("MASTER_MAX_PARALLEL", "4"))
+        except ValueError:
+            env_max = 4
+        self.max_parallel = max(1, int(max_parallel if max_parallel is not None else env_max))
+        self._agent_locks: Dict[int, threading.Lock] = {}
+        self._locks_guard = threading.Lock()
+        self._workspace_lock = threading.Lock()
         self.execution_history: List[TaskResult] = []
         self.dispatched_envelopes: List[Dict[str, Any]] = []
         # S3-04: agent output files are written only under <workspace_root>/<run_id>/.
@@ -116,6 +130,120 @@ class MasterOrchestrator:
             raw_status = getattr(agent.status, "value", str(agent.status))
             if raw_status == "ERROR":
                 agent.status = AgentStatus.IDLE
+
+
+    # ------------------------------------------------------------------ S4-07 parallel dispatch
+    def _agent_lock(self, agent) -> threading.Lock:
+        """One lock per agent: two parallel tasks never run on the same agent at the same time."""
+        with self._locks_guard:
+            return self._agent_locks.setdefault(id(agent), threading.Lock())
+
+    def _execute_wave(self, prepared, workspace) -> List[Dict[str, Any]]:
+        """Runs the attempts of every prepared task; results come back in the same order."""
+        if not prepared:
+            return []
+        jobs = [(task["task_id"], dispatch_task, ranked) for task, _cat, ranked, dispatch_task in prepared]
+        if not self.parallel or len(jobs) < 2:
+            return [self._run_attempts(*job, workspace=workspace) for job in jobs]
+        logger.info("Dispatching %d independent tasks in parallel: %s", len(jobs), [j[0] for j in jobs])
+        with ThreadPoolExecutor(max_workers=min(len(jobs), self.max_parallel)) as pool:
+            futures = [pool.submit(self._run_attempts, *job, workspace=workspace) for job in jobs]
+            return [f.result() for f in futures]
+
+    def _run_attempts(self, task_id: str, dispatch_task: Dict[str, Any], ranked_candidates, workspace) -> Dict[str, Any]:
+        """Failover over the ranked candidates, with bounded retry on TRANSIENT failures (S4-01)."""
+        attempted_agents: List[str] = []
+        attempt_log: List[Dict[str, Any]] = []
+        last_result, last_agent, last_error = None, None, None
+        written_files: List[Dict[str, Any]] = []
+        succeeded = False
+
+        for candidate in ranked_candidates:
+            agent = candidate["agent"]
+            with self._agent_lock(agent):
+                # A parallel task may have left this agent ERROR / OFFLINE while we waited for it
+                if getattr(agent.status, "value", str(agent.status)) in ("ERROR", "OFFLINE"):
+                    continue
+                retry_no = 0
+                while True:
+                    attempted_agents.append(agent.name)
+                    last_agent = agent
+
+                    result = agent.execute_task(dispatch_task)
+                    norm_status = normalize_worker_status(getattr(result, "status", "FAILED"))
+                    if hasattr(result, "status") and norm_status == "SUCCESS":
+                        result.status = "SUCCESS"
+                    self.execution_history.append(result)
+                    last_result = result
+                    is_successful = norm_status == "SUCCESS"
+                    error_message = getattr(result, "error_message", None)
+
+                    raw_files = ((getattr(result, "output_artifacts", None) or {}).get("files")) or []
+                    if is_successful and workspace is not None:
+                        try:
+                            with self._workspace_lock:  # conflict detection keeps a per-run index
+                                written_files = workspace.write_files(raw_files, owner=task_id)
+                        except UnsafePathError as exc:
+                            # The agent answered, but its output cannot be delivered safely
+                            is_successful = False
+                            error_message = f"Güvensiz çıktı yolu reddedildi: {exc}"
+                            written_files = []
+                        except OSError as exc:
+                            is_successful = False
+                            error_message = f"Çıktı dosyaları çalışma alanına yazılamadı: {exc}"
+                            written_files = []
+                    elif is_successful and raw_files:
+                        # Validate relative paths even in in-memory mode (persist=False)
+                        try:
+                            in_mem_files = []
+                            for entry in raw_files:
+                                rel_raw = entry.get("filename") or entry.get("path")
+                                clean_rel = normalize_relative_path(rel_raw).as_posix()
+                                in_mem_files.append({
+                                    "relative_path": clean_rel,
+                                    "content": str(entry.get("content", "")),
+                                })
+                            written_files = in_mem_files
+                        except UnsafePathError as exc:
+                            is_successful = False
+                            error_message = f"Güvensiz çıktı yolu reddedildi: {exc}"
+                            written_files = []
+
+                    last_error = error_message
+                    error_code = None if is_successful else failure_code(result, error_message)
+                    error_kind = None if is_successful else classify_failure(result, error_message)
+                    attempt_log.append({
+                        "agent_id": agent.agent_id,
+                        "agent_name": agent.name,
+                        "model_used": getattr(agent, "model_name", None),
+                        "is_successful": is_successful,
+                        "error_message": error_message,
+                        "execution_time_seconds": getattr(result, "execution_time_seconds", 0.0),
+                        "error_kind": error_kind,
+                        "error_code": error_code,
+                        "retry_no": retry_no,
+                    })
+
+                    if is_successful or error_kind != TRANSIENT or retry_no >= self.retry_policy.max_retries:
+                        break
+                    # TRANSIENT: same agent once more after a short pause (bounded by max_retries)
+                    retry_no += 1
+                    logger.info("Retrying %s on %s after %s (retry %d/%d)", task_id, agent.name,
+                                error_code, retry_no, self.retry_policy.max_retries)
+                    agent.status = AgentStatus.IDLE
+                    self._sleep(self.retry_policy.delay_for(retry_no))
+
+                if is_successful:
+                    succeeded = True
+                    break
+                # A worker that only timed out stays usable for later tasks of this run;
+                # unreachable or permanently failing agents keep their ERROR status until the next run.
+                if error_code == WorkerErrorCode.TIMEOUT.value:
+                    agent.status = AgentStatus.IDLE
+
+        return {"attempted_agents": attempted_agents, "attempt_log": attempt_log, "succeeded": succeeded,
+                "last_result": last_result, "last_agent": last_agent, "last_error": last_error,
+                "written_files": written_files}
 
     def process_requirement(self, requirement_text: str, project_title: str) -> Dict[str, Any]:
         """
@@ -190,6 +318,10 @@ class MasterOrchestrator:
                 # No more executable tasks ready, break to deadlock resolution
                 break
 
+            # S4-07: 1) prepare every ready task in order (ranking, context, envelope),
+            # 2) run the agents - in parallel when several tasks are ready and none depends on another,
+            # 3) record the results in order on this thread (scheduler, shared dicts and SQLite stay single-threaded).
+            prepared = []
             for task in executable_tasks:
                 task_id = task["task_id"]
                 category = TaskCategory(task["category"])
@@ -287,93 +419,18 @@ class MasterOrchestrator:
                         dispatch_task.setdefault("conflicts_log", list(run_conflicts))
 
                 self.dispatched_envelopes.append(dict(dispatch_task))
+                prepared.append((task, category, ranked_candidates, dispatch_task))
 
-                # Candidate failover execution
-                attempted_agents = []
-                attempt_log = []
-                task_succeeded = False
-                last_result = None
-                last_agent = None
-                last_error = None
-                written_files: List[Dict[str, Any]] = []
-
-                for candidate in ranked_candidates:
-                    agent = candidate["agent"]
-                    retry_no = 0
-                    while True:
-                        attempted_agents.append(agent.name)
-                        last_agent = agent
-
-                        result = agent.execute_task(dispatch_task)
-                        norm_status = normalize_worker_status(getattr(result, "status", "FAILED"))
-                        if hasattr(result, "status") and norm_status == "SUCCESS":
-                            result.status = "SUCCESS"
-                        self.execution_history.append(result)
-                        last_result = result
-                        is_successful = norm_status == "SUCCESS"
-                        error_message = getattr(result, "error_message", None)
-
-                        raw_files = ((getattr(result, "output_artifacts", None) or {}).get("files")) or []
-                        if is_successful and workspace is not None:
-                            try:
-                                written_files = workspace.write_files(raw_files, owner=task_id)
-                            except UnsafePathError as exc:
-                                # The agent answered, but its output cannot be delivered safely
-                                is_successful = False
-                                error_message = f"Güvensiz çıktı yolu reddedildi: {exc}"
-                                written_files = []
-                            except OSError as exc:
-                                is_successful = False
-                                error_message = f"Çıktı dosyaları çalışma alanına yazılamadı: {exc}"
-                                written_files = []
-                        elif is_successful and raw_files:
-                            # Validate relative paths even in in-memory mode (persist=False)
-                            try:
-                                in_mem_files = []
-                                for entry in raw_files:
-                                    rel_raw = entry.get("filename") or entry.get("path")
-                                    clean_rel = normalize_relative_path(rel_raw).as_posix()
-                                    in_mem_files.append({
-                                        "relative_path": clean_rel,
-                                        "content": str(entry.get("content", "")),
-                                    })
-                                written_files = in_mem_files
-                            except UnsafePathError as exc:
-                                is_successful = False
-                                error_message = f"Güvensiz çıktı yolu reddedildi: {exc}"
-                                written_files = []
-
-                        last_error = error_message
-                        error_code = None if is_successful else failure_code(result, error_message)
-                        error_kind = None if is_successful else classify_failure(result, error_message)
-                        attempt_log.append({
-                            "agent_id": agent.agent_id,
-                            "agent_name": agent.name,
-                            "model_used": getattr(agent, "model_name", None),
-                            "is_successful": is_successful,
-                            "error_message": error_message,
-                            "execution_time_seconds": getattr(result, "execution_time_seconds", 0.0),
-                            "error_kind": error_kind,
-                            "error_code": error_code,
-                            "retry_no": retry_no,
-                        })
-
-                        if is_successful or error_kind != TRANSIENT or retry_no >= self.retry_policy.max_retries:
-                            break
-                        # TRANSIENT: same agent once more after a short pause (bounded by max_retries)
-                        retry_no += 1
-                        logger.info("Retrying %s on %s after %s (retry %d/%d)", task_id, agent.name,
-                                    error_code, retry_no, self.retry_policy.max_retries)
-                        agent.status = AgentStatus.IDLE
-                        self._sleep(self.retry_policy.delay_for(retry_no))
-
-                    if is_successful:
-                        task_succeeded = True
-                        break
-                    # A worker that only timed out stays usable for later tasks of this run;
-                    # unreachable or permanently failing agents keep their ERROR status until the next run.
-                    if error_code == WorkerErrorCode.TIMEOUT.value:
-                        agent.status = AgentStatus.IDLE
+            outcomes = self._execute_wave(prepared, workspace)
+            for (task, category, _ranked, dispatch_task), outcome in zip(prepared, outcomes):
+                task_id = task["task_id"]
+                attempted_agents = outcome["attempted_agents"]
+                attempt_log = outcome["attempt_log"]
+                task_succeeded = outcome["succeeded"]
+                last_result = outcome["last_result"]
+                last_agent = outcome["last_agent"]
+                last_error = outcome["last_error"]
+                written_files = outcome["written_files"]
 
                 task_conflicts: List[Dict[str, Any]] = []
                 if task_succeeded:
