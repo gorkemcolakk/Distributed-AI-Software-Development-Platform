@@ -737,7 +737,8 @@ def esc(x):
 
 for _k, _v in {"report": None, "meta": {}, "artifacts": {}, "snapshot": {}, "mode": None,
                "elapsed": None, "log": [], "fresh": False, "requirement": "",
-               "decomp": None, "decomp_demo": False, "decomp_label": "", "history": [], "attempt_rows": {}}.items():
+               "decomp": None, "decomp_demo": False, "decomp_label": "", "history": [], "attempt_rows": {},
+               "plan": None}.items():
     st.session_state.setdefault(_k, _v)
 state = st.session_state
 
@@ -872,11 +873,20 @@ def run_engine(requirement, live):
 
         ag.execute_task = wrapped
     title = " ".join(requirement.split())[:60] or "Generated Software System"
-    orch = MasterOrchestrator(evaluator=CapabilityEvaluator(agents))  # çalıştırma state.db'ye yazılır (S2-07)
+    # S4-07: görevleri Master modeli (qwen2.5:7b) böler; MASTER_ANALYZER_USE_OLLAMA=false ise sabit şablon
+    use_llm = os.getenv("MASTER_ANALYZER_USE_OLLAMA", "true").strip().lower() not in ("0", "false", "no", "off")
+    live.write(f"🧠 Master Agent ({OLLAMA_MODEL}) gereksinimi görevlere bölüyor..." if use_llm
+               else "📋 Görevler sabit şablondan alınıyor (MASTER_ANALYZER_USE_OLLAMA=false)")
+    orch = MasterOrchestrator(evaluator=CapabilityEvaluator(agents),  # çalıştırma state.db'ye yazılır (S2-07)
+                              analyzer=RequirementsAnalyzer(use_llm=use_llm, model=OLLAMA_MODEL, host=OLLAMA_HOST))
     t0 = time.perf_counter()
     report = orch.process_requirement(requirement, title)
     elapsed = time.perf_counter() - t0
-    state.meta = {t["task_id"]: t for t in RequirementsAnalyzer().decompose(requirement, title)["tasks"]}
+    plan = report.get("decomposition") or {}
+    state.plan = plan
+    state.meta = {t["task_id"]: t for t in plan.get("tasks") or []}
+    state.decomp_label = plan.get("label") or ""
+    state.decomp_demo = plan.get("mode") != "llm"
     state.artifacts = {r.task_id: {"artifacts": r.output_artifacts, "logs": r.logs}
                        for r in orch.execution_history if r.status == "SUCCESS"}
     state.history = list(orch.execution_history)  # başarısız denemeler dahil (S4-03)
@@ -965,6 +975,37 @@ def current_load():
         if r["assigned_agent"] in by_name and r["status"] == "COMPLETED":
             load[by_name[r["assigned_agent"]]["Agent ID"]] += 1
     return load
+
+
+def render_plan(plan):
+    """S4-07: Master'ın bu çalıştırmada kullandığı görev planı ve ajanlara giden ortak sözleşme."""
+    is_llm = plan.get("mode") == "llm"
+    title = "Master Agent planı · " + (plan.get("label") or ("Yerel model" if is_llm else "Sabit şablon"))
+    with st.expander(title):
+        if not is_llm:
+            st.caption("Model kullanılamadığı için sabit 6 görevlik şablon çalıştı"
+                       + (f" (sebep: {plan.get('fallback_reason')})." if plan.get("fallback_reason") else "."))
+        td = "padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.08);vertical-align:top;"
+        rows = "".join(
+            f'<tr><td style="{td}white-space:nowrap;font-weight:600">{esc(t.get("task_id", ""))}</td>'
+            f'<td style="{td}white-space:nowrap">{esc(t.get("category", ""))}</td>'
+            f'<td style="{td}">{esc(t.get("title", ""))}</td>'
+            f'<td style="{td}white-space:nowrap">{esc(", ".join(t.get("dependencies") or []) or "-")}</td></tr>'
+            for t in plan.get("tasks") or [])
+        head = "".join(f'<th style="{td}text-align:left;color:#9CA3AF;white-space:nowrap">{h}</th>'
+                       for h in ("Görev", "Kategori", "Başlık", "Bağımlılık"))
+        st.markdown('<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.9em">'
+                    f'<thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table></div>', unsafe_allow_html=True)
+        contract = plan.get("shared_contract") or {}
+        if contract:
+            st.markdown("**Ajanlara giden ortak sözleşme**")
+            for ent in contract.get("entities") or []:
+                fields = ", ".join(f'{f.get("name")} ({f.get("type")})' for f in ent.get("fields") or [])
+                st.markdown(f"- `{esc(ent.get('table', ''))}` ({esc(ent.get('name', ''))}): {esc(fields)}")
+            for ep in contract.get("endpoints") or []:
+                st.markdown(f"- `{esc(ep.get('method', ''))} {esc(ep.get('path', ''))}` {esc(ep.get('description', ''))}")
+        elif is_llm:
+            st.caption("Model ortak sözleşme döndürmedi.")
 
 
 def mode_badge():
@@ -1095,14 +1136,16 @@ if st.button("🚀 Analiz et ve ajanlara dağıt", use_container_width=True):
     if not requirement_input.strip():
         st.warning("Analiz için önce bir gereksinim metni girin.")
     else:
-        with st.spinner("Master Agent gereksinimi ayrıştırıyor..."):
-            raw, d_demo, d_label = decompose_task(requirement_input)  # S2-01: etiketli yerel/yedek ayrıştırma
-            try:
-                state.decomp = normalize_tasks(json.loads(raw), requirement_input)
-            except Exception:
-                state.decomp = normalize_tasks({}, requirement_input)
-                d_demo, d_label = True, "Ayrıştırma Hatası - Güvenli Yedek"
-            state.decomp_demo, state.decomp_label = d_demo, d_label
+        state.decomp, state.plan, state.decomp_label, state.decomp_demo = None, None, "", False
+        if ENGINE_ERROR is not None:  # motor yoksa eski etiketli 5 aşamalı ayrıştırma (DEMO)
+            with st.spinner("Master Agent gereksinimi ayrıştırıyor..."):
+                raw, d_demo, d_label = decompose_task(requirement_input)  # S2-01: etiketli yerel/yedek ayrıştırma
+                try:
+                    state.decomp = normalize_tasks(json.loads(raw), requirement_input)
+                except Exception:
+                    state.decomp = normalize_tasks({}, requirement_input)
+                    d_demo, d_label = True, "Ayrıştırma Hatası - Güvenli Yedek"
+                state.decomp_demo, state.decomp_label = d_demo, d_label
         if ENGINE_ERROR is None:
             live = st.status("Master Agent motoru çalışıyor...", expanded=True)
             try:
@@ -1174,6 +1217,9 @@ if state.report:
 
     if state.mode == "engine":
         rp.render_review_panel(st, report, state.history)
+
+    if state.plan:
+        render_plan(state.plan)
 
     if state.decomp:
         with st.expander(f"Master Agent görev ayrıştırması (5 aşama) · {state.decomp_label}"):

@@ -66,10 +66,12 @@ class MasterOrchestrator:
                  db_path: Optional[str] = None, persist: bool = True,
                  workspace_root: Optional[str] = None, write_artifacts: Optional[bool] = None,
                  task_timeout: float = DEFAULT_TASK_TIMEOUT_SECONDS,
-                 retry_policy: Optional[RetryPolicy] = None, sleep=None):
+                 retry_policy: Optional[RetryPolicy] = None, sleep=None,
+                 analyzer: Optional[RequirementsAnalyzer] = None):
         self.persist = persist
         self.db_path = db_manager.init_db(db_path, verbose=False) if persist else None
-        self.analyzer = RequirementsAnalyzer()
+        # S4-07: the UI passes RequirementsAnalyzer(use_llm=True); the default is the fixed template
+        self.analyzer = analyzer or RequirementsAnalyzer()
         self.evaluator = evaluator or CapabilityEvaluator()
         self.scheduler = TaskScheduler()
         self.duplicate_tracker = DuplicateTaskTracker()
@@ -150,6 +152,9 @@ class MasterOrchestrator:
         agent_ids = self._agent_ids()
         workspace = RunWorkspace(run_id, root=self.workspace_root) if self.write_artifacts else None
         project_context = {"project_title": project_title, "requirement": requirement_text}
+        # S4-07: every agent gets the same entity / field / endpoint names from the Master model
+        if decomposition.get("shared_contract"):
+            project_context["shared_contract"] = decomposition["shared_contract"]
 
         # Track upstream task outputs & generated file contents across the DAG (S3-01 / S3-05 / S4-04)
         completed_task_artifacts: Dict[str, Dict[str, Any]] = {}
@@ -550,6 +555,14 @@ class MasterOrchestrator:
             },
             "workspace_path": str(workspace.path) if workspace else None,
             "conflicts": run_conflicts,
+            # S4-07: what the engine actually ran (the UI shows this instead of a second decomposition)
+            "decomposition": {
+                "mode": decomposition.get("decomposition_mode", "template"),
+                "label": decomposition.get("decomposition_label", ""),
+                "fallback_reason": decomposition.get("fallback_reason"),
+                "shared_contract": decomposition.get("shared_contract"),
+                "tasks": tasks,
+            },
             "dag_validation": {
                 "is_valid": dag_report["is_valid"],
                 "cycles": dag_report["cycles"],
