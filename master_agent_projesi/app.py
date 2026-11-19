@@ -7,10 +7,12 @@ import urllib.error
 import socket
 import re
 import sys
+import threading
 from pathlib import Path
 import streamlit as st
 import pandas as pd
 import streamlit.components.v1 as components
+from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
 
 try:  # S4-03: yeniden deneme / kod inceleme paneli
     import review_panel as rp
@@ -850,16 +852,30 @@ def run_engine(requirement, live):
                     live.write(f"⚪ {ag.name}: {ag.endpoint_url} yanıt vermiyor → OFFLINE, görev almayacak")
             else:
                 live.write(f"🔗 {ag.name}: {ag.endpoint_url} → ONLINE")
+    ui_ctx = get_script_run_ctx()  # S4-07: paralel görevler başka thread'den yazar, Streamlit bağlamı gerekir
+    ui_lock = threading.Lock()
     for ag in agents:  # canlı BUSY/sonuç satırları için sarmalayıcı
         orig = ag.execute_task
 
         def wrapped(task, _ag=ag, _orig=orig):
-            live.write(f"🟡 {_ag.name} → BUSY ({task.get('title')})")
-            set_card_status(_ag.agent_id, "BUSY")
+            if ui_ctx is not None and get_script_run_ctx(suppress_warning=True) is None:
+                add_script_run_ctx(threading.current_thread(), ui_ctx)
+            return _run_with_live_log(task, _ag, _orig)
+
+        def _run_with_live_log(task, _ag, _orig):
+            with ui_lock:
+                live.write(f"🟡 {_ag.name} → BUSY ({task.get('title')})")
+                set_card_status(_ag.agent_id, "BUSY")
             try:
                 res = _orig(task)
             finally:
-                set_card_status(_ag.agent_id, CARD_STATUS.get(_ag.agent_id, "IDLE"))
+                with ui_lock:
+                    set_card_status(_ag.agent_id, CARD_STATUS.get(_ag.agent_id, "IDLE"))
+            with ui_lock:
+                _write_result(res, _ag)
+            return res
+
+        def _write_result(res, _ag):
             live.write(
                 f"{'🟢' if res.status == 'SUCCESS' else '🔴'} {_ag.name} → {res.status} ({res.execution_time_seconds} sn)")
             if res.status == "SUCCESS":
@@ -869,7 +885,6 @@ def run_engine(requirement, live):
                     live.write(f"📄 Üretilen dosya: {', '.join(str(n) for n in names)}")
             elif res.error_message:
                 live.write(f"↳ Başarısız: {res.error_message}")
-            return res
 
         ag.execute_task = wrapped
     title = " ".join(requirement.split())[:60] or "Generated Software System"
