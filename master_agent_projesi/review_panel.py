@@ -37,7 +37,7 @@ ERROR_CODE_TEXT = {
     "TIMEOUT": "ajan zamanında yanıt vermedi",
     "UNREACHABLE": "ajana ulaşılamadı",
 }
-_PSEUDO_PATHS = ("", "NONE", "WORKSPACE")  # Integration Agent uses these when there is no real file
+_PSEUDO_PATHS = ("", "NONE", "WORKSPACE", "GENERAL")  # Integration Agent / model use these when no real file is meant
 _REVIEW_ORDER = {"APPROVED": 0, "PENDING": 0, "REVIEW_REQUIRED": 1, "REJECTED": 2}
 
 
@@ -206,17 +206,33 @@ def review_view(report: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     files.sort(key=lambda r: -_REVIEW_ORDER.get(r["status"], 0))
     counts = {s: sum(1 for r in files if r["status"] == s) for s in ("APPROVED", "REVIEW_REQUIRED", "REJECTED")}
     return {"status": report["status"], "summary": report.get("summary") or "", "files": files,
-            "findings": findings, "counts": counts}
+            "findings": findings, "counts": counts,
+            # S4-05: did the model (phi4-mini) really review, or only the static checks?
+            "mode": str(report.get("review_mode") or "static"), "model": report.get("model_used"),
+            "fallback_reason": report.get("fallback_reason")}
+
+
+def review_mode_text(view: Dict[str, Any]) -> tuple:
+    """(text, color) saying who reviewed the code: the model, or only the static checks."""
+    mode = view.get("mode")
+    if mode == "llm" and view.get("model"):
+        return f"Model incelemesi: {view['model']}", "#34D399"
+    if mode == "fallback":
+        reason = f" ({view['fallback_reason']})" if view.get("fallback_reason") else ""
+        return f"Model kullanılamadı · yalnızca statik kontrol{reason}", "#FBBF24"
+    return "Yalnızca statik kontrol (model istenmedi)", "#6B7280"
 
 
 def review_table_html(view: Dict[str, Any]) -> str:
     status_txt, status_color = REVIEW_STYLE.get(view["status"], REVIEW_STYLE["PENDING"])
     c = view["counts"]
+    mode_txt, mode_color = review_mode_text(view)
     head = (f'<div style="margin-bottom:8px"><span class="chip chip-cx" style="--c:{status_color}">'
             f'Kod incelemesi: {status_txt}</span> '
             f'<span class="chip">✔ {c["APPROVED"]} onaylı</span> '
             f'<span class="chip">⚠ {c["REVIEW_REQUIRED"]} inceleme gerekli</span> '
-            f'<span class="chip">✖ {c["REJECTED"]} reddedildi</span></div>')
+            f'<span class="chip">✖ {c["REJECTED"]} reddedildi</span> '
+            f'<span class="chip chip-cx" style="--c:{mode_color}">{esc(mode_txt)}</span></div>')
     if view["summary"]:
         head += f'<div class="task-desc">{esc(view["summary"])}</div>'
     td = "padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.08);vertical-align:top;"

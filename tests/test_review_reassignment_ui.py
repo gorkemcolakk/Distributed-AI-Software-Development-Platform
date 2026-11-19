@@ -139,7 +139,7 @@ def pipeline(backend_files, frontend_files, extra_backend=None):
     backend = Worker("be", "Backend Double", 80, files={"t-be": backend_files}, fail_integration=True)
     frontend = Worker("fe", "Frontend Double", 80, specialties=("frontend",), files={"t-fe": frontend_files},
                       fail_integration=True)
-    integration = IntegrationAgent(workspace_root=tempfile.gettempdir())
+    integration = IntegrationAgent(workspace_root=tempfile.gettempdir(), use_llm=False)  # no Ollama in tests
     tasks = [task("t-be"), task("t-fe", "FRONTEND", "frontend"),
              task("t-int", "INTEGRATION", "integration", deps=["t-be", "t-fe"])]
     orch, report, by_id = run([backend, frontend, integration], tasks)
@@ -224,6 +224,34 @@ class TestIntegrationReview(unittest.TestCase):
         self.assertEqual(view["files"], [])
         self.assertEqual(len(rp.warning_cards(view)), 1)
         self.assertIn("İncelenen dosya yok", rp.review_table_html(view))
+
+    def test_general_model_finding_is_a_card_not_a_file_row(self):
+        view = rp.review_view({"status": "REVIEW_REQUIRED", "inspected_files": ["api.py"], "summary": "s", "findings": [
+            {"file_path": "GENERAL", "severity": "WARNING", "issue": "Genel tasarım notu",
+             "actionable_suggestion": "x"}]})
+        self.assertEqual([r["file"] for r in view["files"]], ["api.py"])
+        self.assertEqual(view["files"][0]["status"], "APPROVED")
+        self.assertEqual(len(rp.warning_cards(view)), 1)
+
+    def test_review_mode_says_who_reviewed(self):
+        base = {"status": "APPROVED", "inspected_files": ["a.py"], "findings": []}
+        llm = rp.review_view(dict(base, review_mode="llm", model_used="phi4-mini:3.8b"))
+        self.assertEqual(rp.review_mode_text(llm)[0], "Model incelemesi: phi4-mini:3.8b")
+        self.assertIn("phi4-mini:3.8b", rp.review_table_html(llm))
+        fb = rp.review_view(dict(base, review_mode="fallback", fallback_reason="CONNECTION_REFUSED"))
+        self.assertIn("Model kullanılamadı", rp.review_mode_text(fb)[0])
+        self.assertIn("CONNECTION_REFUSED", rp.review_mode_text(fb)[0])
+        static = rp.review_view(dict(base))  # old reports without the S4-05 fields
+        self.assertIn("statik", rp.review_mode_text(static)[0])
+        # "llm" without a model name must not be presented as a model review
+        self.assertNotIn("Model incelemesi", rp.review_mode_text(rp.review_view(dict(base, review_mode="llm")))[0])
+
+    def test_real_integration_review_reports_static_mode_when_model_is_off(self):
+        orch, _, _ = pipeline([{"filename": "api.py", "content": "X = 1\n"}],
+                              [{"filename": "ui.html", "content": "<html></html>"}])
+        view = rp.review_view(rp.find_review_report(orch.execution_history))
+        self.assertEqual(view["mode"], "static")
+        self.assertIn("statik", rp.review_table_html(view))
 
     def test_user_controlled_text_is_escaped(self):
         view = rp.review_view({"status": "REJECTED", "inspected_files": ["<img src=x>.py"], "summary": "<i>s</i>",
