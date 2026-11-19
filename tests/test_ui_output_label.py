@@ -51,7 +51,7 @@ class TestOutputSource(unittest.TestCase):
         self.assertEqual(output_source(database.output_artifacts), "backup")
 
     def test_real_integration_agent_is_a_code_check(self):
-        result = IntegrationAgent().execute_task(
+        result = IntegrationAgent(use_llm=False).execute_task(
             {"task_id": "task-int-1", "run_id": "run-l", "output_artifacts": {"a.py": "x = 1\n"}})
         self.assertEqual(output_source(result.output_artifacts), "check")
 
@@ -64,6 +64,8 @@ class TestLabels(unittest.TestCase):
         self.assertEqual(output_label({"generation_mode": "fallback", "fallback_reason": "timeout"}),
                          "Ajan çıktısı · yedek şablon (timeout)")
         self.assertEqual(output_label({"inspected_files": []}), "Ajan çıktısı · kod kontrolü (model kullanılmadı)")
+        self.assertEqual(output_label({"inspected_files": [], "review_mode": "fallback", "fallback_reason": "TIMEOUT"}),
+                         "Ajan çıktısı · kod kontrolü (model kullanılamadı: TIMEOUT)")
         self.assertEqual(output_label({}), "Ajan çıktısı")
 
     def test_run_summary(self):

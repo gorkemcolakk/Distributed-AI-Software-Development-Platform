@@ -297,7 +297,7 @@ class TestFilePathConflictDetection(unittest.TestCase):
                                fail_on={"INTEGRATION"}, files={"t-be": backend_files})
         frontend = WorkerDouble("fe", "Frontend Double", score=80, specialties=["frontend"],
                                 fail_on={"INTEGRATION"}, files={"t-fe": frontend_files})
-        integration = IntegrationAgent(workspace_root=tempfile.gettempdir())
+        integration = IntegrationAgent(workspace_root=tempfile.gettempdir(), use_llm=False)
         tasks = [
             make_task("t-be"),
             make_task("t-fe", category="FRONTEND", specialty="frontend"),

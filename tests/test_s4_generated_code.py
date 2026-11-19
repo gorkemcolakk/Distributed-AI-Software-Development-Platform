@@ -274,7 +274,7 @@ class TestPipelineOutputsAreValid(unittest.TestCase):
             evaluator = CapabilityEvaluator()
             for agent in (FrontendAgent(use_ollama=False), BackendAgent(use_ollama=False),
                           DatabaseAgent(use_ollama=False), TestingAgent(use_ollama=False),
-                          IntegrationAgent(workspace_root=tmp)):
+                          IntegrationAgent(workspace_root=tmp, use_llm=False)):
                 evaluator.register_agent(agent)
             orchestrator = MasterOrchestrator(evaluator=evaluator, persist=False,
                                               workspace_root=os.path.join(tmp, "workspaces"))

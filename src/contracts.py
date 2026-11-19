@@ -1,7 +1,7 @@
 """
 Master–Worker & Integration Inter-Agent Contracts (v1.0).
 
-S2-04 (Elif Yılmaz) & S3-01 (Eren Görkem Çolak) & S3-05 (Elif Yılmaz):
+S2-04 (Elif Yılmaz) & S3-01 (Eren Görkem Çolak) & S3-05 (Elif Yılmaz) & S4-05 (Elif Yılmaz):
 - Versioned Pydantic schemas (contract_version = "1.0") for task envelopes,
   worker results, orchestrator records, worker errors, integration reports,
   and SHA-256 artifact manifests.
@@ -273,9 +273,10 @@ class OrchestratorTaskRecordContract_v1(BaseModel):
 
 
 # =====================================================================
-# 4. BÜTÜNLEŞTİRME (INTEGRATION) & ARTIFACT MANIFEST SÖZLEŞMELERİ
+# 4. BÜTÜNLEŞTİRME (INTEGRATION) & ARTIFACT MANIFEST SÖZLEŞMELERİ (S3-05 & S4-05)
 # =====================================================================
 class IntegrationFinding(BaseModel):
+    """S4-05: Dosya yoluyla birlikte uygulanabilir kod inceleme (Code Review) ve statik analiz bulgusu."""
     file_path: str
     severity: str  # "CRITICAL", "WARNING", "INFO"
     issue: str
@@ -283,6 +284,7 @@ class IntegrationFinding(BaseModel):
 
 
 class IntegrationReportContract_v1(BaseModel):
+    """S4-05: Nihai entegrasyon, sözdizimi denetimi ve phi4-mini:3.8b kod inceleme raporu."""
     contract_version: str = Field(default=CONTRACT_VERSION)
     run_id: Optional[str] = None
     status: str  # "APPROVED", "REVIEW_REQUIRED", "REJECTED"
@@ -292,6 +294,10 @@ class IntegrationReportContract_v1(BaseModel):
     findings: List[IntegrationFinding] = Field(default_factory=list)
     package_path: Optional[str] = None
     summary: str = ""
+    llm_review_summary: str = ""
+    model_used: Optional[str] = None  # set only when the model really reviewed the files
+    review_mode: str = "static"  # "llm" | "fallback" (model unreachable) | "static" (model not asked)
+    fallback_reason: Optional[str] = None
 
 
 class ArtifactManifest(BaseModel):
