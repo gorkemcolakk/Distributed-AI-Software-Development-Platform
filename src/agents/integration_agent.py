@@ -14,6 +14,15 @@ except ImportError:
     AgentStatus = None
     AgentCapabilityProfile = None
 
+
+
+def _env_flag(name: str, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None or not value.strip():
+        return default
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
 from src.contracts import (
     IntegrationFinding,
     IntegrationReportContract_v1,
@@ -78,7 +87,10 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
             self.ollama_generate_url = f"{base_host}/api/generate"
 
         self.ollama_timeout = float(os.getenv("OLLAMA_TIMEOUT", "45"))
-        self.use_llm = use_llm
+        # Same switch style as the other agents (BACKEND_AGENT_USE_OLLAMA, ...); tests pass use_llm=False
+        self.use_llm = _env_flag("INTEGRATION_AGENT_USE_OLLAMA", True) if use_llm is None else bool(use_llm)
+        # (review_mode, fallback_reason) of the last LLM review: "llm" / "fallback" / "static"
+        self._llm_outcome: Tuple[str, Optional[str]] = ("static", None)
 
         # Master motoru ve arayüz uyumluluğu: status her zaman AgentStatus kalmalı
         if not hasattr(self, "status") or self.status is None or isinstance(self.status, str):
@@ -213,6 +225,7 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
         S4-05: Yerel Ollama modelini (phi4-mini:3.8b) çağırarak üretilen kod dosyalarını
         mimari uyum, eksik import/tablo referansı ve kod kalitesi açısından inceler.
         """
+        self._llm_outcome = ("static", None)
         if not valid_files:
             return "", []
 
@@ -254,11 +267,15 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
                 timeout=self.ollama_timeout,
             )
             if response.status_code != 200:
+                self._llm_outcome = ("fallback", f"HTTP_{response.status_code}")
                 return f"LLM incelemesi atlandı (HTTP {response.status_code}).", []
 
             raw_text = (response.json().get("response") or "").strip()
             if not raw_text:
+                self._llm_outcome = ("fallback", "EMPTY_RESPONSE")
                 return "LLM boş yanıt döndürdü; statik analiz sonuçları geçerlidir.", []
+
+            self._llm_outcome = ("llm", None)
 
             cleaned = raw_text
             if "```json" in cleaned:
@@ -297,6 +314,8 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
 
             return raw_text[:500], []
         except Exception as exc:
+            reason = "TIMEOUT" if "timeout" in type(exc).__name__.lower() else "CONNECTION_ERROR"
+            self._llm_outcome = ("fallback", reason)
             return f"Yerel model ({self.model_name}) bağlantısı kurulamadı, statik analiz uygulandı: {exc}", []
 
     def inspect_artifacts(
@@ -454,6 +473,7 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
         # 4. S4-05: Yerel Ollama Modeli (phi4-mini:3.8b) ile Kod İncelemesi
         should_call_llm = use_llm if use_llm is not None else bool(self.use_llm)
         llm_summary = ""
+        self._llm_outcome = ("static", None)
         if should_call_llm and valid_files_for_llm:
             llm_summary, llm_findings = self._review_with_llm(
                 valid_files=valid_files_for_llm,
@@ -487,6 +507,7 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
             if written_files > 0 and os.path.isdir(create_package_dir):
                 package_path = os.path.abspath(create_package_dir)
 
+        review_mode, fallback_reason = self._llm_outcome
         base_summary = f"{len(inspected)} dosya incelendi, {len(findings)} bulgu saptandı. Durum: {final_status}"
         if llm_summary:
             full_summary = f"{base_summary} | Model ({self.model_name}): {llm_summary}"
@@ -503,6 +524,10 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
             package_path=package_path,
             summary=full_summary,
             llm_review_summary=llm_summary,
+            # Shows whether phi4-mini really reviewed the files (UI and logs read these)
+            model_used=self.model_name if review_mode == "llm" else None,
+            review_mode=review_mode,
+            fallback_reason=fallback_reason,
         )
 
     def _extract_artifacts_from_task(self, task: Dict[str, Any]) -> Dict[str, str]:
@@ -521,7 +546,7 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
         extracted: Dict[str, str] = {}
         if isinstance(raw, dict):
             for k, v in raw.items():
-                if isinstance(v, str):
+                if isinstance(v, str) and ("." in k or "/" in k):
                     extracted[k] = v
                 elif isinstance(v, dict):
                     for sub_k, sub_v in v.items():
@@ -545,10 +570,9 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
             if task_id not in self.current_tasks:
                 self.current_tasks.append(task_id)
 
-        in_pytest = "PYTEST_CURRENT_TEST" in os.environ
         use_llm_flag = task.get("use_llm")
         if use_llm_flag is None:
-            use_llm_flag = self.use_llm if self.use_llm is not None else (not in_pytest)
+            use_llm_flag = self.use_llm
 
         logs: List[str] = [
             f"[{self.name}] Starting integration & code review for task '{task_id}' with model '{self.model_name}'"
@@ -572,15 +596,9 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
                 worker_status = "SUCCESS" if report.status in ("APPROVED", "REVIEW_REQUIRED") else "FAILED"
                 logs.append(report.summary)
             else:
+                # Nothing to review: no model call (reviewing the task text alone would be meaningless)
                 llm_note = ""
-                if use_llm_flag and task_desc:
-                    llm_note, _ = self._review_with_llm(
-                        valid_files={"task_specification.txt": task_desc},
-                        task_description=task_desc,
-                    )
                 summary_msg = "İncelenecek dosya bildirilmediği için inceleme gerekli olarak işaretlendi."
-                if llm_note:
-                    summary_msg = f"{summary_msg} | Model ({self.model_name}): {llm_note}"
 
                 report = IntegrationReportContract_v1(
                     run_id=run_id,

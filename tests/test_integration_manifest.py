@@ -10,7 +10,7 @@ from src.agents.integration_agent import IntegrationAgent
 
 class TestIntegrationAgentManifest(unittest.TestCase):
     def setUp(self):
-        self.agent = IntegrationAgent()
+        self.agent = IntegrationAgent(use_llm=False)
         self.run_id = "test_sprint3_05"
 
     def test_generate_manifest_success(self):
@@ -138,6 +138,64 @@ class TestIntegrationAgentManifest(unittest.TestCase):
             self.assertTrue(os.path.isfile(os.path.join(ok_report.package_path, "index.html")))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+class TestReviewModeIsVisible(unittest.TestCase):
+    """The report says whether phi4-mini really reviewed the files (model_used / review_mode / fallback_reason)."""
+
+    FILES = {"app.py": "def ok():\n    return True\n"}
+
+    def _ok_response(self):
+        response = MagicMock(status_code=200)
+        response.json.return_value = {"response": '{"summary": "Uyumlu.", "findings": []}'}
+        return response
+
+    @patch("src.agents.integration_agent.requests.post")
+    def test_successful_review_reports_the_model(self, mock_post):
+        mock_post.return_value = self._ok_response()
+        report = IntegrationAgent(use_llm=True).inspect_artifacts(self.FILES, run_id="r1")
+        self.assertEqual((report.review_mode, report.model_used, report.fallback_reason),
+                         ("llm", "phi4-mini:3.8b", None))
+
+    @patch("src.agents.integration_agent.requests.post")
+    def test_unreachable_model_is_labelled_fallback(self, mock_post):
+        mock_post.side_effect = ConnectionError("refused")
+        report = IntegrationAgent(use_llm=True).inspect_artifacts(self.FILES, run_id="r2")
+        self.assertEqual((report.review_mode, report.model_used, report.fallback_reason),
+                         ("fallback", None, "CONNECTION_ERROR"))
+        self.assertEqual(report.status, "APPROVED")
+
+    @patch("src.agents.integration_agent.requests.post")
+    def test_http_error_is_labelled_fallback(self, mock_post):
+        mock_post.return_value = MagicMock(status_code=404)
+        report = IntegrationAgent(use_llm=True).inspect_artifacts(self.FILES, run_id="r3")
+        self.assertEqual((report.review_mode, report.fallback_reason), ("fallback", "HTTP_404"))
+
+    @patch("src.agents.integration_agent.requests.post")
+    def test_model_off_means_static_check_and_no_call(self, mock_post):
+        report = IntegrationAgent(use_llm=False).inspect_artifacts(self.FILES, run_id="r4")
+        mock_post.assert_not_called()
+        self.assertEqual((report.review_mode, report.model_used), ("static", None))
+
+    def test_env_switch_like_the_other_agents(self):
+        with patch.dict(os.environ, {"INTEGRATION_AGENT_USE_OLLAMA": "false"}):
+            self.assertFalse(IntegrationAgent().use_llm)
+        with patch.dict(os.environ, {"INTEGRATION_AGENT_USE_OLLAMA": "true"}):
+            self.assertTrue(IntegrationAgent().use_llm)
+
+    @patch("src.agents.integration_agent.requests.post")
+    def test_no_files_means_no_model_call(self, mock_post):
+        result = IntegrationAgent(use_llm=True).execute_task(
+            {"task_id": "task-int-1", "run_id": "r5", "description": "Review the build"})
+        mock_post.assert_not_called()
+        self.assertEqual(result.output_artifacts["status"], "REVIEW_REQUIRED")
+
+    def test_project_text_in_context_is_not_taken_as_a_file(self):
+        agent = IntegrationAgent(use_llm=False)
+        files = agent._extract_artifacts_from_task({"context_artifacts": {
+            "project_title": "Kutuphane", "requirement": "uye kaydi ve kitap arama",
+            "code_under_test": {"backend_task_be_1.py": "x = 1\n"}}})
+        self.assertEqual(files, {"backend_task_be_1.py": "x = 1\n"})
 
 
 if __name__ == "__main__":

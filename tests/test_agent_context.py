@@ -55,7 +55,7 @@ class TestDispatchedContext(unittest.TestCase):
         self._old_ws = os.environ.get("WORKSPACE_ROOT")
         os.environ["WORKSPACE_ROOT"] = self._tmp.name
         agents = [
-            IntegrationAgent(),
+            IntegrationAgent(use_llm=False),
             FrontendAgent(use_ollama=False),
             BackendAgent(use_ollama=False),
             DatabaseAgent(use_ollama=False),

@@ -770,6 +770,8 @@ def output_source(artifacts):
     "backup" = labelled template / fallback, "check" = static review without a model
     (IntegrationAgent), None = unknown."""
     a = artifacts if isinstance(artifacts, dict) else {}
+    if "inspected_files" in a:  # IntegrationAgent: model review, or code check only
+        return "model" if a.get("model_used") else "check"
     if a.get("fallback_reason"):
         return "backup"
     mode = str(a.get("generation_mode") or a.get("synthesis_mode") or "").lower()
@@ -777,8 +779,6 @@ def output_source(artifacts):
         return "model"
     if mode in BACKUP_MODES:
         return "backup"
-    if "inspected_files" in a:
-        return "model" if a.get("model_used") else "check"
     return None
 
 
@@ -793,6 +793,9 @@ def output_label(artifacts):
         reason = a.get("fallback_reason")
         return f"Ajan çıktısı · yedek şablon ({reason})" if reason else "Ajan çıktısı · yedek şablon"
     if source == "check":
+        reason = a.get("fallback_reason")
+        if reason:
+            return f"Ajan çıktısı · kod kontrolü (model kullanılamadı: {reason})"
         return "Ajan çıktısı · kod kontrolü (model kullanılmadı)"
     return "Ajan çıktısı"
 

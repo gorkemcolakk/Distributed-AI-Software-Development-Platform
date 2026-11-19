@@ -208,7 +208,7 @@ class TestRunWorkspaceWriting(unittest.TestCase):
         self.assertEqual(conflicts[0]["other_task_id"], "t1")
 
     def test_integration_agent_reports_resolved_and_schema_conflicts(self):
-        agent = IntegrationAgent()
+        agent = IntegrationAgent(use_llm=False)
         report = agent.inspect_artifacts(
             artifacts={
                 "api/main.py": "x = 1\n",

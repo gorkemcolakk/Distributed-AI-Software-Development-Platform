@@ -87,7 +87,7 @@ class TestContracts(unittest.TestCase):
         self.assertEqual(len(orch_rec.attempted_agents), 2)
 
     def test_integration_agent_syntax_and_conflict_checks(self):
-        agent = IntegrationAgent()
+        agent = IntegrationAgent(use_llm=False)
 
         # 1. Geçerli Python kodu -> APPROVED
         ok_report = agent.inspect_artifacts({"app.py": "def hello():\n    return 42\n"})
@@ -158,7 +158,7 @@ class TestContracts(unittest.TestCase):
 
     def test_integration_artifact_manifest(self):
         """S3-05: manifest boyut ve SHA-256 hesaplar, boş dosyayı ayrı listeler, görev sonucuna eklenir."""
-        agent = IntegrationAgent()
+        agent = IntegrationAgent(use_llm=False)
         code = "def hello():\n    return 42\n"
         manifest = agent.generate_artifact_manifest("run-m", {"src/app.py": code, "empty.py": ""})
         self.assertEqual(len(manifest.manifests), 1)
@@ -345,7 +345,7 @@ class TestRemoteAgentProxyAndDistributedDispatch(unittest.TestCase):
             BackendAgent(use_ollama=False),
             DatabaseAgent(use_ollama=False),
             TestingAgent(use_ollama=False),
-            IntegrationAgent(),
+            IntegrationAgent(use_llm=False),
         ])
         orch = MasterOrchestrator(evaluator=evaluator, persist=False)
         report = orch.process_requirement("Library management system", "Library")

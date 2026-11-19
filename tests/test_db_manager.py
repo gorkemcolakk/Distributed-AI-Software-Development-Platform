@@ -125,7 +125,7 @@ class TestDbManager(unittest.TestCase):
     # --- End-to-end orchestrator persistence ------------------------------
     def test_orchestrator_persists_successful_run(self):
         evaluator = CapabilityEvaluator([FrontendAgent(use_ollama=False), BackendAgent(use_ollama=False), DatabaseAgent(use_ollama=False),
-                                         TestingAgent(use_ollama=False), IntegrationAgent()])
+                                         TestingAgent(use_ollama=False), IntegrationAgent(use_llm=False)])
         orch = MasterOrchestrator(evaluator=evaluator, db_path=self.db_path)
         result = orch.process_requirement("Library system", "Library")
 
@@ -163,7 +163,7 @@ class TestDbManager(unittest.TestCase):
 
     def test_consecutive_runs_are_isolated(self):
         evaluator = CapabilityEvaluator([FrontendAgent(use_ollama=False), BackendAgent(use_ollama=False), DatabaseAgent(use_ollama=False),
-                                         TestingAgent(use_ollama=False), IntegrationAgent()])
+                                         TestingAgent(use_ollama=False), IntegrationAgent(use_llm=False)])
         orch = MasterOrchestrator(evaluator=evaluator, db_path=self.db_path)
         r1 = orch.process_requirement("A", "A")
         r2 = orch.process_requirement("B", "B")
@@ -176,7 +176,7 @@ class TestDbManager(unittest.TestCase):
         evaluator = CapabilityEvaluator([
             FrontendAgent(use_ollama=False), BackendAgent(use_ollama=False),
             DatabaseAgent(use_ollama=False), TestingAgent(use_ollama=False),
-            IntegrationAgent(),
+            IntegrationAgent(use_llm=False),
         ])
         orch = MasterOrchestrator(evaluator=evaluator, db_path=self.db_path)
         result = orch.process_requirement("Kütüphane yönetim sistemi", "Library")
