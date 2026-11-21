@@ -17,15 +17,15 @@
 
 During Sprint Planning on Oct 01, 2026, the Developers selected the following 7 PBIs from the Product Backlog, estimated their sizing, and assigned primary owners:
 
-| Card ID | Task Title & Scope | Primary Assignee | Collaboration & Support | Priority | Story Points | Est. Hours | Dependencies | Status |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **S1-01** | Establish GitHub Repository & Team Workflow Guidelines | Eren Görkem Çolak (Master Agent) | İrem Yılmaz (SM), All Team | High | 2 | 4h | None | **Done** |
-| **S1-02** | Develop Initial Streamlit Web Interface Prototype (`app.py`, `start.bat`) | Kübra Hepcan (Frontend Agent) | Elif Yılmaz, İrem Yılmaz | High | 5 | 8h | S1-01 | **Done** |
-| **S1-03** | Document System Architecture & Component Boundaries (`docs/ARCHITECTURE.md`) | Mahmut Karaalioğlu (Database Agent) | Kübra Hepcan, Eren Görkem Çolak | High | 3 | 8h | S1-05 | **Done** |
-| **S1-04** | Design Initial Data Model & SQLite Storage (`docs/DATA_MODEL.md`, `db_manager.py`) | İrem Yılmaz (Backend Agent) | Mahmut Karaalioğlu (Reviewer) | High | 3 | 6h | S1-05, S1-03 | **Done** |
-| **S1-05** | List System Requirements & Testable Acceptance Criteria (`docs/SRS.md`) | Kübra Hepcan (Frontend Agent) | Elif Yılmaz, Mahmut Karaalioğlu | Highest | 3 | 6h | None | **Done** |
-| **S1-06** | Research & Verify Team Local Ollama Model Options (`docs/MODEL_RESEARCH.md`) | Berat İnan (Testing Agent) | Eren Görkem Çolak, All Team | High | 3 | 8h | Team Hardware | **Done** |
-| **S1-07** | Develop Master-Agent Orchestrator & Decomposition Prototype (`orchestrator.py`) | Eren Görkem Çolak (Master Agent) | İrem Yılmaz, Elif Yılmaz, Berat İnan | Highest | 5 | 12h | S1-01, S1-03 | **Done** |
+| Card ID | Task Title & Scope | Primary Assignee | Priority | Story Points | Est. Hours | Dependencies | Status |
+| :--- | :--- | :--- | :--- | :--- | :---  | :--- | :--- |
+| **S1-01** | Establish GitHub Repository & Team Workflow Guidelines | Eren Görkem Çolak (Master Agent) | High | 2 | 4h | None | **Done** |
+| **S1-02** | Develop Initial Streamlit Web Interface Prototype (`app.py`, `start.bat`) | Elif Yılmaz | High | 5 | 8h | S1-01 | **Done** |
+| **S1-03** | Document System Architecture & Component Boundaries (`docs/ARCHITECTURE.md`) | Mahmut Karaalioğlu (Database Agent) | High | 3 | 8h | S1-05 | **Done** |
+| **S1-04** | Design Initial Data Model & SQLite Storage (`docs/DATA_MODEL.md`, `db_manager.py`) | İrem Yılmaz (Backend Agent) | High | 3 | 6h | S1-05, S1-03 | **Done** |
+| **S1-05** | List System Requirements & Testable Acceptance Criteria (`docs/SRS.md`) | Kübra Hepcan (Frontend Agent) | Highest | 3 | 6h | None | **Done** |
+| **S1-06** | Research & Verify Team Local Ollama Model Options (`docs/MODEL_RESEARCH.md`) | Berat İnan (Testing Agent) | High | 3 | 8h | Team Hardware | **Done** |
+| **S1-07** | Develop Master-Agent Orchestrator & Decomposition Prototype (`orchestrator.py`) | Eren Görkem Çolak (Master Agent) | Highest | 5 | 12h | S1-01, S1-03 | **Done** |
 
 * **Total Sprint 1 Committed Capacity:** **24 Story Points** (52 Estimated Development Hours)
 * **Target Delivery:** Baseline working prototype increment meeting the Definition of Done.

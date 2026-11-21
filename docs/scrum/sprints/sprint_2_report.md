@@ -5,24 +5,23 @@
 * **Developers:** Eren Görkem Çolak, Kübra Hepcan, Mahmut Karaalioğlu, Berat İnan, İrem Yılmaz, Elif Yılmaz
 * **Sprint Goal (Why):**
   > *"Standardize API key and safe fallback configuration, unify the Streamlit UI and core engine under a canonical agent registry (`config/agents_config.json`), enforce weighted capability-based agent selection (`calculate_fit_score`) with busy/offline agent filtering, validate task decomposition JSON schemas, and ensure scheduler and SQLite persistence state isolation via `run_id`."*
-* **Sprint Status:** **COMPLETED** (Closed on 2026-10-22; all 7 cards verified on `main`, 22 / 22 SP delivered)
+* **Sprint Status:** **COMPLETED** (Closed on 2026-10-22; all 6 cards verified on `main`, 22 / 22 SP delivered)
 
 ---
 
 ## 1. Sprint Review (At the Review)
 
 ### 1.1. Delivered Product Increment & Observable Evidence (What Was Demonstrated)
-On October 29, 2026, the Scrum Team demonstrated the Sprint 2 Increment to the Product Owner:
+On October 29, 2026, the Scrum Team demonstrated the Sprint 2 Increment to the Product Owner across all 6 completed Trello cards:
 
 | Card ID | Task Title & Scope | Primary Assignee | Repository Evidence | Verification Outcome & Acceptance |
 | :--- | :--- | :--- | :--- | :--- |
-| **S2-01** | Standardize Backend API & Local Ollama Config with Safe Fallback Logic | İrem Yılmaz | `app.py`, `.env.example`, `test_api_config_fallback.py` | **VERIFIED:** Removed duplicate loaders; centralized `load_api_key()` and `get_model_config()`. Hardcoded credentials purged. Resilient fallback mode for HTTP 429, timeouts, and offline status. 9 unit tests pass. |
-| **S2-02** | Unify Streamlit UI and Core Engine Under Canonical Agent Registry | Kübra Hepcan | `config/agents_config.json`, `app.py` (PR #20) | **VERIFIED:** Hardcoded `agents_data` replaced by dynamic loading from `agents_config.json`. Displays member names, models, capabilities, and live statuses. |
-| **S2-03** | Weighted Capability-Based Scoring (`FitScore`) & Availability Filtering | Eren Görkem Çolak | `capability_eval.py`, `orchestrator.py`, `tests/test_master_engine.py` | **VERIFIED:** Excluded `BUSY`, `OFFLINE`, and `ERROR` agents from selection pool. Integrated weighted fit scores with specialty bonus and failover protection. |
-| **S2-04** | Validate Task Decomposition Output & Harden Safe Fallback Template | Elif Yılmaz | `src/contracts.py`, `docs/INTER_AGENT_CONTRACTS.md`, `tests/test_contracts.py` | **VERIFIED:** Pydantic schema validation implemented for decomposed subtasks; 5-stage normalization and malformed JSON protection active. 4 contract tests pass. |
-| **S2-05** | Scheduler Lifecycle Isolation (`run_id`) & Accurate Failure Reporting | Eren Görkem Çolak | `scheduler.py`, `orchestrator.py`, `tests/test_master_engine.py` | **VERIFIED:** Unique `run_id` generated per execution. State reset between runs; failed/unassigned tasks reported accurately without false `COMPLETED`. |
-| **S2-06** | Bind UI Task Assignments & Status Monitoring to Real Engine Execution | Kübra Hepcan | `app.py` (PR #20, #23, #24) | **VERIFIED:** Manual mock buttons removed; "Analyze" executes real `MasterOrchestrator`, binding UI progress and status indicators to backend results. |
-| **S2-07** | Integrate SQLite Persistence (`db_manager.py`) with Unified Registry & `run_id` | Mahmut Karaalioğlu | `src/master/db_manager.py`, `docs/DATA_MODEL.md`, `tests/test_db_manager.py` | **VERIFIED:** `runs`, `agents`, `tasks`, and `attempts` tables initialized with WAL mode. Added 3-layer guard against false `COMPLETED` insertion. 11 unit tests pass. |
+| **S2-01** | Standardize Backend API / Local Ollama Config & Establish Safe Fallback Logic | İrem Yılmaz | `master_agent_projesi/app.py`, `config/agents_config.json`, `.env.example`, `test_api_config_fallback.py` | **VERIFIED:** Removed duplicate loaders; centralized `load_api_key()` and `get_model_config()`. Hardcoded credentials purged. Resilient fallback mode for HTTP 429, timeouts, and offline status. 9 unit tests pass. |
+| **S2-02** | Bind Streamlit UI to Canonical Agent Registry & Real Engine Status Monitoring | Kübra Hepcan | `master_agent_projesi/app.py`, `config/agents_config.json` (PR #20, #23, #24) | **VERIFIED:** Hardcoded `agents_data` and manual mock buttons removed; UI dynamically loads `agents_config.json` and binds task assignments, progress, and live states (`IDLE`, `BUSY`, `COMPLETED`, `FAILED`, `BLOCKED`) to real `MasterOrchestrator` execution. |
+| **S2-03** | Implement Weighted Agent Selection, Availability Filtering & Scheduler Lifecycle | Eren Görkem Çolak | `src/master/capability_eval.py`, `src/master/scheduler.py`, `src/master/orchestrator.py` | **VERIFIED:** Excluded `BUSY`, `OFFLINE`, and `ERROR` agents from selection pool; integrated weighted fit scores with specialty bonus. Unique `run_id` generated per execution with state reset and accurate failure reporting. |
+| **S2-04** | Validate Task Classification Output Against Schema & Define Inter-Agent Integration Contract | Elif Yılmaz | `src/master/analyzer.py`, `src/agents/integration_agent.py`, `src/contracts.py`, `tests/test_contracts.py` | **VERIFIED:** Pydantic and JSON schema validation (`task_id`, `title`, `category`, `dependencies`) implemented for decomposed subtasks; multi-stage normalization and malformed JSON protection active. 4 contract tests pass. |
+| **S2-05** | Integrate SQLite Persistence Layer (`db_manager.py`) with Agent Capability Profiles & `run_id` Task States | Mahmut Karaalioğlu | `src/master/db_manager.py`, `src/agents/database_agent.py`, `docs/DATA_MODEL.md`, `tests/test_db_manager.py` | **VERIFIED:** `runs`, `agents`, `tasks`, and `attempts` tables initialized with WAL mode and capability profile fields. Added 3-layer guard against false `COMPLETED` insertion; `state.db` excluded in `.gitignore`. 11 unit tests pass. |
+| **S2-06** | Develop Automated Unit Tests (Pytest/Unittest) for Agent Selection, Schema Validation & Scheduler | Berat İnan | `tests/test_master_engine.py`, `src/agents/testing_agent.py`, `config/agents_config.json` (PR #22) | **VERIFIED:** Comprehensive offline deterministic unit tests implemented for weighted scoring, `BUSY`/`OFFLINE` filtering, malformed JSON, and `run_id` isolation; local Ollama model/hardware verification completed. 20 engine tests pass. |
 
 ### 1.2. Verification & Terminal Evidence
 ```bash
@@ -50,9 +49,10 @@ OK
 ### 1.4. Product Backlog Adaptations & Changes (At the Review)
 * Added **S3-01**: Define versioned Master–Worker HTTP/JSON task, result, and error contracts in `src/contracts.py`.
 * Added **S3-02**: Implement authenticated REST worker HTTP server (`src/api/worker_server.py`) and connect BackendAgent to local Ollama (`qwen2.5-coder:7b`).
-* Added **S3-04**: Build DAG cycle detection and safe workspace confinement to `workspaces/{run_id}/`.
+* Added **S3-03**: Connect FrontendAgent to local Ollama UI code generation and display distributed agent/file statuses in Streamlit.
+* Added **S3-04**: Build DAG cycle detection, DatabaseAgent SQL generation, and safe workspace confinement to `workspaces/{run_id}/`.
 * Added **S3-05**: Worker output artifact manifest collection layer.
-* Added **S3-06**: TestingAgent Ollama test generation and distributed test suite.
+* Added **S3-06**: TestingAgent Ollama test generation and distributed communication/DAG test suite.
 * Reprioritized Sprint 3 Backlog for Distributed Development (24 Story Points).
 
 ---
@@ -97,12 +97,12 @@ OK
 
 | Team Member | Student ID | Agent & Model | Sprint Role & Primary Deliverables | Estimated vs Actual Hours | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Eren Görkem Çolak** | 2204012296 | Master Agent (`qwen2.5:7b`) | Tech Lead: Weighted fitness selection (`S2-03`), scheduler run isolation (`S2-05`) | 14h / 14h | **Done** |
-| **Kübra Hepcan** | 2204012302 | Frontend Agent (`qwen2.5-coder:3b`) | Developer: Canonical registry UI (`S2-02`), live status & progress binding (`S2-06`) | 16h / 16h | **Done** |
-| **Mahmut Karaalioğlu** | 2204012300 | Database Agent (`llama3.2:3b`) | Developer: SQLite persistence layer (`S2-07`), false `COMPLETED` database guards | 4h / 4h | **Done** |
-| **İrem Yılmaz** | 2204012301 | Backend Agent (`qwen2.5-coder:7b`) | Scrum Master: API key & fallback standardization (`S2-01`), REST draft specification | 4h / 4h | **Done** |
-| **Berat İnan** | 2204012303 | Testing Agent (`deepseek-coder:6.7b`) | Developer: Authoring 44-test unit suite, CI GitHub Actions setup (PR #22) | 6h / 6h | **Done** |
-| **Elif Yılmaz** | 2204012297 | Integration Agent (`phi4-mini:3.8b`) | Developer: Task decomposition Pydantic schema validation (`S2-04`) | 6h / 6h | **Done** |
+| **Eren Görkem Çolak** | 2204012296 | Master Agent (`qwen2.5:3b`) | Tech Lead: Weighted fitness selection, availability filtering & scheduler run isolation (`S2-03`) | 10h / 10h | **Done** |
+| **Kübra Hepcan** | 2204012302 | Frontend Agent (`qwen2.5-coder:3b`) | Developer: Canonical registry UI & live status/progress binding (`S2-02`) | 10h / 10h | **Done** |
+| **Mahmut Karaalioğlu** | 2204012300 | Database Agent (`llama3.2:3b`) | Developer: SQLite persistence layer & false `COMPLETED` database guards (`S2-05`) | 8h / 8h | **Done** |
+| **İrem Yılmaz** | 2204012301 | Backend Agent (`qwen2.5-coder:7b`) | Scrum Master: API key & fallback standardization (`S2-01`), SQLite & REST specification support | 4h / 4h | **Done** |
+| **Berat İnan** | 2204012303 | Testing Agent (`deepseek-coder:6.7b`) | Developer: Automated unit test suite & local Ollama model verification (`S2-06`), CI setup (PR #22) | 6h / 6h | **Done** |
+| **Elif Yılmaz** | 2204012297 | Integration Agent (`phi4-mini:3.8b`) | Developer: Task decomposition schema validation & inter-agent integration contract (`S2-04`) | 6h / 6h | **Done** |
 
 ### 3.4. Risk Assessment & Mitigation Strategies
 * **Risk 1 (Network Latency & Worker Communication):** Connecting distributed nodes over local network may introduce connection failures or dropped payloads.  
@@ -116,4 +116,4 @@ OK
 
 ---
 
-**Report Prepared By:** İrem Yılmaz (Scrum Master)  
+**Report Prepared By:** İrem Yılmaz (Scrum Master)

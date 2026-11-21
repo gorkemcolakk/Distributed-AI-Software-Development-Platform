@@ -17,7 +17,7 @@ On October 15, 2026, the Scrum Team presented the working prototype Increment to
 | Card ID | Deliverable Summary | Primary Assignee | Repository Evidence | Verification Outcome & Acceptance |
 | :--- | :--- | :--- | :--- | :--- |
 | **S1-01** | Repository setup, branch workflow, and launcher scripts | Eren Görkem Çolak | `README.md`, `.gitignore`, `start.bat` | **VERIFIED:** Cloned and verified across all team machines; branch protection active. |
-| **S1-02** | Streamlit Web UI Prototype for requirement input & agent monitoring | Kübra Hepcan | `master_agent_projesi/app.py`, `requirements.txt` | **VERIFIED:** Launches cleanly via `start.bat`; accepts long input; renders agent capability cards. |
+| **S1-02** | Streamlit Web UI Prototype for requirement input & agent monitoring | Elif Yılmaz | `master_agent_projesi/app.py`, `requirements.txt` | **VERIFIED:** Launches cleanly via `start.bat`; accepts long input; renders agent capability cards. |
 | **S1-03** | Multi-Agent Architecture & Component Boundaries | Mahmut Karaalioğlu | `docs/ARCHITECTURE.md`, `docs/scrum/product_backlog.md` | **VERIFIED:** Component boundaries and planned REST worker API explicitly documented. |
 | **S1-04** | Initial Data Model & SQLite Persistence Prototype | İrem Yılmaz | `docs/DATA_MODEL.md`, `src/master/db_manager.py` | **VERIFIED:** Initial relational schema designed; SQLite table creation verified. |
 | **S1-05** | System Requirements Inventory & Acceptance Criteria | Kübra Hepcan | `docs/SRS.md`, `docs/scrum/product_backlog.md` | **VERIFIED:** Decomposed course requirements into REQ-1..REQ-9 with testable criteria. |
