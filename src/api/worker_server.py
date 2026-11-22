@@ -13,6 +13,11 @@ S3-02 (İrem Yılmaz — Backend Agent — qwen2.5-coder:7b) & S3-01 (Eren Görk
   concurrent duplicate, cached result on completed duplicate within the same run_id).
 - Executes tasks via BaseAgent and returns standard TaskResult / WorkerTaskResultContract_v1.
 - No hardcoded secrets or credentials in source code.
+
+S4-02 (İrem Yılmaz): Input validation, output sanitisation, log security.
+- Task payloads are validated before execution.
+- Output artifacts are sanitised (secrets redacted) before returning.
+- Error messages never contain API keys or tokens.
 """
 
 import argparse
@@ -181,6 +186,16 @@ def create_worker_app(
                 detail="Payload must be a JSON object",
             )
 
+        # S4-02: Input validation — sanitise task payload before execution
+        try:
+            from src.security.input_validation import validate_task_payload
+            data = validate_task_payload(data)
+        except Exception as val_err:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Input validation failed: {val_err}",
+            )
+
         task_id = data.get("task_id")
         if not task_id or not isinstance(task_id, str) or not task_id.strip():
             raise HTTPException(
@@ -220,9 +235,10 @@ def create_worker_app(
             result = await run_in_threadpool(worker_agent.execute_task, data)
         except Exception as exc:
             tracker.release(run_id, task_id, envelope_id)
+            from src.security.output_sanitizer import redact_secrets
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Worker execution error: {exc}",
+                detail=redact_secrets(f"Worker execution error: {exc}"),
             )
 
         response_payload = {
@@ -236,6 +252,20 @@ def create_worker_app(
             "execution_time_seconds": result.execution_time_seconds,
             "error_message": result.error_message,
         }
+
+        # S4-02: Redact secrets from logs, error messages and generated files before returning
+        try:
+            from src.security.output_sanitizer import redact_secrets
+            if response_payload.get("error_message"):
+                response_payload["error_message"] = redact_secrets(response_payload["error_message"])
+            if response_payload.get("logs"):
+                response_payload["logs"] = [redact_secrets(l) for l in response_payload["logs"]]
+            if isinstance(response_payload.get("output_artifacts"), dict):
+                for f_item in response_payload["output_artifacts"].get("files") or []:
+                    if isinstance(f_item, dict) and isinstance(f_item.get("content"), str):
+                        f_item["content"] = redact_secrets(f_item["content"])
+        except ImportError:
+            pass
 
         if result.status in ("SUCCESS", "COMPLETED"):
             tracker.complete(run_id, task_id, response_payload, envelope_id)
