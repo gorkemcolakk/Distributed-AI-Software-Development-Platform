@@ -273,6 +273,8 @@ try:
     from src.agents.testing_agent import TestingAgent
     from src.agents.integration_agent import IntegrationAgent
     from src.agents.remote_agent import wrap_agent_if_remote, RemoteAgentProxy, get_agent_endpoint_url
+    from src.security.input_validation import validate_requirement_text, InputValidationError
+    from src.security.output_sanitizer import redact_secrets
 
     ENGINE_ERROR = None
 except Exception as _e:  # motor yüklenemezse arayüz DEMO VERİSİ moduna düşer
@@ -1148,36 +1150,43 @@ if ENGINE_ERROR is not None:
     st.warning(f"Master Agent motoru yüklenemedi ({ENGINE_ERROR}). Sonuçlar DEMO VERİSİ olarak gösterilecek.")
 
 if st.button("🚀 Analiz et ve ajanlara dağıt", use_container_width=True):
-    if not requirement_input.strip():
-        st.warning("Analiz için önce bir gereksinim metni girin.")
-    else:
-        state.decomp, state.plan, state.decomp_label, state.decomp_demo = None, None, "", False
-        if ENGINE_ERROR is not None:  # motor yoksa eski etiketli 5 aşamalı ayrıştırma (DEMO)
-            with st.spinner("Master Agent gereksinimi ayrıştırıyor..."):
-                raw, d_demo, d_label = decompose_task(requirement_input)  # S2-01: etiketli yerel/yedek ayrıştırma
-                try:
-                    state.decomp = normalize_tasks(json.loads(raw), requirement_input)
-                except Exception:
-                    state.decomp = normalize_tasks({}, requirement_input)
-                    d_demo, d_label = True, "Ayrıştırma Hatası - Güvenli Yedek"
-                state.decomp_demo, state.decomp_label = d_demo, d_label
-        if ENGINE_ERROR is None:
-            live = st.status("Master Agent motoru çalışıyor...", expanded=True)
+    try:
+        cleaned_req = validate_requirement_text(requirement_input) if ENGINE_ERROR is None else requirement_input.strip()
+        if not cleaned_req:
+            st.warning("Analiz için önce bir gereksinim metni girin.")
+            st.stop()
+    except InputValidationError as val_err:
+        st.warning(f"⚠️ {val_err.reason}")
+        st.stop()
+
+    state.decomp, state.plan, state.decomp_label, state.decomp_demo = None, None, "", False
+    if ENGINE_ERROR is not None:  # motor yoksa eski etiketli 5 aşamalı ayrıştırma (DEMO)
+        with st.spinner("Master Agent gereksinimi ayrıştırıyor..."):
+            raw, d_demo, d_label = decompose_task(cleaned_req)  # S2-01: etiketli yerel/yedek ayrıştırma
             try:
-                run_engine(requirement_input, live)
-            except Exception as e:
-                live.update(label="Motor hata verdi", state="error")
-                st.error(f"Motor çalıştırılamadı: {type(e).__name__}: {e}")
-                st.stop()
-            live.update(label="Motor çalıştırması bitti", state="complete")
-        else:
-            rep, meta = demo_report(requirement_input)
-            state.report, state.meta, state.artifacts, state.snapshot = rep, meta, {}, {}
-            state.history, state.attempt_rows = [], {}
-            state.mode, state.elapsed, state.requirement = "demo", None, requirement_input
-            state.log = build_log(rep, (), state.decomp_label, state.decomp_demo)
-        state.fresh = True
-        st.rerun()
+                state.decomp = normalize_tasks(json.loads(raw), cleaned_req)
+            except Exception:
+                state.decomp = normalize_tasks({}, cleaned_req)
+                d_demo, d_label = True, "Ayrıştırma Hatası - Güvenli Yedek"
+            state.decomp_demo, state.decomp_label = d_demo, d_label
+    if ENGINE_ERROR is None:
+        live = st.status("Master Agent motoru çalışıyor...", expanded=True)
+        try:
+            run_engine(cleaned_req, live)
+        except Exception as e:
+            live.update(label="Motor hata verdi", state="error")
+            safe_err = redact_secrets(f"{type(e).__name__}: {e}") if ENGINE_ERROR is None else f"{type(e).__name__}: {e}"
+            st.error(f"Motor çalıştırılamadı: {safe_err}")
+            st.stop()
+        live.update(label="Motor çalıştırması bitti", state="complete")
+    else:
+        rep, meta = demo_report(cleaned_req)
+        state.report, state.meta, state.artifacts, state.snapshot = rep, meta, {}, {}
+        state.history, state.attempt_rows = [], {}
+        state.mode, state.elapsed, state.requirement = "demo", None, cleaned_req
+        state.log = build_log(rep, (), state.decomp_label, state.decomp_demo)
+    state.fresh = True
+    st.rerun()
 
 if state.report:
     report = state.report
@@ -1208,7 +1217,8 @@ if state.report:
             label = output_label(art["artifacts"])
             with st.expander(label):
                 st.json(art["artifacts"])
-                st.code("\n".join(art["logs"]), language="text")
+                raw_logs = "\n".join(art["logs"])
+                st.code(redact_secrets(raw_logs) if ENGINE_ERROR is None else raw_logs, language="text")
         st.markdown('<div style="height:10px"></div>', unsafe_allow_html=True)
 
     if state.mode == "engine":

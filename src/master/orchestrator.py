@@ -35,6 +35,9 @@ from src.contracts import (
     validate_master_tasks,
 )
 from src.master import db_manager
+from src.security.error_classification import classify_task_result, ErrorKind
+from src.security.input_validation import validate_requirement_text
+from src.security.output_sanitizer import redact_secrets, safe_log_message
 
 logger = logging.getLogger(__name__)
 
@@ -209,9 +212,18 @@ class MasterOrchestrator:
                             error_message = f"Güvensiz çıktı yolu reddedildi: {exc}"
                             written_files = []
 
+                    if error_message:
+                        error_message = redact_secrets(error_message)
                     last_error = error_message
                     error_code = None if is_successful else failure_code(result, error_message)
-                    error_kind = None if is_successful else classify_failure(result, error_message)
+                    if is_successful:
+                        error_kind = None
+                    else:
+                        raw_kind = getattr(result, "error_kind", None)
+                        if raw_kind in (ErrorKind.TRANSIENT.value, ErrorKind.PERMANENT.value):
+                            error_kind = raw_kind
+                        else:
+                            error_kind = classify_task_result(result, error_message).kind.value
                     attempt_log.append({
                         "agent_id": agent.agent_id,
                         "agent_name": agent.name,
@@ -260,6 +272,7 @@ class MasterOrchestrator:
         7. Apply deadlock protection for unsatisfied dependencies
         8. Determine dynamic system_status and return comprehensive execution report
         """
+        requirement_text = validate_requirement_text(requirement_text)
         self._reset_error_agents()
         run_id = self.scheduler.reset()
         self.duplicate_tracker.clear()

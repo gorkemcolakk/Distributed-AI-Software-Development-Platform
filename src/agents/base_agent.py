@@ -1,6 +1,11 @@
 """
 Base Agent Interface for Distributed AI Software Development Platform.
 Defines capability metrics, status tracking, and standard task execution interfaces.
+
+S4-02 (İrem Yılmaz): Error classification integration and log security.
+- execute_task now classifies errors as TRANSIENT or PERMANENT.
+- Error messages in TaskResult are redacted to prevent secret leakage.
+- Logs are sanitised before being stored.
 """
 
 from dataclasses import dataclass, field
@@ -82,6 +87,7 @@ class TaskResult:
     logs: List[str]
     execution_time_seconds: float
     error_message: Optional[str] = None
+    error_kind: Optional[str] = None  # S4-02: "TRANSIENT" or "PERMANENT"
 
 
 class BaseAgent:
@@ -141,14 +147,25 @@ class BaseAgent:
             self.status = AgentStatus.ERROR
             if task_id in self.current_tasks:
                 self.current_tasks.remove(task_id)
+            # S4-02: Classify error and redact secrets from error message
+            try:
+                from src.security.error_classification import classify_exception
+                from src.security.output_sanitizer import redact_secrets
+                classified = classify_exception(e)
+                error_kind = classified.kind.value
+                safe_message = redact_secrets(str(e))
+            except Exception:
+                error_kind = "PERMANENT"
+                safe_message = str(e)
             return TaskResult(
                 task_id=task_id,
                 agent_id=self.agent_id,
                 status="FAILED",
                 output_artifacts={},
-                logs=logs,
+                logs=[redact_secrets(line) if 'redact_secrets' in dir() else line for line in logs],
                 execution_time_seconds=round(execution_time, 2),
-                error_message=str(e)
+                error_message=safe_message,
+                error_kind=error_kind,
             )
 
     def _process(self, task: Dict[str, Any], logs: List[str]) -> Dict[str, Any]:
