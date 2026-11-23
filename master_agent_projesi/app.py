@@ -1234,9 +1234,8 @@ if state.report:
                                 f'<span class="chip">🤖 {esc(row["agent"])}</span>', unsafe_allow_html=True)
                     st.caption(row["path"])
                     if row["content"]:
-                        safe_content = redact_secrets(row["content"]) if ENGINE_ERROR is None else row["content"]
-                        st.code(safe_content[:20000], language=CODE_LANGUAGES.get(Path(row["file"]).suffix.lower()))
-                        st.download_button("İndir", safe_content, file_name=Path(row["file"]).name,
+                        st.code(row["content"][:20000], language=CODE_LANGUAGES.get(Path(row["file"]).suffix.lower()))
+                        st.download_button("İndir", row["content"], file_name=Path(row["file"]).name,
                                            key=f"dl-{report['run_id']}-{i}")
         else:
             st.caption("Bu çalıştırmada diske yazılmış dosya yok (tamamlanan görev yok ya da çıktı dosya içermiyor).")

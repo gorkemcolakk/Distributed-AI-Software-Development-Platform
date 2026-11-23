@@ -253,17 +253,13 @@ def create_worker_app(
             "error_message": result.error_message,
         }
 
-        # S4-02: Redact secrets from logs, error messages and generated files before returning
+        # S4-02: Redact secrets from logs and error messages before returning
         try:
             from src.security.output_sanitizer import redact_secrets
             if response_payload.get("error_message"):
                 response_payload["error_message"] = redact_secrets(response_payload["error_message"])
             if response_payload.get("logs"):
                 response_payload["logs"] = [redact_secrets(l) for l in response_payload["logs"]]
-            if isinstance(response_payload.get("output_artifacts"), dict):
-                for f_item in response_payload["output_artifacts"].get("files") or []:
-                    if isinstance(f_item, dict) and isinstance(f_item.get("content"), str):
-                        f_item["content"] = redact_secrets(f_item["content"])
         except ImportError:
             pass
 
