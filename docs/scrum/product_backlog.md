@@ -88,8 +88,9 @@
 | **PBI-23** | **S4-04** | Epic 4 | **File Path/Schema Conflict Resolution & SQLite Attempt History:** Detect write conflicts in shared workspaces, record attempt counts and error details in SQLite `attempts` table, and persist generated file metadata in `output_files`. | Mahmut Karaalioğlu | High | 3 | S3-04, S4-01 | **Sprint Backlog** |
 | **PBI-24** | **S4-05** | Epic 4 | **Integration Agent Code Review & Packaging:** Replace static `APPROVED` response with automated Python AST syntax verification, LLM code review via `phi4-mini:3.8b`, and assembled project artifact packaging. | Elif Yılmaz | Highest | 5 | S3-05, S4-04 | **Sprint Backlog** |
 | **PBI-25** | **S4-06** | Epic 4 | **Automated Test Expansion & GitHub Actions CI Gate:** Author mock-based unit tests for retry/reassignment and conflict detection, expand [`.github/workflows/tests.yml`](../../.github/workflows/tests.yml) to block failing PR merges, and sanitize test suites. | Berat İnan | Highest | 5 | S4-01, S4-02, S4-04, S4-05 | **Sprint Backlog** |
+| **PBI-32** | **S4-07** | Epic 4 | **Master Agent Local Model Decomposition & Inter-Agent Shared Contract:** Connect `analyzer.py` to local `qwen2.5:7b` Ollama model to dynamically extract requirements, dependencies, and shared domain contract (endpoints, tables, fields) and enable parallel dispatch of independent tasks. | Eren Görkem Çolak | Highest | 5 | S3-01, S4-01 | **Sprint Backlog** |
 
-*Sprint 4 Committed Capacity:* **24 Story Points** (6 Cards: S4-01 to S4-06). Detailed in [Sprint 4 Backlog](sprints/sprint_4_backlog.md) and [Sprint 4 Report](sprints/sprint_4_report.md).
+*Sprint 4 Committed Capacity:* **29 Story Points** (7 Cards: S4-01 to S4-07; S4-07 added mid-sprint). Detailed in [Sprint 4 Backlog](sprints/sprint_4_backlog.md) and [Sprint 4 Report](sprints/sprint_4_report.md).
 
 ---
 

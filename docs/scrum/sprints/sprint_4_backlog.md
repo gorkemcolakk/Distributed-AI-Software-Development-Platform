@@ -27,9 +27,11 @@ During Sprint Planning on November 12, 2026, the Developers selected 6 Product B
 | **S4-04** | File Path/Schema Conflict Resolution & SQLite Attempt History Persistence | Mahmut Karaalioğlu (Database Agent — `llama3.2:3b`) | High | 3 | 8h | **Sprint Backlog** |
 | **S4-05** | Automated Python AST Syntax / Code Review & Integrated Packaging | Elif Yılmaz (Integration Agent — `phi4-mini:3.8b`) | Highest | 5 | 10h | **Sprint Backlog** |
 | **S4-06** | Automated Test Expansion, Generated Code Tests & GitHub Actions CI Quality Gate | Berat İnan (Testing Agent — `deepseek-coder:6.7b`) | Highest | 5 | 10h | **Sprint Backlog** |
+| **S4-07** | Master Agent Local Model Task Decomposition & Inter-Agent Shared Contract | Eren Görkem Çolak (Master Agent — `qwen2.5:7b`) | Highest | 5 | 10h | **Sprint Backlog** |
 
-* **Total Sprint 4 Committed Capacity:** **24 Story Points** (~52 Estimated Development Hours)
-  - **New Sprint 4 Committed Capacity:** 24 Story Points (S4-01 to S4-06)
+* **Total Sprint 4 Committed Capacity:** **29 Story Points** (~62 Estimated Development Hours)
+  - **Initial Sprint 4 Committed Capacity:** 24 Story Points (S4-01 to S4-06, ~52h)
+  - **Mid-Sprint Added Scope (S4-07):** 5 Story Points (10h)
 
 ---
 
@@ -69,13 +71,19 @@ During Sprint Planning on November 12, 2026, the Developers selected 6 Product B
 - [ ] 3. Enforce that any failing test unconditionally blocks the Pull Request merge.
 - [ ] 4. Purge dummy key assumptions and obsolete constants in `master_agent_projesi/test_api.py`.
 
+### S4-07: Master Agent Local Model Decomposition & Inter-Agent Shared Contract
+- [ ] 1. Connect `src/master/analyzer.py` static 6-task decomposition to the local Ollama model (`qwen2.5:7b`); extract dynamic subtasks and dependencies from requirements.
+- [ ] 2. Extract a shared domain contract (`contract`: entities/tables, fields, and REST endpoints) and inject it into all worker task envelopes so generated files fit together.
+- [ ] 3. Validate and normalize model output (enforce `MAX_LLM_TASKS` limit, valid categories, acyclic DAG, and safe template fallback `decomposition_mode="template"` when model is unavailable or malformed).
+- [ ] 4. Enable parallel dispatch in `src/master/orchestrator.py` (`ThreadPoolExecutor`, `MASTER_PARALLEL_DISPATCH`) for independent ready tasks; visualize the decomposition plan and shared contract in `master_agent_projesi/app.py`.
+
 ---
 
 ## 4. Capacity & Workload Allocation Matrix
 
 | Developer | Student ID | Agent & Model | Assigned Cards | Total SP | Est. Hours | Primary Technical Responsibility |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Eren Görkem Çolak** | 2204012296 | Master Agent (`qwen2.5:7b`) | S4-01 | 5 SP | 8h | Orchestrator retry state machine & agent failover |
+| **Eren Görkem Çolak** | 2204012296 | Master Agent (`qwen2.5:7b`) | S4-01, S4-07 | 10 SP | 18h | Orchestrator retry state machine, failover, LLM task decomposition & parallel dispatch |
 | **İrem Yılmaz** | 2204012301 | Backend Agent (`qwen2.5-coder:7b`) | S4-02 | 3 SP | 8h | Error classification, input validation & Scrum facilitation |
 | **Kübra Hepcan** | 2204012302 | Frontend Agent (`qwen2.5-coder:3b`) | S4-03 | 6 SP | 8h | UI code generation, live status monitor & review visualizer |
 | **Mahmut Karaalioğlu** | 2204012300 | Database Agent (`llama3.2:3b`) | S4-04 | 3 SP | 8h | Workspace path conflict detection & SQLite attempt history |
@@ -97,4 +105,3 @@ Before any item is certified for the Sprint 4 Increment:
 
 **Plan Created By:** Scrum Team at Sprint Planning (Nov 12, 2026)  
 **Facilitated By:** İrem Yılmaz (Scrum Master)  
-**Reviewed By:** Prof. Dr. Ensar Gül (Product Owner)  
