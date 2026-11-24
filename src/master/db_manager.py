@@ -40,7 +40,9 @@ REVIEW_STATUSES = ("PENDING", "APPROVED", "REVIEW_REQUIRED", "REJECTED")
 CONFLICT_TYPES = ("PATH", "SCHEMA")
 CONFLICT_RESOLUTIONS = ("RENAMED", "DEDUPLICATED", "REPORTED")
 
-EXPECTED_TABLES = ("runs", "agents", "tasks", "attempts", "output_files", "file_conflicts")
+EXPECTED_TABLES = ("runs", "agents", "tasks", "attempts", "output_files", "file_conflicts",
+                   "generated_test_results")
+GENERATED_TEST_STATUSES = ("PASSED", "FAILED", "SKIPPED")
 
 
 def _stale_run_timeout() -> int:
@@ -323,6 +325,24 @@ def init_db(db_path: Optional[str] = None, verbose: bool = True,
                 detail TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (run_id, task_id) REFERENCES tasks (run_id, task_id) ON DELETE CASCADE
+            )
+        ''')
+
+        # S5-06: geçme oranı = üretilen testlerden geçen / çalışan; test modelinin kıyaslama metriği
+        cursor.execute(f'''
+            CREATE TABLE IF NOT EXISTS generated_test_results (
+                run_id TEXT PRIMARY KEY,
+                model_used TEXT,
+                status TEXT NOT NULL CHECK (status IN ({_sql_in(GENERATED_TEST_STATUSES)})),
+                passed INTEGER NOT NULL DEFAULT 0,
+                failed INTEGER NOT NULL DEFAULT 0,
+                errors INTEGER NOT NULL DEFAULT 0,
+                skipped INTEGER NOT NULL DEFAULT 0,
+                total INTEGER NOT NULL DEFAULT 0,
+                pass_rate REAL,
+                reason TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (run_id) REFERENCES runs (run_id) ON DELETE CASCADE
             )
         ''')
 
@@ -824,6 +844,70 @@ def get_conflicts_for_run(run_id: str, db_path: Optional[str] = None) -> List[Di
             (run_id,),
         ).fetchall()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def save_generated_test_result(run_id: str, result: Dict[str, Any], model_used: Optional[str] = None,
+                               db_path: Optional[str] = None):
+    """S5-06: stores (or replaces) the generated-test pass rate of a run."""
+    status = result.get("status")
+    if status not in GENERATED_TEST_STATUSES:
+        raise ValueError(f"Invalid generated test status '{status}'")
+    conn = get_connection(db_path)
+    try:
+        conn.execute('''
+            INSERT OR REPLACE INTO generated_test_results
+                (run_id, model_used, status, passed, failed, errors, skipped, total, pass_rate, reason)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            run_id, model_used, status, int(result.get("passed") or 0), int(result.get("failed") or 0),
+            int(result.get("errors") or 0), int(result.get("skipped") or 0), int(result.get("total") or 0),
+            result.get("pass_rate"), result.get("reason"),
+        ))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_generated_test_result(run_id: str, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    conn = get_connection(db_path)
+    try:
+        row = conn.execute("SELECT * FROM generated_test_results WHERE run_id = ?", (run_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_generated_test_pass_rates(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    S5-06 benchmark: per testing model, how many runs were measured and what share of the generated
+    tests passed. `pass_rate` pools all tests (passed / total); `avg_run_pass_rate` averages the runs.
+    Runs with no executable test (SKIPPED) are not counted.
+    """
+    conn = get_connection(db_path)
+    try:
+        rows = conn.execute('''
+            SELECT COALESCE(model_used, 'bilinmiyor') AS model_used,
+                   COUNT(*) AS runs,
+                   SUM(CASE WHEN status = 'PASSED' THEN 1 ELSE 0 END) AS fully_passed_runs,
+                   SUM(passed) AS passed, SUM(total) AS total,
+                   AVG(pass_rate) AS avg_run_pass_rate
+            FROM generated_test_results
+            WHERE status != 'SKIPPED' AND total > 0
+            GROUP BY COALESCE(model_used, 'bilinmiyor')
+            ORDER BY model_used
+        ''').fetchall()
+        out = []
+        for r in rows:
+            item = dict(r)
+            # Rounded in Python, not with SQLite ROUND(): SQLite versions round halfway values
+            # (0.66665) differently, which made the result depend on the platform.
+            if item["avg_run_pass_rate"] is not None:
+                item["avg_run_pass_rate"] = round(item["avg_run_pass_rate"], 4)
+            item["pass_rate"] = round(item["passed"] / item["total"], 4) if item["total"] else None
+            out.append(item)
+        return out
     finally:
         conn.close()
 

@@ -8,3 +8,4 @@ requests>=2.31.0
 fastapi
 httpx
 uvicorn
+pytest
