@@ -107,7 +107,7 @@ class TestModelPlan(unittest.TestCase):
 
     def test_dependencies_are_mapped_and_cleaned(self):
         self.assertEqual(self.tasks["task-db-1"]["dependencies"], [])
-        self.assertEqual(self.tasks["task-be-1"]["dependencies"], ["task-db-1"])  # unknown t9 and self dropped
+        self.assertEqual(self.tasks["task-be-1"]["dependencies"], [])  # S5: the contract is enough, runs in parallel
         self.assertEqual(self.tasks["task-fe-1"]["dependencies"], [])  # frontend only needs the contract
         self.assertEqual(self.tasks["task-qa-1"]["dependencies"], ["task-be-1"])  # testing always waits for backend
         self.assertEqual(self.tasks["task-int-1"]["dependencies"],
@@ -124,7 +124,8 @@ class TestModelPlan(unittest.TestCase):
         self.assertEqual(contract["entities"][0]["fields"][1], {"name": "full_name", "type": "text"})
         self.assertEqual([f["name"] for f in contract["entities"][1]["fields"]], ["id", "title", "author"])
         self.assertEqual([(e["method"], e["path"]) for e in contract["endpoints"]],
-                         [("POST", "/members"), ("GET", "/books/search")])
+                         [("POST", "/members"), ("GET", "/books/search"),
+                          ("POST", "/register"), ("POST", "/login")])  # S5: members -> sign up / log in
 
 
 class TestOneTaskPerRole(unittest.TestCase):
@@ -150,7 +151,7 @@ class TestOneTaskPerRole(unittest.TestCase):
         self.assertEqual(backend["title"], "User Registration + Book Search + Borrowing")
         for part in ("POST /users", "GET /books", "POST /books/{id}/borrow"):
             self.assertIn(part, backend["description"])
-        self.assertEqual(backend["dependencies"], ["task-db-1"])
+        self.assertEqual(backend["dependencies"], [])
         self.assertIn("books: id, title", self.tasks["task-db-1"]["description"])
 
     def test_missing_role_gets_a_contract_based_task(self):
@@ -200,10 +201,15 @@ class TestUnusableAnswersFallBackToTemplate(unittest.TestCase):
                  {"id": "b", "category": "BACKEND", "title": "API"}]
         self.assertEqual(self._reason({"tasks": tasks}), "INVALID_TASKS")
 
-    def test_cycle(self):
+    def test_cycle_between_contract_tasks_is_dissolved(self):
+        # S5: DATABASE / BACKEND / FRONTEND drop their dependencies, so a model cycle among them cannot survive
         tasks = [{"id": "a", "category": "DATABASE", "title": "Schema", "depends_on": ["b"]},
                  {"id": "b", "category": "BACKEND", "title": "API", "depends_on": ["a"]}]
-        self.assertEqual(self._reason({"tasks": tasks}), "CYCLE")
+        result = RequirementsAnalyzer(use_llm=True, llm_client=client({"tasks": tasks})).decompose("x", "X")
+        self.assertEqual(result["decomposition_mode"], "llm")
+        deps = {t["task_id"]: t["dependencies"] for t in result["tasks"]}
+        self.assertEqual(deps["task-db-1"], [])
+        self.assertEqual(deps["task-be-1"], [])
 
     def test_unreachable_model(self):
         s = socket.socket()

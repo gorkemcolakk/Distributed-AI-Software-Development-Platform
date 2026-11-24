@@ -59,15 +59,24 @@ ID_PREFIX = {"REQUIREMENTS": "req", "DATABASE": "db", "BACKEND": "be", "FRONTEND
              "TESTING": "qa", "INTEGRATION": "int"}
 # Short rules appended to every description: the worker models are small (3B-7B) and
 # these limits keep them inside their timeout and away from SQL they get wrong (#41).
+AUTH_TABLES = ("users", "user", "accounts", "members", "customers")
+INDEPENDENT_CATEGORIES = ("DATABASE", "BACKEND", "FRONTEND")
+
 CATEGORY_RULES = {
     "REQUIREMENTS": "Keep it a concise FastAPI skeleton (under 45 lines) that follows the shared contract.",
     "DATABASE": ("Use SQLite 3 with only CREATE TABLE IF NOT EXISTS and CREATE INDEX statements; "
                  "no CHECK constraints, triggers or subqueries. Use the table and column names of the shared contract."),
-    "BACKEND": ("Write a concise FastAPI service (under 60 lines) with /health and every endpoint of the shared contract "
-                "(same method, path and request fields), using Pydantic models with the contract's field names; "
-                "give each model an optional id field instead of adding attributes later."),
-    "FRONTEND": ("Write one concise HTML5 page that calls the shared contract's endpoints and uses its field names "
-                 "in forms and lists."),
+    "BACKEND": ("Write one runnable FastAPI file (under 100 lines) with /health and every endpoint of the shared "
+                "contract (same method, path and request fields), using Pydantic models with the contract's field "
+                "names and an optional id field. Store data in SQLite with the standard sqlite3 module (file app.db, "
+                "CREATE TABLE IF NOT EXISTS at startup with the contract's table and column names), not in memory. "
+                "If the contract has /register and /login: store a hashlib.sha256 hash of the password, never the "
+                "password, and return a random token from /login. Add CORSMiddleware allowing all origins and a "
+                "GET / route that returns the first .html file next to this file with FileResponse."),
+    "FRONTEND": ("Write one HTML5 page with embedded CSS (clean card layout, readable colors, works on mobile) that "
+                 "loads and sends ALL data through the shared contract's endpoints with fetch on relative paths "
+                 "(e.g. fetch('/items')), never hard-coded sample data. Use the contract's field names in forms and "
+                 "lists and show success and error messages."),
     "TESTING": ("Write 3 concise pytest tests (under 40 lines) for the backend endpoints of the shared contract, "
                 "using fastapi.testclient.TestClient. Call only endpoints listed in the contract, with its request "
                 "fields, and create test data through those endpoints."),
@@ -91,8 +100,10 @@ Rules:
 - category is one of: DATABASE, BACKEND, FRONTEND, TESTING.
 - Exactly one task per category: one DATABASE, one BACKEND, one FRONTEND, one TESTING.
   Each task covers ALL features of the requirement for its layer.
-- depends_on lists ids of tasks that must finish first. FRONTEND only needs the contract, not the backend code.
-  TESTING depends on BACKEND.
+- depends_on lists ids of tasks that must finish first. DATABASE, BACKEND and FRONTEND only need the contract,
+  so they have no dependencies. TESTING depends on BACKEND.
+- If the requirement has users, accounts, sign up or log in, the contract includes POST /register and POST /login
+  (request: username, password).
 - The contract is shared by every agent: 1 to 4 entities, snake_case table and field names, 3 to 8 endpoints
   that cover every feature in the requirement. Every entity users create or change has a POST (or PUT) endpoint,
   every list or search has a GET endpoint. "request" lists the body or query field names, "response" names what comes back.
@@ -182,7 +193,8 @@ class RequirementsAnalyzer:
 
     def _call_ollama(self, prompt: str) -> str:
         body = json.dumps({"model": self.model, "prompt": prompt, "stream": False, "format": "json",
-                           "options": {"temperature": 0.1, "seed": 42}}).encode("utf-8")
+                           "keep_alive": "30m",
+                           "options": {"temperature": 0.1, "seed": 42, "num_predict": 1500}}).encode("utf-8")
         req = urllib.request.Request(f"{self.host}/api/generate", data=body,
                                      headers={"Content-Type": "application/json"})
         try:
@@ -274,9 +286,13 @@ class RequirementsAnalyzer:
                 "required_specialty": SPECIALTY[category],
             })
 
-        # TESTING needs the backend code it tests (code_under_test only comes from finished tasks)
+        # The contract is enough for DATABASE / BACKEND / FRONTEND, so they run in parallel (S5: the model
+        # sometimes chained FRONTEND after BACKEND, which left only FRONTEND || TESTING in parallel).
+        # TESTING needs the backend code it tests (code_under_test only comes from finished tasks).
         backend_ids = [t["task_id"] for t in tasks if t["category"] == "BACKEND"]
         for task in tasks:
+            if task["category"] in INDEPENDENT_CATEGORIES:
+                task["dependencies"] = []
             if task["category"] == "TESTING":
                 for be in backend_ids:
                     if be not in task["dependencies"]:
@@ -332,7 +348,16 @@ class RequirementsAnalyzer:
                 endpoints.append(entry)
         if not entities and not endpoints:
             return None
-        return {"entities": entities[:4], "endpoints": endpoints[:10]}
+        endpoints = endpoints[:10]
+        # S5: an app with users needs real sign up / log in, not only "create user"
+        has_users = any(e["table"] in AUTH_TABLES for e in entities)
+        paths = {(ep["method"], ep["path"]) for ep in endpoints}
+        if has_users:
+            for path, desc, response in (("/register", "sign up", "User"), ("/login", "log in", "token")):
+                if ("POST", path) not in paths:
+                    endpoints.append({"method": "POST", "path": path, "description": desc,
+                                      "request": ["username", "password"], "response": response})
+        return {"entities": entities[:4], "endpoints": endpoints[:12]}
 
     # ------------------------------------------------------------------ template
     @staticmethod

@@ -994,6 +994,21 @@ def current_load():
     return load
 
 
+def render_smoke_test(smoke):
+    """S5: did the generated backend really start and answer the contract's endpoints? (MASTER_SMOKE_TEST)"""
+    if not smoke:
+        return
+    icon = {"PASSED": "✅", "FAILED": "❌"}.get(smoke.get("status"), "⏭️")
+    with st.expander(f"{icon} Üretilen uygulamanın duman testi · {smoke.get('status')} · {smoke.get('reason', '')}"):
+        rows = [{"Uç nokta": f"{c['method']} {c['path']}", "HTTP": c["status_code"],
+                 "Sonuç": "çalıştı" if c["ok"] else (c.get("error") or "sunucu hatası")}
+                for c in smoke.get("checks") or []]
+        if rows:
+            st.dataframe(rows, use_container_width=True, hide_index=True)
+        if smoke.get("backend_file"):
+            st.caption(f"Denenen dosya: {smoke['backend_file']} (çalışma alanının geçici kopyasında)")
+
+
 def render_plan(plan):
     """S4-07: Master'ın bu çalıştırmada kullandığı görev planı ve ajanlara giden ortak sözleşme."""
     is_llm = plan.get("mode") == "llm"
@@ -1242,6 +1257,7 @@ if state.report:
 
     if state.mode == "engine":
         rp.render_review_panel(st, report, state.history)
+        render_smoke_test(report.get("smoke_test"))
 
     if state.plan:
         render_plan(state.plan)
