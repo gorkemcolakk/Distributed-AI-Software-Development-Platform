@@ -253,7 +253,7 @@ class TestPassRateBenchmarkStorage(unittest.TestCase):
     def test_pass_rates_are_grouped_per_model(self):
         save = db_manager.save_generated_test_result
         save("r1", {"status": "PASSED", "passed": 3, "total": 3, "pass_rate": 1.0}, "deepseek-coder:6.7b", db_path=self.db)
-        save("r2", {"status": "FAILED", "passed": 1, "failed": 2, "total": 3, "pass_rate": 0.3333},
+        save("r2", {"status": "FAILED", "passed": 1, "failed": 2, "total": 3, "pass_rate": 0.5},
              "deepseek-coder:6.7b", db_path=self.db)
         save("r3", {"status": "FAILED", "passed": 0, "errors": 1, "total": 1, "pass_rate": 0.0}, "qwen2.5-coder:3b",
              db_path=self.db)
@@ -263,7 +263,8 @@ class TestPassRateBenchmarkStorage(unittest.TestCase):
         self.assertEqual(rates["deepseek-coder:6.7b"]["runs"], 2)
         self.assertEqual(rates["deepseek-coder:6.7b"]["fully_passed_runs"], 1)
         self.assertAlmostEqual(rates["deepseek-coder:6.7b"]["pass_rate"], 4 / 6, places=4)
-        self.assertAlmostEqual(rates["deepseek-coder:6.7b"]["avg_run_pass_rate"], 0.6667, places=4)
+        # mean of the run rates (1.0 and 0.5), not the pooled rate; exact in binary, so no platform rounding
+        self.assertEqual(rates["deepseek-coder:6.7b"]["avg_run_pass_rate"], 0.75)
         self.assertEqual(rates["qwen2.5-coder:3b"]["runs"], 1)  # SKIPPED run is not a measurement
         self.assertEqual(rates["qwen2.5-coder:3b"]["pass_rate"], 0.0)
         self.assertEqual(db_manager.get_generated_test_result("r1", self.db)["passed"], 3)

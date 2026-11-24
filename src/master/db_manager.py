@@ -892,7 +892,7 @@ def get_generated_test_pass_rates(db_path: Optional[str] = None) -> List[Dict[st
                    COUNT(*) AS runs,
                    SUM(CASE WHEN status = 'PASSED' THEN 1 ELSE 0 END) AS fully_passed_runs,
                    SUM(passed) AS passed, SUM(total) AS total,
-                   ROUND(AVG(pass_rate), 4) AS avg_run_pass_rate
+                   AVG(pass_rate) AS avg_run_pass_rate
             FROM generated_test_results
             WHERE status != 'SKIPPED' AND total > 0
             GROUP BY COALESCE(model_used, 'bilinmiyor')
@@ -901,6 +901,10 @@ def get_generated_test_pass_rates(db_path: Optional[str] = None) -> List[Dict[st
         out = []
         for r in rows:
             item = dict(r)
+            # Rounded in Python, not with SQLite ROUND(): SQLite versions round halfway values
+            # (0.66665) differently, which made the result depend on the platform.
+            if item["avg_run_pass_rate"] is not None:
+                item["avg_run_pass_rate"] = round(item["avg_run_pass_rate"], 4)
             item["pass_rate"] = round(item["passed"] / item["total"], 4) if item["total"] else None
             out.append(item)
         return out
