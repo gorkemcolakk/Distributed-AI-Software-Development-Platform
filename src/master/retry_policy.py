@@ -17,36 +17,32 @@ their own Ollama timeouts (labelled backup mode), so their failures are PERMANEN
 """
 
 import os
-import re
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from src.contracts import WorkerErrorCode
+from src.security.error_classification import (
+    ErrorKind,
+    TRANSIENT_CODES,
+    classify_task_result,
+    extract_error_code_from_message,
+    extract_error_code_from_result,
+)
 
-TRANSIENT = "TRANSIENT"
-PERMANENT = "PERMANENT"
-
-TRANSIENT_CODES = frozenset({WorkerErrorCode.TIMEOUT.value, WorkerErrorCode.UNREACHABLE.value})
-
-_CODE_PREFIX = re.compile(r"^\s*\[([A-Z_]+)\]")
+TRANSIENT = ErrorKind.TRANSIENT.value
+PERMANENT = ErrorKind.PERMANENT.value
 
 
 def failure_code(result: Any, error_message: Optional[str] = None) -> Optional[str]:
     """Structured worker error code of a failed attempt, or None if there is none."""
-    artifacts = getattr(result, "output_artifacts", None) or {}
-    contract = artifacts.get("error_contract") if isinstance(artifacts, dict) else None
-    if isinstance(contract, dict) and contract.get("error_code"):
-        return str(getattr(contract["error_code"], "value", contract["error_code"]))
-    message = error_message if error_message is not None else getattr(result, "error_message", None)
-    match = _CODE_PREFIX.match(str(message or ""))
-    if match and match.group(1) in WorkerErrorCode.__members__:
-        return match.group(1)
-    return None
+    code = extract_error_code_from_result(result)
+    if code is None and error_message is not None:
+        code = extract_error_code_from_message(error_message)
+    return code
 
 
 def classify_failure(result: Any, error_message: Optional[str] = None) -> str:
     """TRANSIENT for remote timeout / unreachable, PERMANENT for everything else."""
-    return TRANSIENT if failure_code(result, error_message) in TRANSIENT_CODES else PERMANENT
+    return classify_task_result(result, error_message).kind.value
 
 
 def _env_number(name: str, default: float) -> float:

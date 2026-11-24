@@ -305,29 +305,81 @@ def agent_endpoint(a):
     return get_agent_endpoint_url(a["id"], a.get("endpoint_url"))
 
 
-def probe_worker(endpoint_url, timeout=2.0):
-    """Uzak işçinin /health adresine bakar. Asla hata fırlatmaz.
-    Dönen: {"online": bool, "agent_status": "IDLE"/"BUSY"/..., "reason": str}"""
+def _check_worker_auth(base_url, timeout=2.0):
+    """Korumalı heartbeat ucuna hafif bir istek atarak token uyumunu doğrular."""
+    token = (os.getenv("WORKER_AUTH_TOKEN") or os.getenv("BACKEND_AUTH_TOKEN") or "").strip()
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(
+        f"{base_url}/api/v1/agents/heartbeat",
+        data=b"{}",
+        headers=headers,
+        method="POST",
+    )
     try:
-        req = urllib.request.Request(f"{endpoint_url.rstrip('/')}/health", headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status == 200, ""
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            return False, "Yanlış veya eksik WORKER_AUTH_TOKEN (HTTP 401)"
+        return True, ""
+    except Exception:
+        return True, ""
+
+
+def _normalize_role_key(agent_id: str) -> str:
+    """'agent-backend-01', 'agent-backend', 'backend-agent' -> 'backend' olarak normalize eder."""
+    s = str(agent_id or "").strip().lower()
+    for token in ("backend", "frontend", "database", "testing", "integration", "master"):
+        if token in s:
+            return token
+    return s
+
+
+def probe_worker(endpoint_url, expected_agent_id=None, timeout=2.0):
+    """Uzak işçinin /health adresine bakar; rol/port ve token uyumsuzluğunu tespit eder."""
+    base = endpoint_url.rstrip("/")
+    try:
+        req = urllib.request.Request(f"{base}/health", headers={"Accept": "application/json"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         if not isinstance(data, dict) or str(data.get("status", "")).upper() != "HEALTHY":
-            return {"online": False, "agent_status": "OFFLINE", "reason": "sağlıklı değil"}
-        return {"online": True, "agent_status": str(data.get("agent_status", "IDLE")).upper(), "reason": ""}
+            return {"online": False, "agent_status": "OFFLINE", "reason": "sağlıklı değil", "warning": ""}
+
+        actual_id = str(data.get("agent_id") or "")
+        actual_name = str(data.get("agent_name") or "")
+        actual_role = _normalize_role_key(f"{actual_id} {actual_name}")
+        expected_role = _normalize_role_key(expected_agent_id)
+        if expected_role and actual_role and actual_role != expected_role:
+            shown = actual_name or actual_id
+            warn = f"Yanlış rol/port: '{expected_agent_id}' bekleniyordu, '{shown}' ({actual_id}) yanıt verdi!"
+            return {"online": False, "agent_status": "OFFLINE", "reason": "yanlış rol/port", "warning": warn}
+
+        if data.get("token_configured") is False:
+            warn = "Worker üzerinde WORKER_AUTH_TOKEN tanımlanmamış!"
+            return {"online": False, "agent_status": "OFFLINE", "reason": "token eksik", "warning": warn}
+
+        auth_ok, auth_err = _check_worker_auth(base, timeout=timeout)
+        if not auth_ok:
+            return {"online": False, "agent_status": "OFFLINE", "reason": "yanlış token", "warning": auth_err}
+
+        return {"online": True, "agent_status": str(data.get("agent_status", "IDLE")).upper(), "reason": "", "warning": ""}
     except Exception:
-        return {"online": False, "agent_status": "OFFLINE", "reason": "bağlanılamıyor"}
+        return {"online": False, "agent_status": "OFFLINE", "reason": "bağlanılamıyor", "warning": ""}
 
 
 @st.cache_data(ttl=10, show_spinner=False)
-def probe_workers(endpoints):
-    """Birden çok uzak işçiyi paralel yoklar: {url: probe_worker sonucu}. 10 sn önbellekli."""
-    urls = list(endpoints)
-    if not urls:
+def probe_workers(endpoint_pairs):
+    """Birden çok uzak işçiyi paralel yoklar: {url: probe_worker sonucu}.
+    endpoint_pairs: ((url, expected_agent_id), ...) veya (url, ...)"""
+    items = [(p[0], p[1]) if isinstance(p, tuple) else (p, None) for p in endpoint_pairs]
+    if not items:
         return {}
     from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=len(urls)) as pool:
-        return dict(zip(urls, pool.map(probe_worker, urls)))
+    with ThreadPoolExecutor(max_workers=len(items)) as pool:
+        results = list(pool.map(lambda pair: probe_worker(pair[0], pair[1]), items))
+    return {pair[0]: res for pair, res in zip(items, results)}
 
 
 def backup_note(a):
@@ -756,12 +808,12 @@ def agent_by_name():
 
 
 def agent_status(a):
-    """Tek durum, motorun gerçekten yapacağı şeye göre: uzak işçi /health cevap vermiyorsa OFFLINE (görev almaz);
-    yerel ajan her zaman çalışır (model yoksa etiketli yedek modda), bu yüzden OFFLINE olmaz."""
+    """Tek durum, motorun gerçekten yapacağı şeye göre: uzak işçi /health cevap vermiyorsa veya
+    rol/port/token hatalıysa OFFLINE (görev almaz)."""
     url = agent_endpoint(a)
     if url:
-        probe = probe_workers((url,)).get(url)
-        if not probe["online"]:
+        probe = probe_workers(((url, a["id"]),)).get(url)
+        if not probe or not probe["online"]:
             return "OFFLINE"
         raw = state.snapshot.get(a["id"]) or probe["agent_status"]
     else:
@@ -1073,16 +1125,22 @@ CARD_SLOTS, CARD_STATUS = {}, {}
 
 
 def agent_card_html(a, ast_name):
-    """Sidebar ajan kartı; tek durum: ONLINE - IDLE, ONLINE - BUSY, OFFLINE (ya da FAILED). Modeli olmayan yerel ajanda ek not: yedek mod."""
+    """Sidebar ajan kartı; rol/port veya token uyuşmazlığı varsa kartta uyarı gösterir."""
     ast_color = STATUS_STYLE[ast_name][0]
-    label = f"ONLINE - {ast_name}" if ast_name in ("IDLE", "BUSY") else ast_name  # bağlı: ONLINE - IDLE / ONLINE - BUSY
+    label = f"ONLINE - {ast_name}" if ast_name in ("IDLE", "BUSY") else ast_name
     machine = machine_label(a) or backup_note(a)
+    url = agent_endpoint(a)
+    warn_msg = ""
+    if url:
+        probe = probe_workers(((url, a["id"]),)).get(url) or {}
+        warn_msg = probe.get("warning", "")
     return (
         f'<div class="agent-card" style="--c:{a["color"]}">'
         f'<div class="agent-name"><span class="dot"></span>{esc(a["Agent ID"])}'
         f'<span class="chip chip-cx" style="--c:{ast_color};float:right;font-size:.7em">● {label}</span></div>'
         f'<div class="agent-spec">{esc(a["Role"])} · <span style="color:#9CA3AF">Üye: {esc(a["Member"])}</span></div>'
         + (f'<div class="agent-spec" style="color:#9CA3AF">{esc(machine)}</div>' if machine else "")
+        + (f'<div class="agent-spec" style="color:#F87171;font-weight:600">⚠️ {esc(warn_msg)}</div>' if warn_msg else "")
         + skill_bar("Coding", a["Coding"]) + skill_bar("Reasoning", a["Reasoning"]) + skill_bar("Context", a["Context"])
         + f'<div class="agent-spec" style="margin-top:10px">Puanlar: {a["provenance"]} · kayıt: {esc(a["config_status"])}</div></div>')
 
@@ -1112,10 +1170,15 @@ with st.sidebar:
         unsafe_allow_html=True)
 
     st.markdown(f"### 🤖 Alt Ajan Havuzu ({len(agents_data)} Worker)")
-    _urls = tuple(u for u in (agent_endpoint(x) for x in agents_data) if u)
-    if _urls:
-        _p = probe_workers(_urls)
-        st.caption(f"🔗 Uzak işçiler: {sum(1 for u in _urls if _p[u]['online'])}/{len(_urls)} ONLINE")
+    _pairs = tuple((agent_endpoint(x), x["id"]) for x in agents_data if agent_endpoint(x))
+    _worker_warnings = []
+    if _pairs:
+        _p = probe_workers(_pairs)
+        st.caption(f"🔗 Uzak işçiler: {sum(1 for u, _ in _pairs if _p[u]['online'])}/{len(_pairs)} ONLINE")
+        for x in agents_data:
+            u = agent_endpoint(x)
+            if u and _p.get(u, {}).get("warning"):
+                _worker_warnings.append(f"**{x['name']}** (`{u}`): {_p[u]['warning']}")
     for a in agents_data:
         CARD_SLOTS[a["id"]] = st.empty()  # çalışma sırasında kart BUSY'ye döner, bitince geri döner
         CARD_STATUS[a["id"]] = agent_status(a)
@@ -1129,6 +1192,9 @@ st.markdown(
     unsafe_allow_html=True)
 st.markdown('<div class="sub-header">Gereksinimden koda: dağıtık ajanlarla görev ayrıştırma, atama ve izleme</div>',
             unsafe_allow_html=True)
+
+for _w in _worker_warnings:
+    st.error(f"🚨 Worker Yapılandırma Uyarısı — {_w}")
 
 models_now = ollama_models()
 m1, m2, m3, m4 = st.columns(4)
