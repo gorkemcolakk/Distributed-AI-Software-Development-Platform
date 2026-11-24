@@ -63,12 +63,14 @@ CATEGORY_RULES = {
     "REQUIREMENTS": "Keep it a concise FastAPI skeleton (under 45 lines) that follows the shared contract.",
     "DATABASE": ("Use SQLite 3 with only CREATE TABLE IF NOT EXISTS and CREATE INDEX statements; "
                  "no CHECK constraints, triggers or subqueries. Use the table and column names of the shared contract."),
-    "BACKEND": ("Write a concise FastAPI service (under 60 lines) with /health and the endpoints of the shared contract, "
-                "using Pydantic models with the contract's field names."),
+    "BACKEND": ("Write a concise FastAPI service (under 60 lines) with /health and every endpoint of the shared contract "
+                "(same method, path and request fields), using Pydantic models with the contract's field names; "
+                "give each model an optional id field instead of adding attributes later."),
     "FRONTEND": ("Write one concise HTML5 page that calls the shared contract's endpoints and uses its field names "
                  "in forms and lists."),
     "TESTING": ("Write 3 concise pytest tests (under 40 lines) for the backend endpoints of the shared contract, "
-                "using fastapi.testclient.TestClient."),
+                "using fastapi.testclient.TestClient. Call only endpoints listed in the contract, with its request "
+                "fields, and create test data through those endpoints."),
 }
 
 PROMPT = """You are the Master Agent of a multi-agent software team. Plan the work for the requirement below.
@@ -77,7 +79,8 @@ Return ONLY a JSON object with this shape:
 {{
   "contract": {{
     "entities": [{{"name": "Book", "table": "books", "fields": [{{"name": "id", "type": "integer"}}, {{"name": "title", "type": "text"}}]}}],
-    "endpoints": [{{"method": "GET", "path": "/books", "description": "list or search books"}}]
+    "endpoints": [{{"method": "POST", "path": "/books", "description": "add a book", "request": ["title"], "response": "Book"}},
+                  {{"method": "GET", "path": "/books", "description": "list or search books", "request": ["title"], "response": "list of Book"}}]
   }},
   "tasks": [
     {{"id": "t1", "category": "DATABASE", "title": "short title", "description": "what to build for THIS requirement", "depends_on": []}}
@@ -91,7 +94,8 @@ Rules:
 - depends_on lists ids of tasks that must finish first. FRONTEND only needs the contract, not the backend code.
   TESTING depends on BACKEND.
 - The contract is shared by every agent: 1 to 4 entities, snake_case table and field names, 3 to 8 endpoints
-  that cover every feature in the requirement.
+  that cover every feature in the requirement. Every entity users create or change has a POST (or PUT) endpoint,
+  every list or search has a GET endpoint. "request" lists the body or query field names, "response" names what comes back.
 - Descriptions name the concrete entities, fields and endpoints. No code in the JSON.
 
 Project: {title}
@@ -319,8 +323,13 @@ class RequirementsAnalyzer:
             method = str(ep.get("method") or "GET").strip().upper()
             path = str(ep.get("path") or "").strip()
             if method in ("GET", "POST", "PUT", "PATCH", "DELETE") and path.startswith("/"):
-                endpoints.append({"method": method, "path": path[:80],
-                                  "description": _short(ep.get("description"), 120)})
+                entry = {"method": method, "path": path[:80], "description": _short(ep.get("description"), 120)}
+                request = [_snake(f) for f in (ep.get("request") or []) if isinstance(f, str) and _snake(f)]
+                if request:  # S5: request/response shape so tests call what the backend really serves
+                    entry["request"] = request[:10]
+                if ep.get("response"):
+                    entry["response"] = _short(ep.get("response"), 60)
+                endpoints.append(entry)
         if not entities and not endpoints:
             return None
         return {"entities": entities[:4], "endpoints": endpoints[:10]}

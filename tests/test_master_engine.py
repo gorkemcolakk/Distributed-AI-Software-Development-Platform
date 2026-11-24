@@ -108,7 +108,8 @@ class FakeAgent(BaseAgent):
         if self.fail_on == "ALL" or task_id in self.fail_on:
             raise RuntimeError(f"Simulated failure of {self.name} on '{task_id}'")
         logs.append(f"[{self.name}] fake execution finished for '{task_id}'")
-        return {"status": "FAKE_SUCCESS", "task_id": task_id}
+        return {"status": "FAKE_SUCCESS", "task_id": task_id,
+                "files": [{"filename": f"{task_id}.py", "content": "x = 1"}]}
 
 
 def build_fake_evaluator(*agents):

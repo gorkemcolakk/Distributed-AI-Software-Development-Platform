@@ -54,7 +54,8 @@ class WorkerDouble(BaseAgent):
         self.executed.append(task_id)
         if self.fail_on == "ALL" or task_id in self.fail_on or task.get("category") in self.fail_on:
             raise RuntimeError(f"{self.error} ({self.name} / {task_id})")
-        return {"status": "DONE", "files": [dict(f) for f in self.files.get(task_id, [])]}
+        return {"status": "DONE", "files": [dict(f) for f in self.files.get(
+            task_id, [{"filename": f"{task_id}.py", "content": "x = 1"}])]}
 
 
 def make_task(task_id, category="BACKEND", deps=(), specialty="backend"):

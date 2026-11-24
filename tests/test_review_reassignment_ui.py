@@ -42,7 +42,8 @@ class Worker(BaseAgent):
         outcome = self.script.pop(0) if self.script else None
         if outcome is None:
             return TaskResult(task_id=tid, agent_id=self.agent_id, status="SUCCESS",
-                              output_artifacts={"files": [dict(f) for f in self.files.get(tid, [])]},
+                              output_artifacts={"files": [dict(f) for f in self.files.get(
+                                  tid, [{"filename": f"{tid}.py", "content": "x = 1"}])]},
                               logs=[], execution_time_seconds=0.5)
         if outcome in ("TIMEOUT", "UNREACHABLE"):
             return TaskResult(task_id=tid, agent_id=self.agent_id, status="FAILED",
