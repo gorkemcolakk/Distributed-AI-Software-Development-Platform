@@ -10,10 +10,15 @@ and attempts.model_used.
 See docs/DATA_MODEL.md for the schema.
 """
 
+import ctypes
 import json
+import logging
 import os
 import sqlite3
+import sys
 from typing import Any, Dict, Iterable, List, Optional
+
+logger = logging.getLogger(__name__)
 
 # Veritabanı dosyasını projenin ana dizinine state.db olarak kaydeder.
 # STATE_DB_PATH ortam değişkeni ile (ör. testlerde) farklı bir dosya kullanılabilir.
@@ -23,17 +28,61 @@ DB_PATH = os.environ.get("STATE_DB_PATH", DEFAULT_DB_PATH)
 # Şema sürümü: PRAGMA user_version içinde tutulur.
 # v3 (S3-04): runs.workspace_path + tasks.output_files
 # v4 (S4-04): output_files + file_conflicts tabloları, attempts.model_used
-SCHEMA_VERSION = 4
+# v5 (S4):    runs.owner_pid + ABORTED durumu (yarıda kalan RUNNING kayıtlarının kurtarılması)
+SCHEMA_VERSION = 5
+DEFAULT_STALE_RUN_TIMEOUT_SECONDS = 1800  # 30 dakika
 
 AGENT_STATUSES = ("IDLE", "BUSY", "OFFLINE", "ERROR")
 TASK_STATUSES = ("PENDING", "IN_PROGRESS", "COMPLETED", "FAILED", "UNASSIGNED", "BLOCKED")
 TERMINAL_FAILURE_STATUSES = ("FAILED", "UNASSIGNED", "BLOCKED")
-RUN_STATUSES = ("RUNNING", "COMPLETED", "PARTIALLY_COMPLETED", "FAILED")
+RUN_STATUSES = ("RUNNING", "COMPLETED", "PARTIALLY_COMPLETED", "FAILED", "ABORTED")
 REVIEW_STATUSES = ("PENDING", "APPROVED", "REVIEW_REQUIRED", "REJECTED")
 CONFLICT_TYPES = ("PATH", "SCHEMA")
 CONFLICT_RESOLUTIONS = ("RENAMED", "DEDUPLICATED", "REPORTED")
 
 EXPECTED_TABLES = ("runs", "agents", "tasks", "attempts", "output_files", "file_conflicts")
+
+
+def _stale_run_timeout() -> int:
+    raw = os.environ.get("STALE_RUN_TIMEOUT_SECONDS")
+    if raw is None or not raw.strip():
+        return DEFAULT_STALE_RUN_TIMEOUT_SECONDS
+    try:
+        return max(0, int(raw.strip()))
+    except ValueError:
+        return DEFAULT_STALE_RUN_TIMEOUT_SECONDS
+
+
+def _is_pid_alive(pid: Optional[int]) -> bool:
+    """Cross-platform check for whether an OS process with ``pid`` is still running."""
+    if not isinstance(pid, int) or pid <= 0:
+        return False
+    if os.name != "nt":
+        try:
+            os.kill(pid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        except OSError:
+            return False
+    try:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        process_query_limited = 0x1000
+        still_active = 259
+        handle = kernel32.OpenProcess(process_query_limited, False, pid)
+        if not handle:
+            return ctypes.get_last_error() == 5  # ERROR_ACCESS_DENIED -> process exists
+        try:
+            exit_code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                return False
+            return exit_code.value == still_active
+        finally:
+            kernel32.CloseHandle(handle)
+    except Exception:
+        return False
 
 
 def _sql_in(values: Iterable[str]) -> str:
@@ -74,7 +123,7 @@ def _migrate_legacy_schema(cursor: sqlite3.Cursor):
 
 # Columns added after v2. Existing databases get them through ALTER TABLE (data kept).
 _ADDED_COLUMNS = {
-    "runs": [("workspace_path", "TEXT")],
+    "runs": [("workspace_path", "TEXT"), ("owner_pid", "INTEGER")],
     "tasks": [("output_files", "TEXT DEFAULT '[]'")],
     "attempts": [("model_used", "TEXT")],
 }
@@ -88,8 +137,75 @@ def _add_missing_columns(cursor: sqlite3.Cursor):
                 cursor.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
 
 
-def init_db(db_path: Optional[str] = None, verbose: bool = True) -> str:
-    """Creates all tables idempotently (CREATE TABLE IF NOT EXISTS). Returns DB path."""
+_RUNS_TABLE_COLS = (
+    "run_id", "project_title", "requirement_id", "system_status",
+    "total_tasks", "completed_count", "failed_count", "unassigned_count",
+    "blocked_count", "workspace_path", "owner_pid", "started_at", "finished_at",
+)
+
+
+def _runs_table_ddl(table_name: str = "runs") -> str:
+    return f'''
+        CREATE TABLE IF NOT EXISTS {table_name} (
+            run_id TEXT PRIMARY KEY,
+            project_title TEXT,
+            requirement_id TEXT,
+            system_status TEXT NOT NULL DEFAULT 'RUNNING'
+                CHECK (system_status IN ({_sql_in(RUN_STATUSES)})),
+            total_tasks INTEGER DEFAULT 0,
+            completed_count INTEGER DEFAULT 0,
+            failed_count INTEGER DEFAULT 0,
+            unassigned_count INTEGER DEFAULT 0,
+            blocked_count INTEGER DEFAULT 0,
+            workspace_path TEXT,
+            owner_pid INTEGER,
+            started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            finished_at TIMESTAMP
+        )
+    '''
+
+
+def _migrate_runs_check_for_aborted(conn: sqlite3.Connection):
+    """
+    Existing v2-v4 databases have a CHECK constraint on `runs.system_status` that
+    does not include 'ABORTED'. Rebuild `runs` in-place with foreign_keys=OFF so
+    child rows in tasks/attempts/output_files/file_conflicts stay intact.
+    """
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='runs'"
+    ).fetchone()
+    if not row or not row[0]:
+        return
+    ddl = row[0]
+    if "'ABORTED'" in ddl or "CHECK" not in ddl.upper():
+        return
+
+    existing_cols = _table_columns(conn.cursor(), "runs")
+    common = [c for c in existing_cols if c in _RUNS_TABLE_COLS]
+    if not common:
+        return
+    col_list = ", ".join(common)
+
+    conn.commit()
+    conn.execute("PRAGMA foreign_keys = OFF;")
+    try:
+        conn.execute("BEGIN")
+        conn.execute("DROP TABLE IF EXISTS runs_v5_new")
+        conn.execute(_runs_table_ddl("runs_v5_new"))
+        conn.execute(f"INSERT INTO runs_v5_new ({col_list}) SELECT {col_list} FROM runs")
+        conn.execute("DROP TABLE runs")
+        conn.execute("ALTER TABLE runs_v5_new RENAME TO runs")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON;")
+
+
+def init_db(db_path: Optional[str] = None, verbose: bool = True,
+            recover_stale: bool = True) -> str:
+    """Creates all tables idempotently (CREATE TABLE IF NOT EXISTS) and recovers stale RUNNING runs."""
     path = _resolve_path(db_path)
     conn = get_connection(path)
     try:
@@ -99,23 +215,7 @@ def init_db(db_path: Optional[str] = None, verbose: bool = True) -> str:
             _migrate_legacy_schema(cursor)
 
         # Çalıştırma (Run) Tablosu: Her orchestrator çağrısı izole bir run_id alır
-        cursor.execute(f'''
-            CREATE TABLE IF NOT EXISTS runs (
-                run_id TEXT PRIMARY KEY,
-                project_title TEXT,
-                requirement_id TEXT,
-                system_status TEXT NOT NULL DEFAULT 'RUNNING'
-                    CHECK (system_status IN ({_sql_in(RUN_STATUSES)})),
-                total_tasks INTEGER DEFAULT 0,
-                completed_count INTEGER DEFAULT 0,
-                failed_count INTEGER DEFAULT 0,
-                unassigned_count INTEGER DEFAULT 0,
-                blocked_count INTEGER DEFAULT 0,
-                workspace_path TEXT,
-                started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                finished_at TIMESTAMP
-            )
-        ''')
+        cursor.execute(_runs_table_ddl("runs"))
 
         # Ajan Profilleri Tablosu (Yetenek skorları + anlık durum)
         cursor.execute(f'''
@@ -242,13 +342,20 @@ def init_db(db_path: Optional[str] = None, verbose: bool = True) -> str:
         ''')
 
         _add_missing_columns(cursor)
+        _migrate_runs_check_for_aborted(conn)
         cursor.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         conn.commit()
     finally:
         conn.close()
 
+    recovered: List[Dict[str, Any]] = []
+    if recover_stale:
+        recovered = recover_stale_runs(db_path=path)
+
     if verbose:
         print(f"SQLite veritabanı başarıyla başlatıldı: {path}")
+        if recovered:
+            print(f"  [KURTARILDI] {len(recovered)} adet yarıda kalan RUNNING kaydı kapatıldı.")
     return path
 
 
@@ -332,13 +439,15 @@ def upsert_agents(agents: Iterable[Any], db_path: Optional[str] = None):
 
 def create_run(run_id: str, project_title: str, requirement_id: Optional[str] = None,
                total_tasks: int = 0, workspace_path: Optional[str] = None,
-               db_path: Optional[str] = None):
+               owner_pid: Optional[int] = None, db_path: Optional[str] = None):
+    pid = os.getpid() if owner_pid is None else owner_pid
     conn = get_connection(db_path)
     try:
         conn.execute('''
-            INSERT INTO runs (run_id, project_title, requirement_id, total_tasks, workspace_path, system_status)
-            VALUES (?, ?, ?, ?, ?, 'RUNNING')
-        ''', (run_id, project_title, requirement_id, total_tasks, workspace_path))
+            INSERT INTO runs (run_id, project_title, requirement_id, total_tasks, workspace_path,
+                              owner_pid, system_status)
+            VALUES (?, ?, ?, ?, ?, ?, 'RUNNING')
+        ''', (run_id, project_title, requirement_id, total_tasks, workspace_path, pid))
         conn.commit()
     finally:
         conn.close()
@@ -498,9 +607,172 @@ def finish_run(run_id: str, system_status: str, status_counts: Dict[str, int],
         conn.close()
 
 
+def _close_interrupted_run(conn: sqlite3.Connection, run_id: str,
+                           status_counts: Optional[Dict[str, int]] = None,
+                           interrupt_reason: str = "Çalıştırma yarıda kesildi") -> str:
+    """
+    Transitions any stuck PENDING/IN_PROGRESS tasks of ``run_id`` to FAILED,
+    tallies final counts, and closes the ``RUNNING`` row as ``ABORTED``
+    (never left RUNNING and never silently COMPLETED). Caller commits.
+    """
+    task_cols = set(_table_columns(conn.cursor(), "tasks"))
+    if {"run_id", "status", "agent_result_status", "reason"} <= task_cols:
+        conn.execute('''
+            UPDATE tasks
+            SET status = 'FAILED',
+                agent_result_status = COALESCE(agent_result_status, 'FAILED'),
+                reason = COALESCE(NULLIF(reason, ''), ?),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE run_id = ? AND status IN ('PENDING', 'IN_PROGRESS')
+        ''', (interrupt_reason, run_id))
+
+    if status_counts is None:
+        counts = {"COMPLETED": 0, "FAILED": 0, "UNASSIGNED": 0, "BLOCKED": 0}
+        if {"run_id", "status"} <= task_cols:
+            for st, cnt in conn.execute(
+                "SELECT status, COUNT(*) FROM tasks WHERE run_id = ? GROUP BY status",
+                (run_id,),
+            ).fetchall():
+                if st in counts:
+                    counts[st] = cnt
+    else:
+        counts = {
+            "COMPLETED": int(status_counts.get("COMPLETED", 0)),
+            "FAILED": int(status_counts.get("FAILED", 0)),
+            "UNASSIGNED": int(status_counts.get("UNASSIGNED", 0)),
+            "BLOCKED": int(status_counts.get("BLOCKED", 0)),
+        }
+
+    final_status = "ABORTED"
+    conn.execute('''
+        UPDATE runs
+        SET system_status = ?,
+            completed_count = ?,
+            failed_count = ?,
+            unassigned_count = ?,
+            blocked_count = ?,
+            finished_at = CURRENT_TIMESTAMP
+        WHERE run_id = ? AND system_status = 'RUNNING'
+    ''', (
+        final_status,
+        counts["COMPLETED"],
+        counts["FAILED"],
+        counts["UNASSIGNED"],
+        counts["BLOCKED"],
+        run_id,
+    ))
+    return final_status
+
+
+def mark_run_aborted(run_id: str, status_counts: Optional[Dict[str, int]] = None,
+                     reason: str = "Çalıştırma yarıda kesildi",
+                     db_path: Optional[str] = None) -> Optional[str]:
+    """
+    Safely closes a single run that is still ``RUNNING`` (e.g. from a ``finally`` block
+    on KeyboardInterrupt, Streamlit stop, or unexpected exception). No-op if already finished.
+    """
+    conn = get_connection(db_path)
+    try:
+        row = conn.execute(
+            "SELECT system_status FROM runs WHERE run_id = ?", (run_id,)
+        ).fetchone()
+        if not row:
+            return None
+        if row["system_status"] != "RUNNING":
+            return row["system_status"]
+        final_status = _close_interrupted_run(conn, run_id, status_counts=status_counts,
+                                              interrupt_reason=reason)
+        conn.commit()
+        return final_status
+    finally:
+        conn.close()
+
+
+def recover_stale_runs(db_path: Optional[str] = None,
+                       max_age_seconds: Optional[int] = None,
+                       check_pid: bool = True,
+                       exclude_run_ids: Optional[Iterable[str]] = None) -> List[Dict[str, Any]]:
+    """
+    Finds runs left stuck in ``RUNNING`` and transitions them to ``ABORTED``
+    with ``finished_at`` set and accurate task counts.
+
+    A ``RUNNING`` row is recovered when:
+    - ``max_age_seconds == 0`` (explicit immediate cleanup), OR
+    - ``check_pid`` is True, ``owner_pid`` is set, and that process is no longer alive, OR
+    - ``started_at`` is older than ``max_age_seconds`` (default: 1800s / 30 min).
+    """
+    timeout = _stale_run_timeout() if max_age_seconds is None else max(0, int(max_age_seconds))
+    excluded = set(exclude_run_ids or ())
+    conn = get_connection(db_path)
+    recovered: List[Dict[str, Any]] = []
+    try:
+        run_cols = set(_table_columns(conn.cursor(), "runs"))
+        required = {"run_id", "system_status", "started_at", "finished_at",
+                    "completed_count", "failed_count", "unassigned_count", "blocked_count"}
+        if not required <= run_cols:
+            return []
+
+        pid_col = "owner_pid" if "owner_pid" in run_cols else "NULL AS owner_pid"
+        rows = conn.execute(f'''
+            SELECT run_id, {pid_col}, started_at,
+                   CAST(strftime('%s', 'now') AS INTEGER) - CAST(strftime('%s', started_at) AS INTEGER) AS age_seconds
+            FROM runs
+            WHERE system_status = 'RUNNING'
+        ''').fetchall()
+
+        for row in rows:
+            rid = row["run_id"]
+            if rid in excluded:
+                continue
+            pid = row["owner_pid"]
+            age = row["age_seconds"]
+            reason = None
+
+            if timeout == 0:
+                reason = "force_recovery"
+            elif check_pid and pid is not None and not _is_pid_alive(pid):
+                reason = f"dead_pid:{pid}"
+            elif age is not None and age >= timeout:
+                reason = f"timeout:{age}s"
+
+            if reason is None:
+                continue
+
+            interrupt_msg = f"Çalıştırma yarıda kesildi (otomatik kurtarma: {reason})"
+            new_status = _close_interrupted_run(conn, rid, status_counts=None,
+                                                interrupt_reason=interrupt_msg)
+            recovered.append({
+                "run_id": rid,
+                "previous_status": "RUNNING",
+                "new_status": new_status,
+                "reason": reason,
+                "owner_pid": pid,
+                "age_seconds": age,
+            })
+
+        if recovered:
+            conn.commit()
+            logger.warning("Recovered %d stale RUNNING run(s): %s",
+                           len(recovered), [r["run_id"] for r in recovered])
+        return recovered
+    finally:
+        conn.close()
+
+
 # ---------------------------------------------------------------------------
 # Read helpers
 # ---------------------------------------------------------------------------
+
+def get_running_runs(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Returns all runs currently marked as RUNNING (newest first)."""
+    conn = get_connection(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM runs WHERE system_status = 'RUNNING' ORDER BY started_at DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
 
 def get_run(run_id: str, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
     conn = get_connection(db_path)
@@ -558,6 +830,9 @@ def get_conflicts_for_run(run_id: str, db_path: Optional[str] = None) -> List[Di
 
 if __name__ == "__main__":
     db_file = init_db()
+    if "--recover-all" in sys.argv[1:]:
+        forced = recover_stale_runs(db_path=db_file, max_age_seconds=0)
+        print(f"  [ZORLA KURTARILDI] {len(forced)} adet RUNNING kaydı kapatıldı.")
     status = verify_schema(db_file)
     for table, ok in status.items():
         print(f"  [{'OK' if ok else 'MISSING'}] {table}")

@@ -10,6 +10,9 @@ S3-04 (Mahmut Karaalioğlu):
 - ATTACH / DETACH / VACUUM / PRAGMA / load_extension are refused, so a model
   reply can never create or touch a file on disk while being validated.
 - Broken model output raises ModelOutputError -> BaseAgent marks the task FAILED.
+- CHECK constraints are rejected during validation (matching analyzer rules for small
+  models); on any SQL validation failure, the agent automatically re-requests a
+  corrected schema with the exact error feedback (up to ``max_validation_retries``).
 - When Ollama is unreachable the agent returns a clearly labelled fallback schema
   (FALLBACK_ENABLED=true); with fallback disabled the task fails.
 - The agent never writes to disk itself: the generated .sql file is returned in
@@ -51,6 +54,19 @@ def _env_flag(name: str, default: bool) -> bool:
     return value.strip().lower() in ("1", "true", "yes", "on")
 
 
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    try:
+        return max(0, int(value.strip()))
+    except ValueError:
+        return default
+
+
+DEFAULT_MAX_VALIDATION_RETRIES = 2
+
+
 def _is_ollama_reachable(host: str, timeout: float = 1.0) -> bool:
     """Quick TCP check so an offline Ollama fails fast instead of waiting for the full timeout."""
     try:
@@ -65,7 +81,12 @@ def _is_ollama_reachable(host: str, timeout: float = 1.0) -> bool:
 
 _SQL_BLOCK = re.compile(r"```[ \t]*(?:sql|sqlite|postgresql|postgres)?[ \t]*\r?\n(.*?)```", re.DOTALL | re.IGNORECASE)
 _FORBIDDEN_SQL = re.compile(r"\b(ATTACH|DETACH|VACUUM|PRAGMA|LOAD_EXTENSION)\b", re.IGNORECASE)
+_CHECK_CONSTRAINT = re.compile(r"\bCHECK\s*\(", re.IGNORECASE)
 _SQL_COMMENT = re.compile(r"--[^\n]*|/\*.*?\*/", re.DOTALL)
+_SQL_NON_CODE = re.compile(
+    r"--[^\n]*|/\*.*?\*/|'(?:''|[^'])*'|\"(?:\"\"|[^\"])*\"",
+    re.DOTALL,
+)
 SQL_VALIDATION_TIMEOUT_SECONDS = 5.0
 
 
@@ -87,18 +108,21 @@ def _deny_dangerous(action, arg1, arg2, db_name, trigger):
     return sqlite3.SQLITE_OK
 
 
-def validate_sql_schema(sql: str) -> Dict[str, List[str]]:
+def validate_sql_schema(sql: str, *, allow_check: bool = False) -> Dict[str, List[str]]:
     """
     Executes the script in an isolated in-memory SQLite database and returns the
     objects it created: {"tables": [...], "indexes": [...], "views": [...], "triggers": [...]}.
-    Raises ModelOutputError if the script is not valid SQL or creates no table.
+    Raises ModelOutputError if the script is not valid SQL, violates rules (e.g. forbidden
+    statements or CHECK constraints when ``allow_check=False``), or creates no table.
     """
     if not sql or not sql.strip():
         raise ModelOutputError("SQL çıktısı boş.")
-    without_comments = _SQL_COMMENT.sub(" ", sql)
-    forbidden = _FORBIDDEN_SQL.search(without_comments)
+    code_only = _SQL_NON_CODE.sub(" ", sql)
+    forbidden = _FORBIDDEN_SQL.search(code_only)
     if forbidden:
         raise ModelOutputError(f"SQL çıktısında izin verilmeyen ifade var: {forbidden.group(1).upper()}")
+    if not allow_check and _CHECK_CONSTRAINT.search(code_only):
+        raise ModelOutputError("SQL çıktısında yasaklanan CHECK kısıtı kullanılmış (CHECK kullanma kuralı ihlali).")
 
     conn = sqlite3.connect(":memory:")
     deadline = time.monotonic() + SQL_VALIDATION_TIMEOUT_SECONDS
@@ -142,7 +166,8 @@ class DatabaseAgent(BaseAgent):
     def __init__(self, agent_id: str = None, name: str = "Database Schema Agent", model_name: str = "llama3.2:3b",
                  use_ollama: Optional[bool] = None, ollama_host: Optional[str] = None,
                  timeout: Optional[float] = None, fallback_enabled: Optional[bool] = None,
-                 llm_client: Optional[Callable[[str], str]] = None):
+                 llm_client: Optional[Callable[[str], str]] = None,
+                 max_validation_retries: Optional[int] = None):
         profile = AgentCapabilityProfile(
             coding_score=94.0,
             reasoning_score=90.0,
@@ -154,6 +179,10 @@ class DatabaseAgent(BaseAgent):
         self.ollama_host = (ollama_host or os.getenv("OLLAMA_HOST", "http://localhost:11434")).rstrip("/")
         self.timeout = float(timeout if timeout is not None else os.getenv("OLLAMA_TIMEOUT", "180"))
         self.fallback_enabled = _env_flag("FALLBACK_ENABLED", True) if fallback_enabled is None else fallback_enabled
+        self.max_validation_retries = (
+            _env_int("DATABASE_AGENT_MAX_VALIDATION_RETRIES", DEFAULT_MAX_VALIDATION_RETRIES)
+            if max_validation_retries is None else max(0, int(max_validation_retries))
+        )
         # Injectable for tests; defaults to a real HTTP call to Ollama
         self.llm_client = llm_client or self._call_ollama
 
@@ -171,23 +200,45 @@ class DatabaseAgent(BaseAgent):
                                       generation_mode="template", model_used=None)
 
         prompt = self.build_prompt(task)
-        logs.append(f"[{self.name}] Sending schema prompt to local Ollama model '{self.model_name}' at {self.ollama_host}...")
-        try:
-            raw = self.llm_client(prompt)
-        except OllamaCallError as exc:
-            if not self.fallback_enabled:
-                logs.append(f"[{self.name}] Ollama call failed and fallback is disabled: {exc}")
-                raise
-            logs.append(f"[{self.name}] [FALLBACK] Ollama unavailable ({exc.error_type}): {exc}. Using labelled fallback schema.")
-            return self._build_result(task, self._fallback_schema(task), filename,
-                                      generation_mode="fallback", model_used=None, fallback_reason=exc.error_type)
+        total_attempts = 1 + self.max_validation_retries
 
-        sql = extract_sql(raw)
-        objects = validate_sql_schema(sql)
-        logs.append(f"[{self.name}] Model SQL validated in in-memory SQLite: "
-                    f"{len(objects['tables'])} tables, {len(objects['indexes'])} indexes.")
-        return self._build_result(task, sql, filename, generation_mode="ollama",
-                                  model_used=self.model_name, objects=objects)
+        for attempt in range(1, total_attempts + 1):
+            if attempt == 1:
+                logs.append(f"[{self.name}] Sending schema prompt to local Ollama model '{self.model_name}' at {self.ollama_host}...")
+            try:
+                raw = self.llm_client(prompt)
+            except OllamaCallError as exc:
+                if not self.fallback_enabled:
+                    logs.append(f"[{self.name}] Ollama call failed and fallback is disabled: {exc}")
+                    raise
+                logs.append(f"[{self.name}] [FALLBACK] Ollama unavailable ({exc.error_type}): {exc}. Using labelled fallback schema.")
+                return self._build_result(task, self._fallback_schema(task), filename,
+                                          generation_mode="fallback", model_used=None, fallback_reason=exc.error_type)
+
+            sql = None
+            try:
+                sql = extract_sql(raw)
+                objects = validate_sql_schema(sql, allow_check=False)
+            except ModelOutputError as exc:
+                if attempt < total_attempts:
+                    logs.append(
+                        f"[{self.name}] SQL doğrulama hatası (deneme {attempt}/{total_attempts}): {exc} "
+                        f"Düzeltilmiş SQL '{self.model_name}' modelinden yeniden isteniyor..."
+                    )
+                    prompt = self.build_retry_prompt(task, sql or raw or "", str(exc))
+                    continue
+                logs.append(f"[{self.name}] SQL doğrulaması {total_attempts} deneme sonunda başarısız oldu: {exc}")
+                raise
+
+            logs.append(
+                f"[{self.name}] Model SQL validated in in-memory SQLite "
+                f"(attempt {attempt}/{total_attempts}): {len(objects['tables'])} tables, {len(objects['indexes'])} indexes."
+            )
+            return self._build_result(task, sql, filename, generation_mode="ollama",
+                                      model_used=self.model_name, objects=objects,
+                                      validation_retries=attempt - 1)
+
+        raise ModelOutputError("SQL üretimi tamamlanamadı.")
 
     # ------------------------------------------------------------------
     # Prompt / result helpers
@@ -200,19 +251,34 @@ class DatabaseAgent(BaseAgent):
             "Rules:\n"
             "- Reply with exactly one ```sql code block and nothing else.\n"
             "- The SQL must run unchanged on SQLite 3 (no SERIAL, no ENUM, no schema names).\n"
-            "- Use CREATE TABLE IF NOT EXISTS with INTEGER PRIMARY KEY, NOT NULL, UNIQUE,\n"
-            "  CHECK and FOREIGN KEY ... REFERENCES constraints where they make sense.\n"
-            "- Add CREATE INDEX statements for foreign keys and frequently searched columns.\n"
-            "- Do not use PRAGMA, ATTACH, DETACH or VACUUM.\n\n"
+            "- Use ONLY CREATE TABLE IF NOT EXISTS and CREATE INDEX IF NOT EXISTS statements,\n"
+            "  with INTEGER PRIMARY KEY, NOT NULL, UNIQUE, and FOREIGN KEY ... REFERENCES constraints.\n"
+            "- Do NOT use CHECK constraints, triggers, subqueries, PRAGMA, ATTACH, DETACH, or VACUUM.\n"
+            "- Add CREATE INDEX IF NOT EXISTS statements for foreign keys and frequently searched columns.\n"
+            "- If project context includes a shared_contract, use its exact table and column names.\n\n"
             f"Task title: {task.get('title', '')}\n"
             f"Task description: {task.get('description', '')}\n"
             f"Project context:\n{context_text}\n"
         )
 
+    def build_retry_prompt(self, task: Dict[str, Any], previous_output: str, error: str) -> str:
+        """Builds a follow-up prompt asking the model to fix a validation failure (e.g. CHECK constraint)."""
+        snippet = (previous_output or "").strip()[:2500]
+        return (
+            f"{self.build_prompt(task)}\n"
+            "IMPORTANT — Your previous SQL reply was REJECTED during validation:\n"
+            f"- Rejection reason: {error}\n"
+            "- Rewrite the complete corrected SQLite 3 schema inside exactly one ```sql block.\n"
+            "- Do NOT include ANY CHECK(...) constraints anywhere in the SQL.\n"
+            "- Use only simple CREATE TABLE IF NOT EXISTS and CREATE INDEX IF NOT EXISTS statements.\n"
+            f"Previous rejected output:\n```sql\n{snippet}\n```\n"
+        )
+
     def _build_result(self, task: Dict[str, Any], sql: str, filename: str, generation_mode: str,
                       model_used: Optional[str], objects: Optional[Dict[str, List[str]]] = None,
-                      fallback_reason: Optional[str] = None) -> Dict[str, Any]:
-        objects = objects or validate_sql_schema(sql)
+                      fallback_reason: Optional[str] = None,
+                      validation_retries: int = 0) -> Dict[str, Any]:
+        objects = objects or validate_sql_schema(sql, allow_check=(generation_mode != "ollama"))
         result = {
             "files": [{"filename": filename, "content": sql.rstrip() + "\n", "language": "sql"}],
             "generated_sql": sql,
@@ -222,6 +288,7 @@ class DatabaseAgent(BaseAgent):
             "migration_version": f"001_{_safe_slug(task.get('task_id', 'schema'))}",
             "model_used": model_used,
             "generation_mode": generation_mode,
+            "validation_retries": validation_retries,
             "status": "DATABASE_SCHEMA_GENERATED" if generation_mode == "ollama" else "DATABASE_SCHEMA_FALLBACK",
         }
         if fallback_reason:
