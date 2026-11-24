@@ -286,7 +286,27 @@ class MasterOrchestrator:
            into workspaces/{run_id}/ (unsafe paths fail the attempt)
         7. Apply deadlock protection for unsatisfied dependencies
         8. Determine dynamic system_status and return comprehensive execution report
+
+        If execution is interrupted after create_run (exception, KeyboardInterrupt,
+        or Streamlit StopException), the finally guard closes the RUNNING row as
+        ABORTED so no orphaned RUNNING record stays in SQLite.
         """
+        run_state: Dict[str, Any] = {"run_id": None, "finished": False}
+        try:
+            return self._execute_requirement(requirement_text, project_title, run_state)
+        finally:
+            if run_state["run_id"] and not run_state["finished"]:
+                abort_counts = {
+                    "COMPLETED": len(self.scheduler.completed_tasks),
+                    "FAILED": len(self.scheduler.failed_tasks),
+                    "UNASSIGNED": len(self.scheduler.unassigned_tasks),
+                    "BLOCKED": len(self.scheduler.blocked_tasks),
+                }
+                self._db(db_manager.upsert_agents, self.evaluator.registered_agents)
+                self._db(db_manager.mark_run_aborted, run_state["run_id"], status_counts=abort_counts)
+
+    def _execute_requirement(self, requirement_text: str, project_title: str,
+                             run_state: Dict[str, Any]) -> Dict[str, Any]:
         requirement_text = validate_requirement_text(requirement_text)
         self._reset_error_agents()
         run_id = self.scheduler.reset()
@@ -323,6 +343,7 @@ class MasterOrchestrator:
         self._db(db_manager.create_run, run_id, project_title,
                  requirement_id=decomposition["requirement_id"], total_tasks=len(tasks),
                  workspace_path=str(workspace.path) if workspace else None)
+        run_state["run_id"] = run_id
 
         # Pre-execution DAG rejection: these tasks are never handed to an agent
         for task in tasks:
@@ -623,6 +644,7 @@ class MasterOrchestrator:
         }
         self._db(db_manager.upsert_agents, self.evaluator.registered_agents)
         self._db(db_manager.finish_run, run_id, system_status, status_counts)
+        run_state["finished"] = True
 
         return {
             "contract_version": CONTRACT_VERSION,

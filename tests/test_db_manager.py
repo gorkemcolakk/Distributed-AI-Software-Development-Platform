@@ -253,15 +253,160 @@ class TestDbManager(unittest.TestCase):
 
         db_manager.init_db(self.db_path, verbose=False)
         conn = sqlite3.connect(self.db_path)
+        run_cols = {r[1] for r in conn.execute("PRAGMA table_info(runs)")}
         attempt_cols = {r[1] for r in conn.execute("PRAGMA table_info(attempts)")}
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         version = conn.execute("PRAGMA user_version").fetchone()[0]
         conn.close()
 
+        self.assertIn("owner_pid", run_cols)
         self.assertIn("model_used", attempt_cols)
         self.assertIn("output_files", tables)
         self.assertIn("file_conflicts", tables)
-        self.assertEqual(version, 4)
+        self.assertEqual(version, db_manager.SCHEMA_VERSION)
+
+    # --- Stale / Interrupted RUNNING recovery -----------------------------
+    def test_recover_stale_runs_closes_dead_pid_and_keeps_live_run(self):
+        db_manager.init_db(self.db_path, verbose=False)
+        db_manager.create_run("run-dead", "Crashed Run", total_tasks=5, owner_pid=99999999, db_path=self.db_path)
+        db_manager.create_run("run-live", "Active Run", total_tasks=5, owner_pid=os.getpid(), db_path=self.db_path)
+
+        # Calling init_db again automatically recovers the dead-PID run without touching the live one
+        db_manager.init_db(self.db_path, verbose=False)
+
+        dead = db_manager.get_run("run-dead", self.db_path)
+        live = db_manager.get_run("run-live", self.db_path)
+        self.assertEqual(dead["system_status"], "ABORTED")
+        self.assertIsNotNone(dead["finished_at"])
+        self.assertEqual(live["system_status"], "RUNNING")
+        self.assertIsNone(live["finished_at"])
+
+    def test_recover_stale_runs_closes_timed_out_legacy_run_and_in_progress_tasks(self):
+        db_manager.init_db(self.db_path, verbose=False)
+        conn = db_manager.get_connection(self.db_path)
+        conn.execute(
+            "INSERT INTO runs (run_id, project_title, total_tasks, owner_pid, system_status, started_at) "
+            "VALUES ('run-old', 'Legacy Stuck', 3, NULL, 'RUNNING', datetime('now', '-2 hours'))"
+        )
+        conn.execute(
+            "INSERT INTO tasks (run_id, task_id, title, status, agent_result_status, assigned_agent_name) "
+            "VALUES ('run-old', 't1', 'DB', 'COMPLETED', 'SUCCESS', 'Database Agent')"
+        )
+        conn.execute(
+            "INSERT INTO tasks (run_id, task_id, title, status) "
+            "VALUES ('run-old', 't2', 'API', 'IN_PROGRESS')"
+        )
+        conn.commit()
+        conn.close()
+
+        recovered = db_manager.recover_stale_runs(db_path=self.db_path, max_age_seconds=1800)
+        self.assertEqual(len(recovered), 1)
+        self.assertEqual(recovered[0]["run_id"], "run-old")
+        self.assertEqual(recovered[0]["new_status"], "ABORTED")
+
+        run = db_manager.get_run("run-old", self.db_path)
+        self.assertEqual(run["system_status"], "ABORTED")
+        self.assertEqual(run["completed_count"], 1)
+        self.assertEqual(run["failed_count"], 1)
+        self.assertIsNotNone(run["finished_at"])
+
+        tasks = {t["task_id"]: t for t in db_manager.get_tasks_for_run("run-old", self.db_path)}
+        self.assertEqual(tasks["t1"]["status"], "COMPLETED")
+        self.assertEqual(tasks["t2"]["status"], "FAILED")
+        self.assertIn("yarıda kesildi", tasks["t2"]["reason"])
+
+    def test_v4_database_migrates_check_constraint_to_allow_aborted_without_losing_tasks(self):
+        # Simulate an existing v4 DB whose runs CHECK constraint did not include ABORTED
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("PRAGMA foreign_keys = ON;")
+        conn.execute("""
+            CREATE TABLE runs (
+                run_id TEXT PRIMARY KEY,
+                project_title TEXT,
+                requirement_id TEXT,
+                system_status TEXT NOT NULL DEFAULT 'RUNNING'
+                    CHECK (system_status IN ('RUNNING', 'COMPLETED', 'PARTIALLY_COMPLETED', 'FAILED')),
+                total_tasks INTEGER DEFAULT 0,
+                completed_count INTEGER DEFAULT 0,
+                failed_count INTEGER DEFAULT 0,
+                unassigned_count INTEGER DEFAULT 0,
+                blocked_count INTEGER DEFAULT 0,
+                workspace_path TEXT,
+                started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                finished_at TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                task_id TEXT NOT NULL,
+                title TEXT,
+                status TEXT NOT NULL DEFAULT 'PENDING',
+                agent_result_status TEXT,
+                reason TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (run_id, task_id),
+                FOREIGN KEY (run_id) REFERENCES runs (run_id) ON DELETE CASCADE
+            )
+        """)
+        conn.execute(
+            "INSERT INTO runs (run_id, project_title, total_tasks, system_status, started_at) "
+            "VALUES ('run-v4-stuck', 'Old v4 Run', 1, 'RUNNING', datetime('now', '-3 hours'))"
+        )
+        conn.execute(
+            "INSERT INTO tasks (run_id, task_id, title, status, agent_result_status) "
+            "VALUES ('run-v4-stuck', 't1', 'DB', 'COMPLETED', 'SUCCESS')"
+        )
+        conn.execute("PRAGMA user_version = 4")
+        conn.commit()
+        conn.close()
+
+        db_manager.init_db(self.db_path, verbose=False)
+
+        run = db_manager.get_run("run-v4-stuck", self.db_path)
+        self.assertEqual(run["system_status"], "ABORTED")
+        self.assertEqual(run["completed_count"], 1)
+        self.assertIsNotNone(run["finished_at"])
+        tasks = db_manager.get_tasks_for_run("run-v4-stuck", self.db_path)
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0]["task_id"], "t1")
+
+    def test_mark_run_aborted_is_noop_for_finished_run(self):
+        db_manager.init_db(self.db_path, verbose=False)
+        db_manager.create_run("run-done", "Done", total_tasks=1, db_path=self.db_path)
+        db_manager.finish_run("run-done", "COMPLETED", {"COMPLETED": 1}, db_path=self.db_path)
+
+        status = db_manager.mark_run_aborted("run-done", db_path=self.db_path)
+        self.assertEqual(status, "COMPLETED")
+        self.assertEqual(db_manager.get_run("run-done", self.db_path)["system_status"], "COMPLETED")
+
+    def test_orchestrator_aborted_mid_run_never_leaves_running_record(self):
+        class InterruptingAgent(BaseAgent):
+            def __init__(self):
+                super().__init__(
+                    agent_id="agent-interrupt",
+                    name="Interrupting Agent",
+                    model_name="qwen2.5-coder:7b",
+                    capability_profile=AgentCapabilityProfile(95, 95, 95, ["architecture"]),
+                )
+
+            def _process(self, task, logs):
+                raise KeyboardInterrupt("user stopped execution")
+
+        evaluator = CapabilityEvaluator([InterruptingAgent()])
+        orch = MasterOrchestrator(evaluator=evaluator, db_path=self.db_path)
+
+        with self.assertRaises(KeyboardInterrupt):
+            orch.process_requirement("Interrupted requirement", "Interrupted Project")
+
+        self.assertEqual(db_manager.get_running_runs(self.db_path), [])
+        conn = db_manager.get_connection(self.db_path)
+        rows = conn.execute("SELECT run_id, system_status, finished_at FROM runs").fetchall()
+        conn.close()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["system_status"], "ABORTED")
+        self.assertIsNotNone(rows[0]["finished_at"])
 
 
 if __name__ == "__main__":

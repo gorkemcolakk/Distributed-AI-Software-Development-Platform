@@ -118,6 +118,35 @@ class TestSqlExtractionAndValidation(unittest.TestCase):
                     validate_sql_schema(payload)
                 self.assertIn("izin verilmeyen ifade", str(ctx.exception).lower())
 
+    def test_validate_rejects_check_constraints_by_default(self):
+        check_payloads = [
+            "CREATE TABLE orders (id INTEGER PRIMARY KEY, status TEXT CHECK (status IN ('open', 'closed')));",
+            "CREATE TABLE items (id INTEGER PRIMARY KEY, price REAL, CONSTRAINT chk_p CHECK(price > 0));",
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, age INTEGER CHECK\n  (age >= 18));",
+            "CREATE TABLE broken (id INTEGER PRIMARY KEY, status TEXT CHECK (status IN ('a', 'b') NOT NULL);",
+        ]
+        for payload in check_payloads:
+            with self.subTest(payload=payload):
+                with self.assertRaises(ModelOutputError) as ctx:
+                    validate_sql_schema(payload)
+                self.assertIn("CHECK", str(ctx.exception))
+
+    def test_validate_allows_check_in_identifiers_comments_strings_and_opt_in(self):
+        safe_sql = """
+        -- Do NOT use CHECK (x > 0) here
+        CREATE TABLE IF NOT EXISTS bookings (
+            id INTEGER PRIMARY KEY,
+            check_in_date TEXT NOT NULL,
+            note TEXT DEFAULT 'check(ok)'
+        );
+        """
+        objs = validate_sql_schema(safe_sql)
+        self.assertEqual(objs["tables"], ["bookings"])
+
+        with_check = "CREATE TABLE t (id INTEGER PRIMARY KEY, s TEXT CHECK (s IN ('a', 'b')));"
+        objs_allowed = validate_sql_schema(with_check, allow_check=True)
+        self.assertEqual(objs_allowed["tables"], ["t"])
+
 
 class TestDatabaseAgentExecution(unittest.TestCase):
 
@@ -182,6 +211,63 @@ class TestDatabaseAgentExecution(unittest.TestCase):
         self.assertEqual(result.status, "SUCCESS")
         self.assertEqual(result.output_artifacts["generation_mode"], "template")
         self.assertIn("users", result.output_artifacts["tables_designed"])
+
+    def test_build_prompt_explicitly_forbids_check_constraints(self):
+        agent = DatabaseAgent(use_ollama=False)
+        prompt = agent.build_prompt(SAMPLE_DB_TASK)
+        self.assertIn("Do NOT use CHECK constraints", prompt)
+        self.assertNotIn("CHECK and FOREIGN KEY", prompt)
+
+    def test_check_violation_is_caught_and_retried_until_clean(self):
+        bad_with_check = """```sql
+CREATE TABLE IF NOT EXISTS orders (
+    id INTEGER PRIMARY KEY,
+    status TEXT NOT NULL CHECK (status IN ('open', 'closed'))
+);
+```"""
+        replies = iter([bad_with_check, VALID_SQL_REPLY])
+        calls = []
+
+        def sequence_client(prompt: str) -> str:
+            calls.append(prompt)
+            return next(replies)
+
+        agent = DatabaseAgent(use_ollama=True, llm_client=sequence_client, max_validation_retries=2)
+        result = agent.execute_task(SAMPLE_DB_TASK)
+
+        self.assertEqual(result.status, "SUCCESS")
+        self.assertEqual(len(calls), 2)
+        self.assertIn("CHECK", calls[1])
+        self.assertIn("orders", calls[1])
+        self.assertEqual(result.output_artifacts["validation_retries"], 1)
+        self.assertNotIn("CHECK", result.output_artifacts["generated_sql"].upper())
+        self.assertTrue(any("CHECK" in line for line in result.logs))
+
+    def test_check_violation_fails_after_exhausting_retries(self):
+        always_check = fixed_llm_reply(
+            "```sql\nCREATE TABLE items (id INTEGER PRIMARY KEY, qty INTEGER CHECK (qty > 0));\n```"
+        )
+        agent = DatabaseAgent(use_ollama=True, llm_client=always_check, max_validation_retries=2)
+        result = agent.execute_task(SAMPLE_DB_TASK)
+
+        self.assertEqual(result.status, "FAILED")
+        self.assertEqual(len(always_check.calls), 3)
+        self.assertIn("CHECK", result.error_message)
+
+    def test_syntax_error_is_caught_and_retried_until_valid(self):
+        replies = iter(["```sql\nCREATE TABLE broken (id INTEGER PRIMARY\n```", VALID_SQL_REPLY])
+        calls = []
+
+        def sequence_client(prompt: str) -> str:
+            calls.append(prompt)
+            return next(replies)
+
+        agent = DatabaseAgent(use_ollama=True, llm_client=sequence_client, max_validation_retries=1)
+        result = agent.execute_task(SAMPLE_DB_TASK)
+
+        self.assertEqual(result.status, "SUCCESS")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(result.output_artifacts["validation_retries"], 1)
 
 
 if __name__ == "__main__":
