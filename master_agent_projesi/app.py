@@ -1009,6 +1009,24 @@ def render_smoke_test(smoke):
             st.caption(f"Denenen dosya: {smoke['backend_file']} (çalışma alanının geçici kopyasında)")
 
 
+def render_generated_tests(result):
+    """S5-06: pass rate of the Testing Agent's tests against the generated backend (MASTER_SMOKE_TEST)."""
+    if not result:
+        return
+    icon = {"PASSED": "✅", "FAILED": "❌"}.get(result.get("status"), "⏭️")
+    with st.expander(f"{icon} Üretilen testlerin geçme oranı · {result.get('status')} · {result.get('reason', '')}"):
+        rate = result.get("pass_rate")
+        cols = st.columns(4)
+        cols[0].metric("Geçme oranı", "—" if rate is None else f"%{rate * 100:.0f}")
+        cols[1].metric("Geçen", result.get("passed", 0))
+        cols[2].metric("Kalan / hata", (result.get("failed") or 0) + (result.get("errors") or 0))
+        cols[3].metric("Test modeli", result.get("model_used") or "—")
+        rows = [{"Test": c.get("name"), "Sonuç": c.get("outcome"), "Mesaj": c.get("message") or ""}
+                for c in result.get("cases") or []]
+        if rows:
+            st.dataframe(rows, use_container_width=True, hide_index=True)
+
+
 def render_plan(plan):
     """S4-07: Master'ın bu çalıştırmada kullandığı görev planı ve ajanlara giden ortak sözleşme."""
     is_llm = plan.get("mode") == "llm"
@@ -1258,6 +1276,7 @@ if state.report:
     if state.mode == "engine":
         rp.render_review_panel(st, report, state.history)
         render_smoke_test(report.get("smoke_test"))
+    render_generated_tests(report.get("generated_tests"))
 
     if state.plan:
         render_plan(state.plan)

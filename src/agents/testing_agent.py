@@ -8,6 +8,12 @@ S3-06 (Berat İnan):
 - Broken model output raises ModelOutputError -> BaseAgent marks the task FAILED.
 - When Ollama is unreachable the agent returns a labelled template (FALLBACK_ENABLED=true).
 - Output file names coming from the task payload are checked against path traversal (../).
+
+S5-06 (Berat İnan):
+- When the task context has a shared_contract, the prompt lists its endpoints as the only ones
+  the tests may call, and every client.get/post/... call in the reply is checked against it.
+  A call outside the contract is a validation error: the model is asked once more with the
+  rejected calls listed (TESTING_AGENT_VALIDATION_RETRIES, default 1), then the task FAILS.
 """
 
 import ast
@@ -112,6 +118,92 @@ def validate_test_code(code: str) -> Tuple[int, int]:
     return test_functions, assertions
 
 
+HTTP_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE")
+# The backend rule (analyzer.CATEGORY_RULES) always adds these even though the contract does not list them
+ALWAYS_ALLOWED_ENDPOINTS = (("GET", "/health"), ("GET", "/"))
+
+
+def contract_endpoints(context: Optional[Dict[str, Any]]) -> List[Tuple[str, str]]:
+    """(METHOD, path) pairs of the shared contract in the task context; empty when there is none."""
+    contract = (context or {}).get("shared_contract") or {}
+    endpoints = []
+    for ep in contract.get("endpoints") or []:
+        if not isinstance(ep, dict):
+            continue
+        method = str(ep.get("method") or "").upper()
+        path = str(ep.get("path") or "").strip()
+        if method in HTTP_METHODS and path.startswith("/"):
+            endpoints.append((method, path))
+    return endpoints
+
+
+def _is_param(segment: str) -> bool:
+    return (segment.startswith("{") and segment.endswith("}")) or segment.startswith(":")
+
+
+def _split_path(path: str) -> List[str]:
+    return [s for s in path.split("?", 1)[0].split("#", 1)[0].split("/") if s != ""]
+
+
+def path_matches(template: str, called: str) -> bool:
+    """'/books/{book_id}' matches '/books/1' and '/books/{x}'; fixed segments must be equal."""
+    t, c = _split_path(template), _split_path(called)
+    if len(t) != len(c):
+        return False
+    return all(_is_param(ts) or ts == cs or _is_param(cs) for ts, cs in zip(t, c))
+
+
+def _literal_path(node: ast.AST) -> Optional[str]:
+    """The URL of a call argument: a plain string, or an f-string with each {expr} kept as '{}'."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.JoinedStr):
+        parts = []
+        for value in node.values:
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                parts.append(value.value)
+            else:
+                parts.append("{}")
+        return "".join(parts)
+    return None
+
+
+def find_endpoint_calls(code: str) -> List[Tuple[str, str]]:
+    """(METHOD, path) of every client.get('/x') / client.request('POST', '/x') style call with a literal URL."""
+    calls = []
+    for node in ast.walk(ast.parse(code)):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+            continue
+        attr = node.func.attr.lower()
+        if attr.upper() in HTTP_METHODS and node.args:
+            method, url_node = attr.upper(), node.args[0]
+        elif attr == "request" and len(node.args) >= 2 and isinstance(node.args[0], ast.Constant):
+            method, url_node = str(node.args[0].value).upper(), node.args[1]
+        else:
+            continue
+        path = _literal_path(url_node)
+        if path is None:
+            continue
+        if "://" in path:  # http://testserver/books -> /books
+            path = "/" + path.split("://", 1)[1].partition("/")[2]
+        if path.startswith("/"):
+            calls.append((method, path))
+    return calls
+
+
+def find_off_contract_calls(code: str, endpoints: List[Tuple[str, str]]) -> List[str]:
+    """Calls in the test code that the contract does not define ('POST /orders'), in order, without duplicates."""
+    allowed = list(endpoints) + list(ALWAYS_ALLOWED_ENDPOINTS)
+    off = []
+    for method, path in find_endpoint_calls(code):
+        if any(m == method and path_matches(p, path) for m, p in allowed):
+            continue
+        label = f"{method} {path}"
+        if label not in off:
+            off.append(label)
+    return off
+
+
 def _safe_slug(value: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9_]+", "_", value or "").strip("_").lower()
     return slug or "generated"
@@ -138,6 +230,10 @@ class TestingAgent(BaseAgent):
         self.timeout = float(timeout if timeout is not None else os.getenv("OLLAMA_TIMEOUT", "180"))
         self.output_dir = output_dir if output_dir is not None else (os.getenv("TESTING_AGENT_OUTPUT_DIR") or None)
         self.fallback_enabled = _env_flag("FALLBACK_ENABLED", True) if fallback_enabled is None else fallback_enabled
+        try:
+            self.max_validation_retries = max(0, int(os.getenv("TESTING_AGENT_VALIDATION_RETRIES", "1")))
+        except ValueError:
+            self.max_validation_retries = 1
         # Injectable for tests; defaults to a real HTTP call to Ollama
         self.llm_client = llm_client or self._call_ollama
 
@@ -151,19 +247,38 @@ class TestingAgent(BaseAgent):
             logs.append(f"[{self.name}] Ollama disabled (TESTING_AGENT_USE_OLLAMA=false); returning template suite.")
             return self._template_result(filename, generation_mode="template")
 
+        endpoints = contract_endpoints(task.get("context_artifacts"))
         prompt = self.build_prompt(task)
+        total_attempts = 1 + self.max_validation_retries
         logs.append(f"[{self.name}] Sending test generation prompt to local Ollama model '{self.model_name}'...")
-        try:
-            raw = self.llm_client(prompt)
-        except OllamaCallError as exc:
-            if not self.fallback_enabled:
-                raise
-            logs.append(f"[{self.name}] Ollama unavailable ({exc.error_type}): {exc}. Using labelled fallback template.")
-            return self._template_result(filename, generation_mode="fallback", fallback_reason=exc.error_type)
+        for attempt in range(1, total_attempts + 1):
+            try:
+                raw = self.llm_client(prompt)
+            except OllamaCallError as exc:
+                if not self.fallback_enabled:
+                    raise
+                logs.append(f"[{self.name}] Ollama unavailable ({exc.error_type}): {exc}. Using labelled fallback template.")
+                return self._template_result(filename, generation_mode="fallback", fallback_reason=exc.error_type)
 
-        code = extract_python_code(raw)
-        test_count, assertion_count = validate_test_code(code)
-        logs.append(f"[{self.name}] Model output validated: {test_count} test functions, {assertion_count} assertions.")
+            code = None
+            try:
+                code = extract_python_code(raw)
+                test_count, assertion_count = validate_test_code(code)
+                if endpoints:
+                    off_contract = find_off_contract_calls(code, endpoints)
+                    if off_contract:
+                        raise ModelOutputError(
+                            "Testler sözleşmede olmayan uç noktaları çağırıyor: " + ", ".join(off_contract))
+            except ModelOutputError as exc:
+                if attempt < total_attempts:
+                    logs.append(f"[{self.name}] Test doğrulama hatası (deneme {attempt}/{total_attempts}): {exc} "
+                                f"Düzeltilmiş testler yeniden isteniyor...")
+                    prompt = self.build_retry_prompt(task, code or raw or "", str(exc))
+                    continue
+                raise
+            break
+        logs.append(f"[{self.name}] Model output validated: {test_count} test functions, {assertion_count} assertions"
+                    + (f", all endpoint calls inside the shared contract ({len(endpoints)} endpoints)." if endpoints else "."))
 
         written_path = None
         if self.output_dir:
@@ -180,6 +295,9 @@ class TestingAgent(BaseAgent):
             "total_assertions": assertion_count,
             "model_used": self.model_name,
             "generation_mode": "ollama",
+            "validation_retries": attempt - 1,
+            "contract_checked": bool(endpoints),
+            "endpoints_called": sorted({f"{m} {p}" for m, p in find_endpoint_calls(code)}),
             "written_path": written_path,
             "status": "TEST_SUITE_GENERATED"
         }
@@ -197,6 +315,31 @@ class TestingAgent(BaseAgent):
             f"Task title: {task.get('title', '')}\n"
             f"Task description: {task.get('description', '')}\n"
             f"Context artifacts from upstream agents:\n{context_text}\n"
+            f"{self._contract_rules(task)}"
+        )
+
+    @staticmethod
+    def _contract_rules(task: Dict[str, Any]) -> str:
+        endpoints = contract_endpoints(task.get("context_artifacts"))
+        if not endpoints:
+            return ""
+        listed = "\n".join(f"  - {m} {p}" for m, p in endpoints)
+        return (
+            "\nAPI CONTRACT — the tests may call ONLY these endpoints (plus GET /health), with exactly this\n"
+            "method and path; replace {param} parts with an id created earlier in the same test:\n"
+            f"{listed}\n"
+            "Do not invent other paths, versions (/api/v1/...) or methods.\n"
+        )
+
+    def build_retry_prompt(self, task: Dict[str, Any], previous_output: str, error: str) -> str:
+        """Follow-up prompt asking the model to fix a rejected reply (e.g. calls outside the contract)."""
+        snippet = (previous_output or "").strip()[:2500]
+        return (
+            f"{self.build_prompt(task)}\n"
+            "IMPORTANT — your previous reply was REJECTED:\n"
+            f"- Reason: {error}\n"
+            "- Rewrite the complete test file inside exactly one ```python block, fixing this.\n"
+            f"Previous rejected output:\n```python\n{snippet}\n```\n"
         )
 
     def _target_filename(self, task: Dict[str, Any]) -> str:

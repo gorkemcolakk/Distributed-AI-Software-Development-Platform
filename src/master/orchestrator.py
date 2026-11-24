@@ -34,7 +34,7 @@ from src.contracts import (
     normalize_worker_status,
     validate_master_tasks,
 )
-from src.master import db_manager, smoke_test
+from src.master import db_manager, generated_tests, smoke_test
 from src.security.error_classification import classify_task_result, ErrorKind
 from src.security.input_validation import validate_requirement_text
 from src.security.output_sanitizer import redact_secrets, safe_log_message
@@ -646,6 +646,16 @@ class MasterOrchestrator:
         self._db(db_manager.finish_run, run_id, system_status, status_counts)
         run_state["finished"] = True
 
+        # S5-06: run the generated tests and keep their pass rate as the testing model's benchmark metric
+        testing_model = next((r.get("model_used") for r in assignments
+                              if r.get("status") == "COMPLETED"
+                              and str(task_map.get(r["task_id"], {}).get("category", "")).upper().endswith("TESTING")),
+                             None)
+        generated_tests_result = self._generated_tests(workspace)
+        if generated_tests_result is not None:
+            generated_tests_result["model_used"] = testing_model
+            self._db(db_manager.save_generated_test_result, run_id, generated_tests_result, testing_model)
+
         return {
             "contract_version": CONTRACT_VERSION,
             "run_id": run_id,
@@ -664,6 +674,8 @@ class MasterOrchestrator:
             "conflicts": run_conflicts,
             # S5: does the delivered app actually answer? (opt-in, it runs model-written code)
             "smoke_test": self._smoke_test(workspace, decomposition.get("shared_contract")),
+            # S5-06: how many of the generated tests pass against the generated backend (same opt-in)
+            "generated_tests": generated_tests_result,
             # S4-07: what the engine actually ran (the UI shows this instead of a second decomposition)
             "decomposition": {
                 "mode": decomposition.get("decomposition_mode", "template"),
@@ -690,6 +702,18 @@ class MasterOrchestrator:
         except Exception as exc:  # a broken smoke test must never break the run report
             result = {"status": "FAILED", "reason": f"duman testi çalıştırılamadı: {exc}", "checks": []}
         logger.info("Smoke test: %s (%s)", result["status"], result.get("reason"))
+        return result
+
+    @staticmethod
+    def _generated_tests(workspace) -> Optional[Dict[str, Any]]:
+        if workspace is None or not smoke_test.is_enabled():
+            return None
+        try:
+            result = generated_tests.run_generated_tests(workspace.path)
+        except Exception as exc:  # measuring the tests must never break the run report
+            result = {"status": "FAILED", "reason": f"üretilen testler çalıştırılamadı: {exc}",
+                      "pass_rate": None, "cases": []}
+        logger.info("Generated tests: %s (%s)", result["status"], result.get("reason"))
         return result
 
     @staticmethod
