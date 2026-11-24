@@ -148,6 +148,7 @@ def create_worker_app(
             "agent_name": worker_agent.name,
             "model_name": worker_agent.model_name,
             "agent_status": raw_status,
+            "token_configured": bool(token_resolver()),
             "active_tasks_count": len(getattr(worker_agent, "current_tasks", [])),
             "timestamp": time.time(),
         }
