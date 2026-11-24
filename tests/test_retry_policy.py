@@ -52,7 +52,8 @@ class ScriptedAgent(BaseAgent):
         if outcome is None:
             self.status = AgentStatus.IDLE
             return TaskResult(task_id=task["task_id"], agent_id=self.agent_id, status="SUCCESS",
-                              output_artifacts={"files": []}, logs=[], execution_time_seconds=0.0)
+                              output_artifacts={"files": [{"filename": f"{task['task_id']}.py", "content": "x = 1"}]},
+                              logs=[], execution_time_seconds=0.0)
         self.status = AgentStatus.ERROR
         if outcome == "CRASH":  # local agent exception (BaseAgent turns it into a plain message)
             return TaskResult(task_id=task["task_id"], agent_id=self.agent_id, status="FAILED",

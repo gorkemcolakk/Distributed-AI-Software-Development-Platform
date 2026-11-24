@@ -41,6 +41,14 @@ from src.security.output_sanitizer import redact_secrets, safe_log_message
 
 logger = logging.getLogger(__name__)
 
+# Tasks whose whole job is to produce files; a SUCCESS without files counts as a failure
+CODE_CATEGORIES = frozenset({"DATABASE", "BACKEND", "FRONTEND", "TESTING"})
+
+
+def _category_value(task: Dict[str, Any]) -> str:
+    category = task.get("category")
+    return str(getattr(category, "value", category) or "").upper()
+
 # How much generated code the Testing task sees (enough for signatures, short enough for small models)
 TEST_CONTEXT_MAX_FILES = 2
 TEST_CONTEXT_MAX_CHARS = 1500
@@ -182,6 +190,13 @@ class MasterOrchestrator:
                     error_message = getattr(result, "error_message", None)
 
                     raw_files = ((getattr(result, "output_artifacts", None) or {}).get("files")) or []
+                    if is_successful and not raw_files and _category_value(dispatch_task) in CODE_CATEGORIES:
+                        # A code task that "succeeded" without a single file delivered nothing: fail it so the
+                        # next candidate is tried and the run is not reported as COMPLETED (24 Nov: a 401 made
+                        # every task fail over to Integration, which answered SUCCESS with no files)
+                        is_successful = False
+                        error_message = (f"[{WorkerErrorCode.CONTRACT_VIOLATION.value}] {agent.name} başarılı döndü "
+                                         f"ama dosya üretmedi")
                     if is_successful and workspace is not None:
                         try:
                             with self._workspace_lock:  # conflict detection keeps a per-run index
