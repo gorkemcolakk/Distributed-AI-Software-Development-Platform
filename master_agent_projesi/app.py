@@ -892,18 +892,31 @@ def build_agents():
     return out, skipped
 
 
+def remote_start_problem(ag):
+    """Görev dağıtılmadan önce uzak işçinin sorunu: cevap yok, yanlış rol/port ya da token. Sorun yoksa "".
+    Sorun varsa ajan OFFLINE yapılır; böylece kartta görünen uyarı motorda da geçerli olur (yanlış role görev gitmez)."""
+    ag.check_health()
+    if ag.status == AgentStatus.OFFLINE:
+        return "yanıt vermiyor"
+    warning = probe_worker(ag.endpoint_url, ag.agent_id, timeout=3.0).get("warning")
+    if warning:
+        ag.status = AgentStatus.OFFLINE
+        return warning
+    return ""
+
+
 def run_engine(requirement, live):
     """Gerçek MasterOrchestrator'ı çalıştırır; sonucu session_state'e yazar."""
     agents, skipped = build_agents()
-    for ag in agents:  # uzak işçiler: görev dağıtılmadan önce /health kontrolü
+    for ag in agents:  # uzak işçiler: görev dağıtılmadan önce /health, rol ve token kontrolü
         if isinstance(ag, RemoteAgentProxy):
-            ag.check_health()
-            if ag.status == AgentStatus.OFFLINE:
+            problem = remote_start_problem(ag)
+            if problem:
                 if ag.fallback_to_local:
                     ag.status = AgentStatus.IDLE  # yerel yedek devreye girer
-                    live.write(f"⚪ {ag.name}: {ag.endpoint_url} yanıt vermiyor → yerel yedek kullanılacak")
+                    live.write(f"⚪ {ag.name}: {ag.endpoint_url} {problem} → yerel yedek kullanılacak")
                 else:
-                    live.write(f"⚪ {ag.name}: {ag.endpoint_url} yanıt vermiyor → OFFLINE, görev almayacak")
+                    live.write(f"⚪ {ag.name}: {ag.endpoint_url} {problem} → OFFLINE, görev almayacak")
             else:
                 live.write(f"🔗 {ag.name}: {ag.endpoint_url} → ONLINE")
     ui_ctx = get_script_run_ctx()  # S4-07: paralel görevler başka thread'den yazar, Streamlit bağlamı gerekir
