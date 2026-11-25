@@ -19,6 +19,11 @@ try:  # S4-03: yeniden deneme / kod inceleme paneli
 except ImportError:  # app.py repo kökünden import edildiğinde (testler)
     from master_agent_projesi import review_panel as rp
 
+try:  # çalıştırmanın dosyalarını proje adıyla zip olarak indirme
+    import run_export
+except ImportError:  # app.py repo kökünden import edildiğinde (testler)
+    from master_agent_projesi import run_export
+
 try:
     from dotenv import load_dotenv
 
@@ -1339,6 +1344,12 @@ if state.report:
         if file_rows:
             if report.get("workspace_path"):
                 st.caption(f"Çalışma alanı: {report['workspace_path']}")
+            zip_name, zip_bytes, zip_count = run_export.build_run_zip(
+                report.get("project_title"), file_rows, fallback_name=str(report.get("run_id") or "proje"))
+            if zip_count:
+                st.download_button(f"📦 Tümünü zip olarak indir ({zip_count} dosya)", zip_bytes,
+                                   file_name=zip_name, mime="application/zip",
+                                   key=f"zip-{report['run_id']}")
             for i, row in enumerate(file_rows):
                 mode_txt, mode_color = GEN_MODE_LABELS.get(row["mode"], ("Üretim kipi bilinmiyor", "#6B7280"))
                 with st.expander(f"📄 {row['file']} · {row['task']}"):
