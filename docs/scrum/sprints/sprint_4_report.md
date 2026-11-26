@@ -1,16 +1,16 @@
 # Sprint 4 Review Report, Retrospective & Progress Report
 
-* **Sprint Period:** November 13, 2026 – November 26, 2026 (Weeks 7 – 8)
-* **Product Owner:** Prof. Dr. Ensar Gül (Course Instructor)
-* **Scrum Master:** İrem Yılmaz (Backend Agent — `qwen2.5-coder:7b`)
-* **Developers:** Eren Görkem Çolak, Kübra Hepcan, Mahmut Karaalioğlu, Berat İnan, İrem Yılmaz, Elif Yılmaz
-* **Sprint Goal (Why):**
-  > *"Implement bounded retry state machines with automatic alternative agent reassignment, enforce transient vs. permanent error classification and input/output security hardening, detect cross-agent file path/schema conflicts with SQLite attempt history persistence, automate Python AST syntax review and packaging in the Integration Agent, surface review verdicts and conflict alerts in the Streamlit UI, and enforce a hardened GitHub Actions CI quality gate."*
-* **Sprint Status:** **COMPLETED (6 of 6 Core Cards Done + Nov 24 Test Findings Resolved)** (Closed on 2026-11-26; all Sprint 4 scope verified against Definition of Done)
-* **Capacity & Velocity Metrics:**
-  * **Committed Capacity:** **24 Story Points** (6 Cards: S4-01 to S4-06, 54 Estimated Hours)
-  * **Delivered Velocity:** **24 Story Points** (6 Cards: S4-01 to S4-06 + Nov 24 Integration Test Verification)
-  * **Sprint Velocity Completion Rate:** **100.0%**
+- **Sprint Period:** November 12, 2026 – November 26, 2026 (Weeks 7 – 8)
+- **Product Owner:** Prof. Dr. Ensar Gül (Course Instructor)
+- **Scrum Master:** İrem Yılmaz (Backend Agent — `qwen2.5-coder:7b`)
+- **Developers:** Eren Görkem Çolak, Kübra Hepcan, Mahmut Karaalioğlu, Berat İnan, İrem Yılmaz, Elif Yılmaz
+- **Sprint Goal (Why):**
+  > *"Implement bounded retry state machines with automatic alternative agent reassignment, enforce transient vs. permanent error classification and input/output security hardening, detect cross-agent file path/schema conflicts with SQLite attempt history persistence, automate Python AST/SQL syntax review and packaging in the Integration Agent, connect the Master Agent analyzer to local Ollama with a shared domain contract and parallel dispatch, surface review verdicts and conflict alerts in the Streamlit UI, and enforce a hardened GitHub Actions CI quality gate."*
+- **Sprint Status:** **COMPLETED (7 of 7 Cards Done)** (Closed on 2026-11-26; all Sprint 4 scope verified against the Definition of Done)
+- **Capacity & Velocity Metrics:**
+  - **Initial Committed Capacity:** **24 Story Points** (6 Cards: `S4-01` to `S4-06`, 52 Estimated Hours)
+  - **Mid-Sprint Accepted Scope (`S4-07`):** **5 Story Points** (10 Estimated Hours)
+  - **Total Delivered Velocity:** **29 Story Points** (7 Cards: `S4-01` to `S4-07`, 100% completion rate)
 
 ---
 
@@ -18,149 +18,144 @@
 
 ### 1.1. Delivered Product Increment & Observable Evidence (What Was Demonstrated)
 
-On November 26, 2026, the Scrum Team demonstrated the complete, working Sprint 4 Increment to the Product Owner. Following the mid-sprint integration audit (`24 Kasım Test Bulguları`) and subsequent bug-fix verification, all 6 committed items met the [Definition of Done](../definition_of_done.md) and were presented as part of the verified Increment:
+On November 26, 2026, the Scrum Team demonstrated the completed Sprint 4 Increment. All 7 items (`S4-01` – `S4-07`) met the [Definition of Done](../definition_of_done.md) and were verified against existing repository modules and automated tests:
 
-| Card ID | Task Title & Scope | Primary Assignee | Repository Evidence | Verification Outcome & Acceptance | 
-| ----- | ----- | ----- | ----- | ----- | 
-| **S4-01** | Bounded Retry State Machine & Automatic Alternative Agent Reassignment | Eren Görkem Çolak (Master Agent — `qwen2.5:7b`) | `src/master/orchestrator.py`, `src/master/recovery.py`, `src/contracts.py`, `tests/test_recovery.py` | **VERIFIED (5 SP):** Implemented bounded retry loop (`max_retries`) with exponential backoff and deterministic failover to the second-highest capability idle worker when a primary agent exceeds retry limits or remains offline. | 
-| **S4-02** | Error Detection, Classification & Input/Output Security Hardening | İrem Yılmaz (Backend Agent — `qwen2.5-coder:7b`) | `src/api/worker_server.py`, `src/security/sanitizer.py`, `src/utils/logger.py`, `tests/test_security_errors.py` | **VERIFIED (3 SP):** Implemented structured error taxonomy (`TRANSIENT` vs. `PERMANENT`), prompt payload length/injection sanitization, and automatic regex masking of Bearer tokens and `.env` secrets in runtime logs. | 
-| **S4-03** | Streamlit UI Display of Code Review Verdicts, Conflict Alerts & Reassignment History | Kübra Hepcan (Frontend Agent — `qwen2.5-coder:3b`) | `master_agent_projesi/app.py`, `src/ui/components.py`, `tests/test_ui_state.py` | **VERIFIED (3 SP):** Added real-time UI badges for `APPROVED`, `REVIEW_REQUIRED`, and `REJECTED` file verdicts, highlighted cross-agent path/schema conflict warnings, and rendered step-by-step agent reassignment timelines without page-rerun flicker. | 
-| **S4-04** | Output File Path/Schema Conflict Detection & SQLite Attempt History Persistence | Mahmut Karaalioğlu (Database Agent — `llama3.2:3b`) | `src/master/conflict_detector.py`, `src/master/db_manager.py`, `tests/test_conflict_db.py` | **VERIFIED (3 SP):** Built automated pre-write conflict scanner detecting duplicate file paths and overlapping SQL/API schemas across parallel workers. Persisted full execution attempt histories (`run_id`, `task_id`, `attempt_no`, `agent_id`, `status`) in SQLite `attempts` table. | 
-| **S4-05** | Integration Agent Automated AST Syntax Review & Packaging | Elif Yılmaz (Integration Agent — `phi4-mini:3.8b`) | `src/agents/integration_agent.py`, `src/review/ast_inspector.py`, `src/contracts.py`, `tests/test_ast_review.py` | **VERIFIED (5 SP):** Implemented deterministic Python `ast.parse()` syntax inspection reporting exact line/column numbers and structured `CodeReviewVerdict` objects (`APPROVED`, `REVIEW_REQUIRED`, `REJECTED`), bundled alongside validated manifests into reproducible ZIP packages. | 
-| **S4-06** | Test Expansion, Generated Code Tests & GitHub Actions CI Quality Gate Hardening | Berat İnan (Testing Agent — `deepseek-coder:6.7b`) | `.github/workflows/ci.yml`, `tests/test_recovery.py`, `tests/test_ast_review.py`, `tests/test_conflict_db.py` | **VERIFIED (5 SP):** Expanded deterministic unit and integration test suites covering fault recovery, AST syntax rejection, conflict trapping, and generated artifact syntax validation. Configured GitHub Actions CI workflow to block PR merges on any test failure or lint violation. | 
-| **QA-24** | *24 Kasım Test Bulguları* (End-to-End Integration Audit & Bug Verification) | Elif Yılmaz, Kübra Hepcan, Eren Görkem Çolak | `src/master/orchestrator.py`, `src/review/ast_inspector.py`, `master_agent_projesi/app.py` | **VERIFIED (Unpointed QA Checklist):** Executed full multi-agent pipeline test on Nov 24; resolved 3 findings (UTF-8 encoding edge case in AST parser, SQLite lock contention during parallel retries, and UI badge alignment for `REVIEW_REQUIRED` files). | 
+| Card ID | Task Title & Scope | Primary Assignee | Repository Evidence | Verification Outcome & Acceptance |
+| :--- | :--- | :--- | :--- | :--- |
+| **S4-01** | Bounded Retry State Machine & Automatic Alternative Agent Reassignment | Eren Görkem Çolak (Master Agent — `qwen2.5:7b`) | `src/master/orchestrator.py`, `src/master/retry_policy.py`, `src/contracts.py`, `tests/test_retry_policy.py` | **VERIFIED (5 SP):** Implemented bounded retry loop (`max_retries`) and deterministic failover to the next highest-scoring `IDLE` candidate agent when a primary worker exhausts retries or remains unavailable. |
+| **S4-02** | Error Detection, Classification & Input/Output Security Hardening | İrem Yılmaz (Backend Agent — `qwen2.5-coder:7b`) | `src/security/error_classification.py`, `src/security/input_validation.py`, `src/security/output_sanitizer.py`, `src/api/worker_server.py`, `tests/test_s4_error_classification_security.py` | **VERIFIED (3 SP):** Separated transient errors (timeouts, rate limits) from permanent errors (invalid payloads, unsafe paths), enforced prompt input validation, escaped untrusted model output, and masked Bearer tokens/secrets in logs. |
+| **S4-03** | Streamlit UI Display of Code Review Verdicts, Conflict Alerts & Reassignment History | Kübra Hepcan (Frontend Agent — `qwen2.5-coder:3b`) | `master_agent_projesi/app.py`, `master_agent_projesi/review_panel.py`, `tests/test_review_reassignment_ui.py` | **VERIFIED (3 SP):** Added UI panels and badges for `APPROVED`, `REVIEW_REQUIRED`, and `REJECTED` file verdicts, surfaced cross-agent path/schema conflict alerts, and displayed task reassignment histories. |
+| **S4-04** | Output File Path/Schema Conflict Detection & SQLite Attempt History Persistence | Mahmut Karaalioğlu (Database Agent — `llama3.2:3b`) | `src/master/conflicts.py`, `src/master/db_manager.py`, `tests/test_s4_failover_and_conflicts.py` | **VERIFIED (3 SP):** Implemented workspace path deduplication/renaming (`DEDUPLICATED`, `RENAMED`) and SQL `CREATE TABLE` schema mismatch detection (`REPORTED`), persisting full attempt and conflict records in SQLite (`state.db` schema v5). |
+| **S4-05** | Integration Agent Automated AST/SQL Syntax Review & Packaging | Elif Yılmaz (Integration Agent — `phi4-mini:3.8b`) | `src/agents/integration_agent.py`, `src/contracts.py`, `tests/test_s4_generated_code.py`, `tests/test_integration_manifest.py` | **VERIFIED (5 SP):** Implemented Python `ast.parse()` and SQLite DDL syntax inspection reporting exact line details and structured review verdicts (`APPROVED`, `REVIEW_REQUIRED`, `REJECTED`), alongside SHA-256 artifact manifests and workspace packaging. |
+| **S4-06** | Test Expansion, Generated Code Tests & GitHub Actions CI Quality Gate Hardening | Berat İnan (Testing Agent — `deepseek-coder:6.7b`) | `.github/workflows/tests.yml`, `src/master/generated_tests.py`, `master_agent_projesi/test_api.py`, `tests/test_s4_ci_quality_gate.py` | **VERIFIED (5 SP):** Expanded the offline mock-based unit test suite to **418 passing tests** at Sprint 4 closure (subsequently expanded to **495 tests** at Sprint 5 kickoff) and enforced merge-blocking PR checks in `.github/workflows/tests.yml`. |
+| **S4-07** | Master Agent Local Model Task Decomposition, Shared Contract & Parallel Dispatch | Eren Görkem Çolak (Master Agent — `qwen2.5:7b`) | `src/master/analyzer.py`, `src/master/orchestrator.py`, `master_agent_projesi/app.py`, `tests/test_llm_decomposition.py`, `tests/test_parallel_dispatch.py` | **VERIFIED (5 SP):** Connected `analyzer.py` to local Ollama (`qwen2.5:7b`) with deterministic template fallback, extracted a shared domain contract injected into worker envelopes, and added `ThreadPoolExecutor` parallel dispatch for independent ready tasks. |
 
 ### 1.2. Verification & Terminal Evidence
 
-#### Full Automated Test Suite (`main` Branch Baseline — Expanded from 176 to 238 Tests)
+#### Full Automated Test Suite (Sprint 4 Closure Baseline: 418 Tests)
 
+```bash
+python -m unittest discover -s tests
 ```
-python -m unittest discover -s tests -v
+- **Sprint 4 Closure Result:** `Ran 418 tests — OK` (subsequent Sprint 4–5 test additions brought the repository suite to **495 passing tests**).
+- **Verified:** All unit and integration tests run deterministically offline without live Ollama daemons or external network dependencies.
 
+#### Fault Recovery, Error Classification & Security Hardening (`S4-01` & `S4-02`)
+
+```bash
+python -m unittest tests/test_retry_policy.py tests/test_s4_error_classification_security.py
 ```
-* **Output:** `Ran 238 tests in 4.182s — OK`
-* **Verified:** All 176 Sprint 3 baseline tests plus 62 new Sprint 4 tests covering bounded retries, alternative worker failover, error classification, secret log masking, SQLite attempt history, file conflict detection, AST syntax inspection, and UI state rendering pass deterministically without requiring live Ollama daemons or external API keys.
-
-#### Fault Recovery & Alternative Agent Reassignment (`S4-01` & `S4-02`)
-
-```
-python -m unittest tests/test_recovery.py tests/test_security_errors.py
-
-```
-* **Verified:**
-  * **Transient Failure Retry:** Simulated HTTP `503` / Ollama timeout triggers up to `max_retries=2` before escalating.
-  * **Alternative Worker Failover:** Exhausted retries on `BackendAgent-Primary` automatically reassign the task envelope to `BackendAgent-Backup` and log the transition in `ReassignmentHistory`.
-  * **Permanent Error Short-Circuit:** Invalid schema / `HTTP 400` errors classify as `PERMANENT` and skip redundant retries.
-  * **Credential Masking:** Verified that `Authorization: Bearer <token>` strings are scrubbed to `Bearer ***REDACTED***` in all log streams.
+- **Verified:**
+  - **Transient vs. Permanent Classification:** Transient network/timeout errors trigger bounded retries (`src/master/retry_policy.py`), whereas permanent contract or unsafe-path errors short-circuit immediately without futile retries.
+  - **Alternative Worker Failover:** Exhausted retries on a primary worker automatically reassign the task to the next highest-scoring `IDLE` candidate agent and record the transition in `attempted_agents` and SQLite `attempts`.
+  - **Input/Output Sanitization:** Oversized or malformed requirement strings are rejected by `src/security/input_validation.py`, and Bearer tokens/credentials are masked by `src/security/output_sanitizer.py`.
 
 #### Conflict Detection & SQLite Attempt Persistence (`S4-04`)
 
+```bash
+python -m unittest tests/test_s4_failover_and_conflicts.py tests/test_db_manager.py
 ```
-python -m unittest tests/test_conflict_db.py
+- **Verified:**
+  - **Path & Schema Conflict Handling:** Duplicate target paths with identical SHA-256 hashes are `DEDUPLICATED`, differing contents are `RENAMED` (`<stem>.<task_id><ext>`), and conflicting SQL `CREATE TABLE` definitions are `REPORTED` in SQLite `file_conflicts`.
+  - **Truthful State Integrity:** Database `CHECK` constraints and triggers prevent failed, blocked, or unassigned tasks from being marked `COMPLETED`.
 
+#### Automated AST/SQL Review, LLM Decomposition & Parallel Dispatch (`S4-05` & `S4-07`)
+
+```bash
+python -m unittest tests/test_s4_generated_code.py tests/test_llm_decomposition.py tests/test_parallel_dispatch.py
 ```
-* **Verified:**
-  * **Path Collision Trapping:** Parallel outputs targeting `src/models.py` from two agents trigger `FileConflictWarning` before workspace overwrite.
-  * **SQLite Persistence:** `attempts` table accurately records every retry attempt, timestamps, failure reason, and reassigned worker ID across `run_id` sessions.
-
-#### Automated Python AST Syntax Review & Packaging (`S4-05`)
-
-```
-python -m unittest tests/test_ast_review.py
-
-```
-* **Verified:**
-  * **Syntax Error Pinpointing:** Malformed generated Python files fail AST parsing with exact `lineno` and `offset`, automatically assigning `REJECTED` verdict and triggering `S4-01` feedback retry.
-  * **Clean Artifact Packaging:** Validated workspaces produce `ArtifactManifest` + `CodeReviewReport` bundled inside `workspaces/{run_id}/release_bundle.zip`.
+- **Verified:**
+  - **Syntax Verification:** Malformed Python files fail `ast.parse()` with file/line diagnostics and receive `REVIEW_REQUIRED` / `REJECTED` verdicts instead of a static `APPROVED` status.
+  - **Shared Domain Contract & Parallelism:** `RequirementsAnalyzer` extracts entities, fields, and endpoints into a shared contract and dispatches independent DAG tasks concurrently via `ThreadPoolExecutor`.
 
 #### GitHub Actions CI Quality Gate (`S4-06`)
+
+```bash
+python -m unittest tests/test_s4_ci_quality_gate.py
 ```
-act -j quality-gate  # Local CI verification matching .github/workflows/ci.yml
+- **Verified:** `.github/workflows/tests.yml` executes `python -m unittest discover -s tests` on every Pull Request and push to `main`, blocking merges on any test failure.
 
-```
-* **Verified:** Pull request checks execute `flake8` linting, `unittest` discovery (`238` tests), and security secret-scan checks; any non-zero exit code strictly blocks merge into `main`.
+### 1.3. Sprint Review Outcome & Product Owner Acceptance
 
-### 1.3. Stakeholder Feedback (Product Owner Inspection)
+- **Review Verification:** All 7 Sprint 4 PBIs (`S4-01` through `S4-07`) were demonstrated against the Definition of Done criteria, confirming automated AST/SQL code review, cross-agent conflict resolution, bounded retry/failover, local Ollama task decomposition, and a green CI quality gate.
+- **Acceptance Status:** **ACCEPTED** (All 7 Sprint 4 cards / 29 SP accepted into the product Increment; 0 SP carried over).
 
-* **Feedback from Prof. Dr. Ensar Gül (Product Owner):**
-  * Praised the team for addressing every Sprint 3 review directive—specifically the automated AST syntax inspection (`S4-05`), cross-agent path conflict detection (`S4-04`), and deterministic failover to backup workers (`S4-01`).
-  * Noted that the November 24 integration test checkpoint (`24 Kasım Test Bulguları`) significantly improved demo stability, as error recovery and AST rejection loops worked seamlessly live.
-  * Directed thespri team to focus Sprint 5 (the final sprint) on full end-to-end capstone scenarios, multi-node deployment benchmarks, comprehensive user/architecture documentation, and final project presentation readiness.
-* **Acceptance Verdict:** **ACCEPTED** (All 6 Sprint 4 cards / 24 SP accepted into the product Increment).
+### 1.4. Product Backlog Adaptations & Sprint 5 Scope Alignment
 
-### 1.4. Product Backlog Adaptations & Changes (At the Review)
+- All Sprint 4 items (`S4-01` to `S4-07`) were closed and moved to `Done` in [`docs/scrum/product_backlog.md`](../product_backlog.md) and [`sprint_4_backlog.md`](sprint_4_backlog.md).
+- Confirmed the Sprint 5 Backlog (**27 Story Points** across 8 cards in [`sprint_5_backlog.md`](sprint_5_backlog.md)):
+  - **S5-01**: End-to-End Distributed Workflow & Telemetry Logging (3 SP)
+  - **S5-02**: Documentation & System Harmonization (3 SP)
+  - **S5-03**: Live Telemetry & Model Benchmark Visualizer Dashboard (3 SP)
+  - **S5-04**: SQLite Telemetry & Benchmark Data Export (3 SP)
+  - **S5-05**: Final Demonstration Scenario & PO Acceptance Verification (3 SP)
+  - **S5-06**: Empirical Ollama Benchmark & E2E Test Suite Validation (5 SP)
+  - **S5-07**: Comprehensive Final Project Report — CM6453 Deliverable (4 SP)
+  - **S5-08**: Final Project Presentation Deck & Live Demo Script (3 SP)
 
-* All Sprint 4 items (`S4-01` to `S4-06`) and `24 Kasım Test Bulguları` QA checklist items were closed and moved to `Done` with zero carry-over debt.
-* Confirmed the Sprint 5 scope (24 SP committed — Final Milestone):
-  * **S5-01**: Multi-node distributed worker deployment & concurrent load benchmarking (5 SP).
-  * **S5-02**: End-to-end full-stack capstone project generation scenarios & prompt tuning (5 SP).
-  * **S5-03**: Streamlit UI polish, interactive zip bundle downloader & execution metrics dashboard (3 SP).
-  * **S5-04**: SQLite analytics queries & historical run comparison reporting (3 SP).
-  * **S5-05**: Comprehensive system architecture documentation, deployment guide & user manual (4 SP).
-  * **S5-06**: Final end-to-end system validation suite & capstone demo rehearsal (4 SP).
+---
 
 ## 2. Sprint Retrospective (At the Retrospective)
 
 ### 2.1. Team Observations: What Went Well?
-1. **Mid-Sprint Integration Audit (`24 Kasım Test Bulguları`):** Scheduling a dedicated integration test session two days before the Sprint Review uncovered UTF-8 AST parsing issues and SQLite write-lock contention early enough to resolve and verify before the demo.
-2. **Seamless Coupling Between AST Review (`S4-05`) and Retry Loop (`S4-01`):** Returning structured syntax error line numbers from `IntegrationAgent` directly into the `MasterAgent` retry prompt enabled worker models to self-correct broken Python syntax automatically.
-3. **Deterministic Mock Testing & CI Gate (`S4-06`):** Isolating Ollama HTTP responses behind deterministic test fixtures kept the 238-test suite running in \~4 seconds inside GitHub Actions.
-4. **Clear UI Observability (`S4-03`):** Surfacing conflict alerts and reassignment badges in Streamlit made complex background recovery behavior immediately transparent to stakeholders.
+1. **End-to-End Integration Check Before Review:** Testing multi-agent execution, AST validation, and UI rendering together prior to Sprint Review caught encoding and state-synchronization edge cases early.
+2. **Tight Integration Between AST/SQL Review (`S4-05`) and Retry/Failover (`S4-01`):** Returning structured syntax diagnostics from `IntegrationAgent` and enforcing transient/permanent error classification (`S4-02`) prevented redundant retries on permanent defects while enabling recovery on transient worker failures.
+3. **Deterministic Offline Test Suite (`S4-06`):** Isolating Ollama HTTP calls behind deterministic mocks allowed 418+ unit tests to execute rapidly inside GitHub Actions (`.github/workflows/tests.yml`).
+4. **Shared Domain Contract (`S4-07`):** Injecting extracted entities, fields, and endpoints into every worker envelope reduced schema drift between `DatabaseAgent`, `BackendAgent`, and `FrontendAgent`.
 
 ### 2.2. Team Observations: Challenges & Identified Technical Debt
-1. **SQLite Concurrency Under Parallel Retries:** During the Nov 24 stress test, simultaneous worker retries briefly caused `sqlite3.OperationalError: database is locked`. Enabling WAL (Write-Ahead Logging) mode and connection timeouts resolved the issue, though multi-node scaling in Sprint 5 will require careful connection pooling.
-2. **AST Scope Limited to Python:** `ast_inspector.py` validates Python syntax natively, whereas generated SQL (`DatabaseAgent`) and HTML/JS (`FrontendAgent`) currently rely on lighter structural checks. Adding SQL/JS syntax validators in Sprint 5 will further strengthen quality assurance.
-3. **Cold-Start Latency on Failover:** When `S4-01` reassigns a task to a backup worker running a different local Ollama model, Ollama model swap latency adds 10–20 seconds to total run duration.
+1. **SQLite Concurrency Under Parallel Dispatch:** Running independent DAG tasks concurrently (`ThreadPoolExecutor`) required WAL mode (`PRAGMA journal_mode=WAL`) and proper connection handling in `src/master/db_manager.py` to avoid lock contention during simultaneous attempt writes.
+2. **Cold-Start Latency on Model Switching:** Reassigning tasks across workers using different local Ollama models (`7b` vs `3b` vs `6.7b`) introduces model-loading latency on single-GPU machines, which needs empirical measurement in Sprint 5 (`S5-06`).
+3. **Documentation Drift After Mid-Sprint Scope (`S4-07`):** Adding `S4-07` and new security/conflict modules created temporary gaps between `README.md`/`docs/` and the codebase, prioritized as `S5-02` at the start of Sprint 5.
 
 ### 2.3. Actionable Improvement Items for Sprint 5
 
-| Improvement Action Item | Target Area | Assignee / Owner | Success Criteria | 
-| ----- | ----- | ----- | ----- | 
-| Implement **S5-01**: Multi-node deployment & concurrency benchmarks with model warm-up | Distributed Systems | Eren Görkem Çolak | Concurrent multi-worker benchmark report; zero SQLite lock errors | 
-| Implement **S5-02**: End-to-end full-stack capstone scenarios & error-feedback prompt templates | Backend & Prompts | İrem Yılmaz | 3 complete reference apps generated end-to-end without manual intervention | 
-| Implement **S5-03**: Interactive ZIP bundle download & run analytics dashboard in Streamlit | Frontend & UI | Kübra Hepcan | One-click bundle download and latency/retry charts rendered in `app.py` | 
-| Implement **S5-04**: SQLite WAL optimization & historical run metrics queries | Database & Storage | Mahmut Karaalioğlu | WAL mode enabled by default; query module for success/retry rates | 
-| Implement **S5-05**: Final architecture documentation, API specs & deployment guide | Documentation | Elif Yılmaz | Complete `docs/` suite aligned with final codebase and diagrams | 
-| Implement **S5-06**: Final E2E acceptance test suite & SQL/JS syntax checks | QA & Testing | Berat İnan | Extended syntax checks + full E2E release sign-off suite green on CI | 
+| Improvement Action Item | Target Area | Assignee / Owner | Success Criteria |
+| :--- | :--- | :--- | :--- |
+| Implement **S5-01**: End-to-end distributed workflow & per-task latency telemetry logging | Master Orchestration | Eren Görkem Çolak | Full pipeline runs end-to-end with verified start/finish timestamps in SQLite |
+| Implement **S5-02**: Harmonize `README.md`, `ARCHITECTURE.md`, `DATA_MODEL.md`, `SRS.md` & Scrum docs | Documentation & Scrum | İrem Yılmaz | Zero mismatch between repository file tree, model tags, and documentation |
+| Implement **S5-03**: Live telemetry & model benchmark visualizer in Streamlit dashboard | Frontend & UI | Kübra Hepcan | Real run metrics, durations, and retry counts charted in UI with clear live vs. demo labels |
+| Implement **S5-04**: SQLite telemetry queries & CSV/JSON export (`run_export.py`) | Database & Export | Mahmut Karaalioğlu | Exportable CSV/JSON reports for agent success rates, latencies, and attempt counts |
+| Implement **S5-05** & **S5-07**: Final demo rehearsal, PO acceptance checklist & final project report | Integration & Reporting | Elif Yılmaz | Rehearsed multi-paragraph demo, negative failover check, and complete CM6453 report |
+| Implement **S5-06**: Empirical Ollama model benchmarks & full E2E test suite validation | QA & Benchmarking | Berat İnan | Standardized benchmark results (`scripts/master_model_benchmark.py`) and 495+ green CI tests |
+
+---
 
 ## 3. Course Progress Report (Mandated by CM6453 Syllabus)
 
 ### 3.1. Project Milestone & Schedule Status
-* **Iteration Timeline:** Sprint 4 of 5 (Weeks 7–8 of 10-Week Semester Schedule: Nov 13 – Nov 26, 2026).
-* **Milestone Objective:** Integration, Quality Assurance & Fault Recovery (Bounded retry and alternative agent failover, error taxonomy and security hardening, conflict detection with SQLite attempt logging, automated AST syntax review, UI alerting, and CI quality gate).
-
-* **Schedule Status:** **ON TRACK (100% MILESTONE DELIVERED)** (All Sprint 4 deliverables and Nov 24 QA findings completed and verified on schedule).
+- **Iteration Timeline:** Sprint 4 of 5 (Weeks 7–8 of 10-Week Semester Schedule: Nov 12 – Nov 26, 2026).
+- **Milestone Objective:** Integration, Quality Assurance & Fault Recovery (Bounded retry and alternative agent failover, error classification and security hardening, conflict detection with SQLite attempt logging, automated AST/SQL syntax review, LLM task decomposition with shared contract, UI alerting, and CI quality gate).
+- **Schedule Status:** **ON TRACK (100% MILESTONE DELIVERED)**
 
 ### 3.2. Cumulative Velocity & Story Point Burnup Tracking
-
-* **Sprint 1 Velocity:** 24 SP (100% completed)
-* **Sprint 2 Velocity:** 22 SP (100% completed)
-* **Sprint 3 Velocity:** 24 SP (100% completed)
-* **Sprint 4 Committed:** 24 SP | **Delivered:** 24 SP (100% completed) | **Rolled Over:** 0 SP
-* **Total Cumulative Story Points Delivered to Date:** **94 Story Points**
-* **Sprint 5 Committed Capacity:** **24 Story Points** (6 Cards: S5-01 to S5-06)
+- **Sprint 1 Velocity:** 24 SP (7 of 7 cards completed)
+- **Sprint 2 Velocity:** 22 SP (6 of 6 cards completed)
+- **Sprint 3 Velocity:** 24 SP (6 of 6 cards completed)
+- **Sprint 4 Committed:** 24 SP initial + 5 SP mid-sprint (`S4-07`) = **29 SP** | **Delivered:** **29 SP** (7 of 7 cards completed) | **Rolled Over:** 0 SP
+- **Total Cumulative Story Points Delivered to Date:** **99 Story Points** (26 of 26 cards completed across Sprints 1–4)
+- **Sprint 5 Committed Capacity:** **27 Story Points** (8 Cards: `S5-01` to `S5-08`)
 
 ### 3.3. Team Member Contribution Matrix
 
-| Team Member | Student ID | Agent & Model | Sprint Role & Primary Deliverables | Estimated vs Actual Hours | Status | 
-| ----- | ----- | ----- | ----- | ----- | ----- | 
-| **Eren Görkem Çolak** | 2204012296 | Master Agent (`qwen2.5:7b`) | Tech Lead: Bounded retry state machine & alternative worker reassignment (`S4-01`), Nov 24 QA fixes | 10h / 10h | **Done** | 
-| **İrem Yılmaz** | 2204012301 | Backend Agent (`qwen2.5-coder:7b`) | Scrum Master: Error classification (`TRANSIENT`/`PERMANENT`), input sanitization & secret masking (`S4-02`) | 8h / 8h | **Done** | 
-| **Kübra Hepcan** | 2204012302 | Frontend Agent (`qwen2.5-coder:3b`) | Developer: Streamlit UI code review verdicts, conflict alerts & reassignment history (`S4-03`), Nov 24 UI fixes | 8h / 8h | **Done** | 
-| **Mahmut Karaalioğlu** | 2204012300 | Database Agent (`llama3.2:3b`) | Developer: Cross-agent file/schema conflict detector & SQLite `attempts` persistence (`S4-04`) | 8h / 8h | **Done** | 
-| **Berat İnan** | 2204012303 | Testing Agent (`deepseek-coder:6.7b`) | Developer: 62 new unit/integration tests & GitHub Actions CI merge-blocking quality gate (`S4-06`) | 10h / 10h | **Done** | 
-| **Elif Yılmaz** | 2204012297 | Integration Agent (`phi4-mini:3.8b`) | Developer: Automated Python AST syntax review, verdict generation & ZIP packaging (`S4-05`), Nov 24 test audit | 10h / 10h | **Done** | 
+| Team Member | Student ID | Agent & Model | Sprint Role & Primary Deliverables | Estimated vs Actual Hours | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Eren Görkem Çolak** | 2204012296 | Master Agent (`qwen2.5:7b`) | Tech Lead: Bounded retry & failover (`S4-01`), local Ollama decomposition, shared contract & parallel dispatch (`S4-07`) | 18h / 18h | **Done** |
+| **İrem Yılmaz** | 2204012301 | Backend Agent (`qwen2.5-coder:7b`) | Scrum Master: Error classification (`TRANSIENT`/`PERMANENT`), input validation, output sanitization & secret masking (`S4-02`) | 8h / 8h | **Done** |
+| **Kübra Hepcan** | 2204012302 | Frontend Agent (`qwen2.5-coder:3b`) | Developer: Streamlit UI code review verdicts, conflict alerts & reassignment history (`S4-03` / `review_panel.py`) | 8h / 8h | **Done** |
+| **Mahmut Karaalioğlu** | 2204012300 | Database Agent (`llama3.2:3b`) | Developer: Cross-agent file/schema conflict resolver (`conflicts.py`) & SQLite `attempts`/`output_files` persistence (`S4-04`) | 8h / 8h | **Done** |
+| **Berat İnan** | 2204012303 | Testing Agent (`deepseek-coder:6.7b`) | Developer: Deterministic unit/integration test expansion (418 tests at closure) & GitHub Actions CI quality gate (`S4-06`) | 10h / 10h | **Done** |
+| **Elif Yılmaz** | 2204012297 | Integration Agent (`phi4-mini:3.8b`) | Developer: Automated Python AST & SQLite DDL syntax review, verdict generation & artifact manifest packaging (`S4-05`) | 10h / 10h | **Done** |
 
 ### 3.4. Risk Assessment & Mitigation Strategies
-
-* **Risk 1 (Model Swap Latency During Reassignment):** Switching between distinct Ollama models (`7b` vs `3b`) on memory-constrained hosts during `S4-01` failover can cause cold-start delays.
-  * *Mitigation:* `S5-01` will introduce pre-warmed worker health probes and configurable `OLLAMA_KEEP_ALIVE` settings alongside concurrency benchmarks.
-* **Risk 2 (Non-Python Syntax Blind Spots):** While Python outputs are strictly gated by `ast.parse()`, multi-file full-stack projects also depend on valid SQL DDL and frontend markup.
-  * *Mitigation:* `S5-06` extends `ast_inspector.py` with lightweight SQL (`sqlparse`) and HTML/JSON structural validators before final packaging.
+- **Risk 1 (Model Swap Latency During Reassignment):** Switching between distinct Ollama models (`qwen2.5:7b`, `qwen2.5-coder:7b`, `deepseek-coder:6.7b`) on memory-constrained hosts during `S4-01` failover can cause cold-start delays.
+  - *Mitigation:* `S5-06` benchmarks per-model load and inference latency via `scripts/master_model_benchmark.py` to document realistic hardware thresholds.
+- **Risk 2 (Multi-Node Network & Timeout Variance):** Distributed HTTP workers running across Tailscale VPN nodes may experience variable latency under concurrent `ThreadPoolExecutor` dispatch (`S4-07`).
+  - *Mitigation:* `S5-01` and `S5-03` instrument per-task start/finish timestamps and retry counts in SQLite (`state.db`) and expose them in the Streamlit telemetry panel.
 
 ### 3.5. Next Sprint Focus & Functional Increment Preview
-* **Sprint 5 Focus:** Final Polish, Multi-Node Benchmarking & Capstone Release.
-* **Deliverable Preview:** A production-ready distributed AI software development platform validated across multi-node workers, capable of generating, reviewing, repairing, and packaging complete multi-tier applications with full architectural documentation and a `250+` test green CI pipeline.
+- **Sprint 5 Focus:** End-to-End Integration, Live Telemetry, Empirical Model Benchmarking & Final Release Deliverables (`S5-01` – `S5-08`).
+- **Deliverable Preview:** A verified end-to-end multi-agent software development platform with live SQLite telemetry and CSV/JSON export, empirical local Ollama benchmark results, harmonized system documentation, a 495+ test green CI pipeline, and final course report/presentation deliverables.
 
 ---
 
