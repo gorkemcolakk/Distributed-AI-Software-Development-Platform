@@ -138,6 +138,9 @@ class RemoteAgentProxy(BaseAgent):
             if timeout is not None
             else os.getenv("WORKER_HTTP_TIMEOUT", str(DEFAULT_TASK_TIMEOUT_SECONDS))
         )
+        if timeout is None and "integration" in str(agent_id or "").lower():
+            # S5 (27 Nov): Integration's phi4-mini may use its own 150 s plus model loading; 180 s cut it off
+            self.timeout = max(self.timeout, float(os.getenv("WORKER_HTTP_TIMEOUT_INTEGRATION", "300")))
         self.task_path = task_path if task_path.startswith("/") else f"/{task_path}"
         self.health_path = health_path if health_path.startswith("/") else f"/{health_path}"
         self.fallback_to_local = fallback_to_local

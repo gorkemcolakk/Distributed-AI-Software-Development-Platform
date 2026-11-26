@@ -45,6 +45,16 @@ logger = logging.getLogger(__name__)
 CODE_CATEGORIES = frozenset({"DATABASE", "BACKEND", "FRONTEND", "TESTING"})
 
 
+# Generation modes that mean "the model did not deliver, a canned template was returned instead"
+FALLBACK_MODES = frozenset({"fallback", "safe_fallback", "template"})
+PAGE_SUFFIXES = (".html", ".htm")
+
+
+def _generation_mode(result: Any) -> str:
+    artifacts = getattr(result, "output_artifacts", None) or {}
+    return str(artifacts.get("generation_mode") or artifacts.get("synthesis_mode") or "").lower()
+
+
 def _category_value(task: Dict[str, Any]) -> str:
     category = task.get("category")
     return str(getattr(category, "value", category) or "").upper()
@@ -197,6 +207,25 @@ class MasterOrchestrator:
                         is_successful = False
                         error_message = (f"[{WorkerErrorCode.CONTRACT_VIOLATION.value}] {agent.name} başarılı döndü "
                                          f"ama dosya üretmedi")
+                    forced_kind = None
+                    category = _category_value(dispatch_task)
+                    if (is_successful and category in CODE_CATEGORIES and getattr(agent, "endpoint_url", None)
+                            and _generation_mode(result) in FALLBACK_MODES):
+                        # S5 (27 Nov): a remote worker whose model failed answered with its canned template
+                        # (backend /api/v1/items) and the run looked COMPLETED. The model may succeed on a second
+                        # call, so this is retried on the same agent like a transient failure, then failed over.
+                        is_successful = False
+                        reason = (getattr(result, "output_artifacts", None) or {}).get("fallback_reason")
+                        error_message = (f"[{WorkerErrorCode.EXECUTION_ERROR.value}] {agent.name} modeli çıktı "
+                                         f"üretemedi, yedek şablon döndü" + (f" ({reason})" if reason else ""))
+                        forced_kind = TRANSIENT
+                    if (is_successful and category == "FRONTEND" and raw_files and getattr(agent, "endpoint_url", None)
+                            and not any(str(f.get("filename") or f.get("path") or "").lower().endswith(PAGE_SUFFIXES)
+                                        for f in raw_files if isinstance(f, dict))):
+                        # 26 Nov: FRONTEND failed over to the remote backend worker, which wrote a .py file instead of a page
+                        is_successful = False
+                        error_message = (f"[{WorkerErrorCode.CONTRACT_VIOLATION.value}] {agent.name} arayüz görevinde "
+                                         f"HTML sayfası üretmedi")
                     if is_successful and workspace is not None:
                         try:
                             with self._workspace_lock:  # conflict detection keeps a per-run index
@@ -234,7 +263,7 @@ class MasterOrchestrator:
                     if is_successful:
                         error_kind = None
                     else:
-                        raw_kind = getattr(result, "error_kind", None)
+                        raw_kind = forced_kind or getattr(result, "error_kind", None)
                         if raw_kind in (ErrorKind.TRANSIENT.value, ErrorKind.PERMANENT.value):
                             error_kind = raw_kind
                         else:
