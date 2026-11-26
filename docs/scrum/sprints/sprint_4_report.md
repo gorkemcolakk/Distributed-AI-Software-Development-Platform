@@ -98,8 +98,8 @@ python -m unittest tests/test_s4_ci_quality_gate.py
 ## 2. Sprint Retrospective (At the Retrospective)
 
 ### 2.1. Team Observations: What Went Well?
-1. **End-to-End Integration Check Before Review:** Testing multi-agent execution, AST validation, and UI rendering together prior to Sprint Review caught encoding and state-synchronization edge cases early.
-2. **Tight Integration Between AST/SQL Review (`S4-05`) and Retry/Failover (`S4-01`):** Returning structured syntax diagnostics from `IntegrationAgent` and enforcing transient/permanent error classification (`S4-02`) prevented redundant retries on permanent defects while enabling recovery on transient worker failures.
+1. **Distributed Test Before Review (November 24):** Running all five workers together before the Sprint Review exposed real integration issues early: mismatched worker tokens (HTTP 401), empty worker results counted as `COMPLETED`, a forbidden `CHECK` constraint in generated SQL, a frontend that did not fetch from the backend, and the Integration Agent's Ollama timeout. Each finding was added to the Sprint 5 cards.
+2. **Error Classification Guiding Retry/Failover (`S4-01`, `S4-02`):** Classifying worker errors as transient or permanent let the retry policy retry only transient failures (timeouts, unreachable workers) and move permanent ones straight to failover, while the Integration Agent's AST/SQL review (`S4-05`) marks faulty files in its review verdict.
 3. **Deterministic Offline Test Suite (`S4-06`):** Isolating Ollama HTTP calls behind deterministic mocks allowed 418+ unit tests to execute rapidly inside GitHub Actions (`.github/workflows/tests.yml`).
 4. **Shared Domain Contract (`S4-07`):** Injecting extracted entities, fields, and endpoints into every worker envelope reduced schema drift between `DatabaseAgent`, `BackendAgent`, and `FrontendAgent`.
 
