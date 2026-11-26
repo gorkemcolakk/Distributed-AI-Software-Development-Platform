@@ -1,7 +1,7 @@
 # Data Model and Persistence Design
 
-**Iteration:** Iteration 1 (S1-04) → updated in Iteration 2 (S2-07) → updated in Iteration 3 (S3-04) → updated in Iteration 4 (S4-04)  
-**Task ID:** S1-04, S2-07, S3-04, S4-04  
+**Iteration:** Iteration 1 (S1-04) → updated in Iteration 2 (S2-07) → updated in Iteration 3 (S3-04) → updated in Iteration 4 (S4-04) → harmonized in Iteration 5 (S5-02, S5-04)  
+**Task ID:** S1-04, S2-07, S3-04, S4-04, S5-02, S5-04  
 **Assignee:** Mahmut Karaalioğlu (Database Agent)  
 **Reviewer:** İrem Yılmaz (Scrum Master)  
 **Source of truth:** [`src/master/db_manager.py`](../src/master/db_manager.py) — schema version `5` (`PRAGMA user_version`)  
@@ -11,15 +11,15 @@
 In our distributed AI agent platform, data is categorized into two main storage types:
 
 **Information Requiring Persistent Storage (Persistent Data):**
-* Parsed sub-tasks (Task details, requirements)
-* Task assignments and execution statuses (Pending, In Progress, Failed, Completed)
-* Persistent agent profiles and their capability scores
-* Error logs and execution attempt history (crucial for self-correction)
-* Output file metadata and physical repository paths
+* Parsed sub-tasks (Task details, requirements, dependencies)
+* Task assignments and execution statuses (`PENDING`, `IN_PROGRESS`, `COMPLETED`, `FAILED`, `UNASSIGNED`, `BLOCKED`)
+* Persistent agent profiles and their capability scores (`coding`, `reasoning`, `context_capacity`)
+* Error logs and execution attempt history (crucial for bounded retry and failover self-correction)
+* Output file metadata, SHA-256 hashes, AST review verdicts, and file/schema conflict resolutions
 
 **State Required Only During Runtime (In-Memory State):**
-* Real-time WebSocket/API connection statuses of the agents (Ping/Pong)
-* UI (Dashboard) progress bars and temporary render data
+* Real-time HTTP `/health` ping responses of distributed worker nodes
+* UI (Streamlit) session state, progress bars, and temporary render data
 * Raw prompts generated and sent to the LLM during active execution
 
 ## 2. SQLite Tables (Data Dictionary — Implemented)
@@ -37,14 +37,14 @@ All tables are created with `CREATE TABLE IF NOT EXISTS` by `init_db()`, which i
 | `completed_count`, `failed_count`, `unassigned_count`, `blocked_count` | INTEGER | Final status counters |
 | `workspace_path` | TEXT | S3-04: absolute root directory for this run's artifacts (`workspaces/{run_id}`) |
 | `owner_pid` | INTEGER | OS process ID that created the run (used for automatic stale `RUNNING` recovery) |
-| `started_at`, `finished_at` | TIMESTAMP | |
+| `started_at`, `finished_at` | TIMESTAMP | Used for end-to-end latency & Sprint 5 telemetry calculations |
 
 ### `agents` — persistent agent capability profiles
 | Column | Type | Notes |
 | :--- | :--- | :--- |
 | `agent_id` | TEXT **PK** | `BaseAgent.agent_id` |
-| `name` | TEXT NOT NULL | e.g. Frontend Agent |
-| `model_name` | TEXT | Underlying LLM (e.g. `qwen2.5-coder:7b`) |
+| `name` | TEXT NOT NULL | e.g. Backend Agent |
+| `model_name` | TEXT | Underlying Ollama LLM (e.g. `qwen2.5-coder:7b`) |
 | `coding_score`, `reasoning_score`, `context_capacity` | REAL | 0–100 (CHECK) |
 | `specialties` | TEXT (JSON array) | |
 | `provenance` | TEXT (JSON object) | Per-metric `estimated` / `measured` |
@@ -80,7 +80,7 @@ All tables are created with `CREATE TABLE IF NOT EXISTS` by `init_db()`, which i
 | `agent_id`, `agent_name` | TEXT | |
 | `attempt_no` | INTEGER | 1-based order within the task |
 | `is_successful` | INTEGER | `0` / `1` (CHECK) |
-| `error_message` | TEXT | Exception message on failure |
+| `error_message` | TEXT | Sanitized exception message on failure |
 | `execution_time_seconds` | REAL | |
 | `model_used` | TEXT | S4-04: model tag used in this attempt |
 | `created_at` | TIMESTAMP | |
@@ -126,13 +126,12 @@ Runs interrupted mid-execution (exception, `KeyboardInterrupt`, Streamlit stop, 
 If `init_db()` finds the Sprint 1 schema (`tasks` without `run_id`, `agents` without `agent_id`), those tables are renamed to `tasks_legacy_v1` / `agents_legacy_v1` and the new schema is created. Existing v2/v3/v4 databases are upgraded in-place via `_add_missing_columns()` and `CREATE TABLE IF NOT EXISTS`. No data is deleted.
 
 ## 3. Storage Options Comparison
-Currently, agent capabilities are stored statically in `config/agents_config.json`. However, this is insufficient for asynchronous task management.
 
 | Method | Advantages | Disadvantages | Decision |
 | :--- | :--- | :--- | :--- |
 | **JSON / In-Memory** | Fast execution, zero setup required. | Total data loss on system crash. Prone to data corruption during concurrent writes by multiple agents. | **Rejected.** Unsafe for asynchronous distributed architecture. |
-| **SQLite** | File-based, zero configuration required (Ideal for MVP). ACID compliant. Prevents locks with WAL (Write-Ahead Logging) mode. | May face performance bottlenecks in highly concurrent, multi-server production environments. | **Accepted.** Ideal solution for Sprints 1 and 2. |
-| **PostgreSQL** | Most robust solution for distributed and production systems. | Requires Docker or local server installation for every developer. Over-engineering for Iteration 1. | **Postponed.** (Can be migrated from SQLite later if needed). |
+| **SQLite (WAL Mode)** | File-based, zero configuration required. ACID compliant. Prevents locks with WAL (Write-Ahead Logging) mode across parallel worker threads. | Single-host file lock limits multi-region horizontal scaling. | **Accepted.** Implemented across Sprints 1–5 (`schema v5`) for run persistence, conflict logs, and Sprint 5 telemetry export. |
+| **PostgreSQL** | Most robust solution for multi-datacenter production systems. | Requires Docker or local server installation for every developer. | **Postponed.** (Can be migrated from `db_manager.py` later if needed). |
 
 ## 4. Entity-Relationship Diagram (ERD)
 
@@ -146,6 +145,8 @@ erDiagram
     RUNS {
         TEXT run_id PK
         TEXT system_status
+        TEXT workspace_path
+        INTEGER owner_pid
     }
     AGENTS {
         TEXT agent_id PK
@@ -167,14 +168,29 @@ erDiagram
         INTEGER attempt_id PK
         TEXT run_id FK
         TEXT task_id FK
+        INTEGER attempt_no
         INTEGER is_successful
+        TEXT model_used
+    }
+    OUTPUT_FILES {
+        INTEGER file_id PK
+        TEXT run_id FK
+        TEXT task_id FK
+        TEXT relative_path
+        TEXT sha256
+        TEXT review_status
+    }
+    FILE_CONFLICTS {
+        INTEGER conflict_id PK
+        TEXT run_id FK
+        TEXT task_id FK
+        TEXT conflict_type
+        TEXT resolution
     }
 ```
 
-## 5. Verification
-`python -m src.master.db_manager` initializes `state.db` and prints the status of each table. `tests/test_db_manager.py` covers creating the tables on a fresh database, running init twice, legacy migration, the COMPLETED guards, and orchestrator persistence.
-
-## 6. Open Questions and Decision Inputs (carried over from S1-04)
-Output Files: Should we store the actual code strings returned by the LLM in the database (as BLOB/TEXT), or write them directly to the disk (.py, .js) and only store the file_path in the database? (Recommendation: Writing to disk and storing the path is safer for Git integration).
-
-Attempt History: Should we implement a periodic pruning mechanism for the Attempt table to prevent database bloat from tasks that fail repeatedly?
+## 5. Verification & Architectural Decisions Resolved
+- **Verification:** `python -m src.master.db_manager` initializes `state.db` and prints the status of each table. `tests/test_db_manager.py` and `tests/test_s4_failover_and_conflicts.py` verify fresh table creation, idempotent `init_db()`, legacy migration, `COMPLETED` integrity triggers, stale-run `ABORTED` recovery, and conflict persistence.
+- **Resolved Design Decisions (carried over from S1-04):**
+  - *Artifact Storage:* Generated code files are written physically to disk inside `workspaces/{run_id}/` via `src/master/workspace.py`, while SQLite (`output_files`) stores file paths, byte sizes, SHA-256 digests, and review verdicts.
+  - *Attempt History Bounds:* Bounded retry policies (`src/master/retry_policy.py`) cap per-task retry loops (`max_retries`) and prevent unbounded database growth while preserving full auditability for Sprint 5 telemetry exports.

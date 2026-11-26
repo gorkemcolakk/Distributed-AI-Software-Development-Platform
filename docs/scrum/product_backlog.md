@@ -13,14 +13,14 @@
 * **Academic Course:** CM6453 Software Engineering Process and DevOps
 * **Methodology:** Scrum Framework (5 Sprints × 2 Weeks = 10 Weeks)
 * **Standard:** 2020 Scrum Guide (Ken Schwaber & Jeff Sutherland)
-* **Current Status:** Living Document (Sprint 1 & Sprint 2 Completed, Sprint 3 Completed with 2 Tasks Rolled Over, Sprint 4 Active)
+* **Current Status:** Living Document (Sprints 1–4 Completed, Sprint 5 Active)
 
 ---
 
 ## 1. Commitment: Product Goal
 
 > **Product Goal:**  
-> *"Deliver an end-to-end web-based distributed software engineering platform where a central Master Agent receives long-form software specifications, decomposes them into a validated Directed Acyclic Graph (DAG) of architectural subtasks, evaluates heterogeneous worker agent capabilities (Coding, Reasoning, Context Window), autonomously assigns tasks to specialized local Ollama models across distributed nodes, validates and integrates produced code artifacts through automated syntax and conflict review, and provides verifiable telemetry and benchmarking through a web dashboard."*
+> *"Deliver an end-to-end web-based distributed software engineering platform where a central Master Agent receives long-form software specifications, decomposes them into a validated Directed Acyclic Graph (DAG) of architectural subtasks with a shared domain contract, evaluates heterogeneous worker agent capabilities (Coding, Reasoning, Context Window), autonomously assigns tasks to specialized local Ollama models across distributed nodes, validates and integrates produced code artifacts through automated AST/SQL syntax and conflict review, and provides verifiable telemetry, empirical benchmarking, and release deliverables through a web dashboard."*
 
 ---
 
@@ -29,8 +29,8 @@
 * **Epic 1 (Foundation & Architecture):** Repository governance, architectural specifications, persistence design, and web UI baseline.
 * **Epic 2 (Agent Management & Intelligence):** Capability profiles, weighted candidate selection algorithm, schema validation, and run isolation.
 * **Epic 3 (Distributed Execution & Worker Integration):** Local Ollama model prompting, REST worker communication, artifact production, and DAG dependency enforcement.
-* **Epic 4 (Quality Assurance, Recovery & Integration):** Code review automation, AST syntax inspection, conflict resolution, bounded retries, task reassignment, and CI quality gates.
-* **Epic 5 (Telemetry, Benchmarking & Release):** Telemetry dashboard, empirical model benchmarks, end-to-end validation, and release documentation.
+* **Epic 4 (Quality Assurance, Recovery & Integration):** Code review automation, AST/SQL syntax inspection, conflict resolution, bounded retries, task reassignment, LLM task decomposition, and CI quality gates.
+* **Epic 5 (Telemetry, Benchmarking & Release):** Telemetry dashboard, empirical model benchmarks, end-to-end validation, release documentation, final project report, and presentation deck.
 
 ---
 
@@ -61,7 +61,7 @@
 | **PBI-12** | **S2-05** | Epic 1 | **SQLite Persistence Integration:** Implement SQLite WAL-mode tables (`runs`, `agents`, `tasks`, `attempts`) with `run_id` isolation, error constraints, and `.gitignore` protection. | Mahmut Karaalioğlu | High | 3 | S1-04, S2-03 | **Done** |
 | **PBI-13** | **S2-06** | Epic 4 | **Automated Unit Test Suite for Selection & Scheduler:** Develop deterministic mock-based unit tests for weighted selection, status filtering, schema validation, and scheduler lifecycle in [`tests/test_master_engine.py`](../../tests/test_master_engine.py). | Berat İnan | High | 3 | S2-03, S2-04, S2-05 | **Done** |
 
-*Sprint 2 Velocity Delivered:* **22 Story Points** (7 of 7 Cards Completed). Detailed in [Sprint 2 Backlog](sprints/sprint_2_backlog.md) and [Sprint 2 Report](sprints/sprint_2_report.md).
+*Sprint 2 Velocity Delivered:* **22 Story Points** (6 of 6 Cards Completed). Detailed in [Sprint 2 Backlog](sprints/sprint_2_backlog.md) and [Sprint 2 Report](sprints/sprint_2_report.md).
 
 ---
 
@@ -71,7 +71,7 @@
 | **PBI-14** | **S3-01** | Epic 3 | **Versioned Master–Worker Contracts & Task Dispatch:** Finalize versioned JSON schemas (`TaskPayloadContract_v1`, `WorkerTaskResultContract_v1`) in [`src/contracts.py`](../../src/contracts.py) and update orchestrator dispatch. | Eren Görkem Çolak | Highest | 5 | S2-03, S2-04 | **Done** |
 | **PBI-15** | **S3-02** | Epic 3 | **Authenticated Worker HTTP API & Backend Ollama Code Generation:** Implement Bearer-token protected REST worker endpoint (`src/api/worker_server.py`) and connect BackendAgent to local Ollama (`qwen2.5-coder:7b`). | İrem Yılmaz | Highest | 5 | S3-01, S2-01 | **Done** |
 | **PBI-16** | **S3-03** | Epic 3 | **FrontendAgent Local Ollama Generation & Distributed UI Monitor:** Connect FrontendAgent to local Ollama (`qwen2.5-coder:3b`) and display distributed worker and file statuses in Streamlit UI. | Kübra Hepcan | High | 3 | S3-01, S2-02 | **Done** |
-| **PBI-17** | **S3-04** | Epic 3 | **DAG Dependency Graph Validation & Safe Workspace Writer:** Validate task DAG for cycles (Tarjan SCC), enforce cascading `BLOCKED` states on failure, generate SQL via DatabaseAgent, and enforce safe file writing to `workspaces/{run_id}/`. | Mahmut Karaalioğlu | Highest | 5 | S3-01, S2-05 | **Done** |
+| **PBI-17** | **S3-04** | Epic 3 | **DAG Dependency Graph Validation & Safe Workspace Writer:** Validate task DAG for cycles, enforce cascading `BLOCKED` states on failure, generate SQL via DatabaseAgent, and enforce safe file writing to `workspaces/{run_id}/`. | Mahmut Karaalioğlu | Highest | 5 | S3-01, S2-05 | **Done** |
 | **PBI-18** | **S3-05** | Epic 3 | **Artifact Manifest Aggregation & Output Collection:** Collect worker code outputs, compute file sizes and SHA-256 integrity hashes, and structure standardized artifact manifests via IntegrationAgent. | Elif Yılmaz | High | 3 | S3-01, S3-04 | **Done** |
 | **PBI-19** | **S3-06** | Epic 4 | **TestingAgent Ollama Generation & DAG/HTTP Test Suite:** Connect TestingAgent to local Ollama (`deepseek-coder:6.7b`) and write automated unit tests for HTTP auth, DAG cycle detection, and path traversal prevention. | Berat İnan | High | 3 | S3-01, S3-02, S3-04 | **Done** |
 
@@ -79,38 +79,40 @@
 
 ---
 
-### Phase 4: Integration, Quality Assurance & Fault Recovery (Sprint 4: Nov 12 – Nov 26, 2026 — Active)
+### Phase 4: Integration, Quality Assurance & Fault Recovery (Sprint 4: Nov 12 – Nov 26, 2026)
 | PBI ID | Card ID | Epic | Title & Description | Primary Assignee | Priority | SP | Dependencies | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **PBI-20** | **S4-01** | Epic 4 | **Bounded Retry & Automated Task Reassignment:** Implement state machine in `orchestrator.py` with bounded retry limits (`max_retries`) for transient errors and automatic failover to the second-highest idle candidate agent. | Eren Görkem Çolak | Highest | 5 | S3-01, S3-04, S4-02 | **Sprint Backlog** |
-| **PBI-21** | **S4-02** | Epic 4 | **Error Classification & Input/Output Security Hardening:** Classify worker errors into transient (timeout/quota) vs. permanent (syntax/schema), sanitize requirements input length, escape untrusted model output, and purge credentials from logs. | İrem Yılmaz | High | 3 | S3-02, S2-01 | **Sprint Backlog** |
-| **PBI-22** | **S4-03** | Epic 1 | **UI Display of Code Review Findings & Reassignment History:** Display file-by-file code review results (`APPROVED`, `REVIEW_REQUIRED`, `REJECTED`), path conflict alerts, and task reassignment histories in Streamlit dashboard. | Kübra Hepcan | High | 3 | S4-01, S4-05 | **Sprint Backlog** |
-| **PBI-23** | **S4-04** | Epic 4 | **File Path/Schema Conflict Resolution & SQLite Attempt History:** Detect write conflicts in shared workspaces, record attempt counts and error details in SQLite `attempts` table, and persist generated file metadata in `output_files`. | Mahmut Karaalioğlu | High | 3 | S3-04, S4-01 | **Sprint Backlog** |
-| **PBI-24** | **S4-05** | Epic 4 | **Integration Agent Code Review & Packaging:** Replace static `APPROVED` response with automated Python AST syntax verification, LLM code review via `phi4-mini:3.8b`, and assembled project artifact packaging. | Elif Yılmaz | Highest | 5 | S3-05, S4-04 | **Sprint Backlog** |
-| **PBI-25** | **S4-06** | Epic 4 | **Automated Test Expansion & GitHub Actions CI Gate:** Author mock-based unit tests for retry/reassignment and conflict detection, expand [`.github/workflows/tests.yml`](../../.github/workflows/tests.yml) to block failing PR merges, and sanitize test suites. | Berat İnan | Highest | 5 | S4-01, S4-02, S4-04, S4-05 | **Sprint Backlog** |
-| **PBI-32** | **S4-07** | Epic 4 | **Master Agent Local Model Decomposition & Inter-Agent Shared Contract:** Connect `analyzer.py` to local `qwen2.5:7b` Ollama model to dynamically extract requirements, dependencies, and shared domain contract (endpoints, tables, fields) and enable parallel dispatch of independent tasks. | Eren Görkem Çolak | Highest | 5 | S3-01, S4-01 | **Sprint Backlog** |
+| **PBI-20** | **S4-01** | Epic 4 | **Bounded Retry & Automated Task Reassignment:** Implement state machine in `orchestrator.py` and `retry_policy.py` with bounded retry limits (`max_retries`) for transient errors and automatic failover to the second-highest idle candidate agent. | Eren Görkem Çolak | Highest | 5 | S3-01, S3-04, S4-02 | **Done** |
+| **PBI-21** | **S4-02** | Epic 4 | **Error Classification & Input/Output Security Hardening:** Classify worker errors into transient vs. permanent (`src/security/error_classification.py`), sanitize requirements input (`input_validation.py`), escape untrusted model output, and purge credentials (`output_sanitizer.py`). | İrem Yılmaz | High | 3 | S3-02, S2-01 | **Done** |
+| **PBI-22** | **S4-03** | Epic 1 | **UI Display of Code Review Findings & Reassignment History:** Display file-by-file code review results (`APPROVED`, `REVIEW_REQUIRED`, `REJECTED`), path conflict alerts, and task reassignment histories in Streamlit dashboard (`review_panel.py`). | Kübra Hepcan | High | 3 | S4-01, S4-05 | **Done** |
+| **PBI-23** | **S4-04** | Epic 4 | **File Path/Schema Conflict Resolution & SQLite Attempt History:** Detect write conflicts in shared workspaces (`src/master/conflicts.py`), record attempt counts in SQLite `attempts`, and persist metadata in `output_files` and `file_conflicts`. | Mahmut Karaalioğlu | High | 3 | S3-04, S4-01 | **Done** |
+| **PBI-24** | **S4-05** | Epic 4 | **Integration Agent Code Review & Packaging:** Replace static `APPROVED` response with automated Python AST & SQL syntax verification, LLM code review via `phi4-mini:3.8b`, and assembled project artifact packaging. | Elif Yılmaz | Highest | 5 | S3-05, S4-04 | **Done** |
+| **PBI-25** | **S4-06** | Epic 4 | **Automated Test Expansion & GitHub Actions CI Gate:** Author mock-based unit tests for retry/reassignment and conflict detection, expand [`.github/workflows/tests.yml`](../../.github/workflows/tests.yml) to block failing PR merges, and sanitize test suites. | Berat İnan | Highest | 5 | S4-01, S4-02, S4-04, S4-05 | **Done** |
+| **PBI-26** | **S4-07** | Epic 4 | **Master Agent Local Model Decomposition & Inter-Agent Shared Contract:** Connect `analyzer.py` to local `qwen2.5:7b` Ollama model to dynamically extract requirements, dependencies, and shared domain contract and enable parallel dispatch (`ThreadPoolExecutor`). | Eren Görkem Çolak | Highest | 5 | S3-01, S4-01 | **Done** |
 
-*Sprint 4 Committed Capacity:* **29 Story Points** (7 Cards: S4-01 to S4-07; S4-07 added mid-sprint). Detailed in [Sprint 4 Backlog](sprints/sprint_4_backlog.md) and [Sprint 4 Report](sprints/sprint_4_report.md).
+*Sprint 4 Velocity Delivered:* **29 Story Points** (7 of 7 Cards Completed; cumulative velocity: **99 SP**). Detailed in [Sprint 4 Backlog](sprints/sprint_4_backlog.md) and [Sprint 4 Report](sprints/sprint_4_report.md).
 
 ---
 
-### Phase 5: Telemetry, Benchmarking, Complete System & Release (Sprint 5: Nov 26 – Dec 10, 2026 — Planned)
+### Phase 5: Telemetry, Benchmarking, Complete System & Release (Sprint 5: Nov 26 – Dec 10, 2026 — Active)
 | PBI ID | Card ID | Epic | Title & Description | Primary Assignee | Priority | SP | Dependencies | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **PBI-26** | **S5-01** | Epic 5 | **End-to-End Distributed Workflow & Telemetry Logging:** Orchestrate full pipeline from requirement input to integrated application package, recording per-task start/finish timestamps and latency metrics in `orchestrator.py`. | Eren Görkem Çolak | Highest | 3 | S4-01, S4-05 | **Planned** |
-| **PBI-27** | **S5-02** | Epic 5 | **Documentation & System Harmonization:** Synchronize [`README.md`](../../README.md), [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md), [`docs/DATA_MODEL.md`](../DATA_MODEL.md), [`docs/SRS.md`](../SRS.md), and Definition of Done with final verified code and local Ollama setup. | İrem Yılmaz | High | 3 | S5-01, S5-04 | **Planned** |
-| **PBI-28** | **S5-03** | Epic 5 | **Live Telemetry & Model Benchmark Visualizer Dashboard:** Render real execution runs (`run_id`), task durations, retry counts, and agent comparison charts in Streamlit UI; clearly distinguish live vs. demo data. | Kübra Hepcan | High | 3 | S5-01, S5-04 | **Planned** |
-| **PBI-29** | **S5-04** | Epic 5 | **SQLite Telemetry & Benchmark Data Export:** Implement queries and CSV/JSON export functionality in `db_manager.py` for agent success rates, latencies, and attempt counts. | Mahmut Karaalioğlu | High | 3 | S4-04, S5-01 | **Planned** |
-| **PBI-30** | **S5-05** | Epic 5 | **Final Demonstration Scenario & PO Acceptance Verification:** Rehearse multi-paragraph software requirement demo (`sample_requirement.md`), verify assembled web app, test negative failure path, and confirm PO acceptance. | Elif Yılmaz | Highest | 3 | S5-01, S5-03 | **Planned** |
-| **PBI-31** | **S5-06** | Epic 5 | **Empirical Ollama Benchmark & E2E Test Suite Validation:** Benchmark local team models using standardized prompts (`master_model_benchmark.py`), record latency/accuracy in benchmark report, and execute full E2E test suite. | Berat İnan | Highest | 5 | S5-01, S5-04 | **Planned** |
+| **PBI-27** | **S5-01** | Epic 5 | **End-to-End Distributed Workflow & Telemetry Logging:** Orchestrate full pipeline from requirement input to integrated application package, recording per-task start/finish timestamps and latency metrics in `orchestrator.py`. | Eren Görkem Çolak | Highest | 3 | S4-01, S4-05, S4-07 | **Sprint Backlog** |
+| **PBI-28** | **S5-02** | Epic 5 | **Documentation & System Harmonization:** Synchronize [`README.md`](../../README.md), [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md), [`docs/DATA_MODEL.md`](../DATA_MODEL.md), [`docs/SRS.md`](../SRS.md), and Definition of Done with final verified code and local Ollama setup. | İrem Yılmaz | High | 3 | S5-01, S5-04 | **Sprint Backlog** |
+| **PBI-29** | **S5-03** | Epic 5 | **Live Telemetry & Model Benchmark Visualizer Dashboard:** Render real execution runs (`run_id`), task durations, retry counts, and agent comparison charts in Streamlit UI; clearly distinguish live vs. demo data. | Kübra Hepcan | High | 3 | S5-01, S5-04 | **Sprint Backlog** |
+| **PBI-30** | **S5-04** | Epic 5 | **SQLite Telemetry & Benchmark Data Export:** Implement queries and CSV/JSON export functionality in `db_manager.py` and `run_export.py` for agent success rates, latencies, and attempt counts. | Mahmut Karaalioğlu | High | 3 | S4-04, S5-01 | **Sprint Backlog** |
+| **PBI-31** | **S5-05** | Epic 5 | **Final Demonstration Scenario & PO Acceptance Verification:** Rehearse multi-paragraph software requirement demo (`sample_requirement.md`), verify assembled web app, test negative failure path, and confirm PO acceptance. | Elif Yılmaz | Highest | 3 | S5-01, S5-03 | **Sprint Backlog** |
+| **PBI-32** | **S5-06** | Epic 5 | **Empirical Ollama Benchmark & E2E Test Suite Validation:** Benchmark local team models using standardized prompts (`master_model_benchmark.py`), record latency/accuracy in benchmark report, and execute full E2E test suite. | Berat İnan | Highest | 5 | S5-01, S5-04 | **Sprint Backlog** |
+| **PBI-33** | **S5-07** | Epic 5 | **Comprehensive Final Project Report (CM6453 Deliverable):** Compile final engineering and academic project report covering system architecture, multi-agent algorithms, SQLite schema, empirical benchmarks, and Scrum metrics. | Elif Yılmaz (Lead), Mahmut Karaalioğlu | Highest | 4 | S5-01, S5-02, S5-04, S5-06 | **Sprint Backlog** |
+| **PBI-34** | **S5-08** | Epic 5 | **Final Project Presentation Deck & Live Demo Script:** Create final presentation slide deck covering problem statement, distributed architecture, live telemetry/benchmark results, and live demo walkthrough. | Kübra Hepcan (Lead), Eren Görkem Çolak | Highest | 3 | S5-03, S5-05, S5-06 | **Sprint Backlog** |
 
-*Sprint 5 Planned Capacity:* **20 Story Points** (6 Cards). Detailed in [Sprint 5 Backlog](sprints/sprint_5_backlog.md) and [Sprint 5 Report](sprints/sprint_5_report.md).
+*Sprint 5 Committed Capacity:* **27 Story Points** (8 Cards: `S5-01` – `S5-08`). Detailed in [Sprint 5 Backlog](sprints/sprint_5_backlog.md).
 
 ---
 
 ## 4. Scrum Traceability & Quality Commitments
 
-1. **Alignment with Product Goal:** Every PBI directly supports the incremental realization of the distributed multi-agent platform, from foundational setup to empirical benchmarking.
+1. **Alignment with Product Goal:** Every PBI directly supports the incremental realization of the distributed multi-agent platform, from foundational setup to empirical benchmarking and release deliverables.
 2. **Definition of Done (DoD):** All PBIs must satisfy the unified [Definition of Done](definition_of_done.md) before being marked as `Done` in Sprint Reviews.
 3. **Carry-over Management:** Unfinished work is never marked done; it returns to the backlog and is prioritized in the next Sprint Backlog.
 4. **Honest Reporting:** No simulated feature or mocked test is reported as verified distributed execution. Unimplemented capabilities are explicitly labeled as planned.
