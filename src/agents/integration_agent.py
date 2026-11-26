@@ -86,7 +86,7 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
         else:
             self.ollama_generate_url = f"{base_host}/api/generate"
 
-        self.ollama_timeout = float(os.getenv("OLLAMA_TIMEOUT", "45"))
+        self.ollama_timeout = float(os.getenv("OLLAMA_TIMEOUT", "150"))
         # Same switch style as the other agents (BACKEND_AGENT_USE_OLLAMA, ...); tests pass use_llm=False
         self.use_llm = _env_flag("INTEGRATION_AGENT_USE_OLLAMA", True) if use_llm is None else bool(use_llm)
         # (review_mode, fallback_reason) of the last LLM review: "llm" / "fallback" / "static"
