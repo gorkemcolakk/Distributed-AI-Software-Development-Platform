@@ -19,6 +19,11 @@ try:  # S4-03: yeniden deneme / kod inceleme paneli
 except ImportError:  # app.py repo kökünden import edildiğinde (testler)
     from master_agent_projesi import review_panel as rp
 
+try:  # çalıştırmanın dosyalarını proje adıyla zip olarak indirme
+    import run_export
+except ImportError:  # app.py repo kökünden import edildiğinde (testler)
+    from master_agent_projesi import run_export
+
 try:
     from dotenv import load_dotenv
 
@@ -515,6 +520,69 @@ st.markdown("""
     div[data-testid="stMetric"] { transition: border-color .25s, box-shadow .25s; }
     div[data-testid="stMetric"]:hover { border-color: #4FACFE; box-shadow: 0 0 20px rgba(79,172,254,.25); }
     @media (prefers-reduced-motion: reduce) { .stApp::before, .stApp::after, .main-header, .task-card, .dot { animation: none !important; } }
+
+    /* ---------- Kullanılabilirlik katmanı ---------- */
+    .stApp::before { opacity: .6; }
+    .stApp::after { opacity: .65; }
+    .block-container { max-width: 1240px; padding-bottom: 4rem; }
+    .stApp p, .stApp li { line-height: 1.6; }
+    .section-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 1.1rem;
+        padding-bottom: 8px; border-bottom: 1px solid #1F2937; }
+    .section-hint { color: #8B949E; font-size: .88rem; margin: -4px 0 12px 0; }
+
+    /* Bildirim kutuları (başarı / hata / uyarı / bilgi) */
+    div[data-testid="stAlert"] { border-radius: 12px !important; border: 1px solid transparent; }
+    div[data-testid="stAlert"] > div { border-radius: 12px !important; }
+    div[data-testid="stAlertContentSuccess"] { color: #D1FAE5; }
+    div[data-testid="stAlertContentError"] { color: #FEE2E2; }
+    div[data-testid="stAlertContentWarning"] { color: #FEF3C7; }
+    div[data-testid="stAlertContentInfo"] { color: #DBEAFE; }
+
+    /* Açılır paneller kart gibi */
+    div[data-testid="stExpander"] details { background: #0F1524; border: 1px solid #1F2937 !important; border-radius: 12px !important;
+        transition: border-color .2s; }
+    div[data-testid="stExpander"] details:hover { border-color: #2A3B5F !important; }
+    div[data-testid="stExpander"] summary { font-weight: 600; }
+
+    /* Sekmeler */
+    div[data-baseweb="tab-list"] { gap: 6px; border-bottom: 1px solid #1F2937; }
+    button[data-baseweb="tab"] { background: #111827 !important; border-radius: 10px 10px 0 0 !important; padding: 10px 18px !important;
+        border: 1px solid #1F2937 !important; border-bottom: none !important; }
+    button[data-baseweb="tab"][aria-selected="true"] { background: #16213A !important; color: #4FACFE !important; }
+    button[data-baseweb="tab"] p { font-weight: 600 !important; font-size: .95rem !important; }
+
+    /* İndirme ve ikincil butonlar */
+    div.stDownloadButton > button { border-radius: 10px; border: 1px solid #2A3550; background: #121828; color: #E5E7EB; font-weight: 600; }
+    div.stDownloadButton > button:hover { border-color: #4FACFE; color: #4FACFE; }
+    div[data-testid="stButtonGroup"] button { border-radius: 999px !important; }
+
+    /* Özet kutucukları */
+    .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 4px 0 14px 0; }
+    .kpi { background: #121828; border: 1px solid #1F2937; border-top: 3px solid var(--c); border-radius: 12px; padding: 12px 16px; }
+    .kpi b { display: block; font-size: 1.6rem; color: var(--c); line-height: 1.2; }
+    .kpi span { color: #9CA3AF; font-size: .82rem; text-transform: uppercase; letter-spacing: .04em; }
+
+    /* Sonuç bandı */
+    .result-banner { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 12px; margin: 6px 0 16px 0;
+        background: color-mix(in srgb, var(--c) 12%, #0F1524); border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); }
+    .result-banner .ico { font-size: 1.6rem; }
+    .result-banner .t { font-weight: 700; color: #F9FAFB; }
+    .result-banner .d { color: #CBD5E1; font-size: .9rem; }
+
+    /* Boş durum: nasıl çalışır */
+    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin: 18px 0 6px 0; }
+    .step { background: #0F1524; border: 1px dashed #2A3550; border-radius: 12px; padding: 16px; }
+    .step .n { display: inline-flex; width: 26px; height: 26px; border-radius: 50%; align-items: center; justify-content: center;
+        background: rgba(79,172,254,.15); color: #4FACFE; font-weight: 800; font-size: .85rem; margin-bottom: 8px; }
+    .step .h { font-weight: 700; color: #F3F4F6; margin-bottom: 4px; }
+    .step .p { color: #9CA3AF; font-size: .88rem; }
+
+    .char-count { text-align: right; color: #6B7280; font-size: .8rem; margin-top: -6px; }
+    .char-count.warn { color: #FBBF24; }
+    .task-card:hover { border-color: #2A3B5F; }
+    .task-card .task-reason { margin: -6px 0 14px 0; padding: 8px 12px; border-radius: 8px; font-size: .9rem;
+        background: color-mix(in srgb, var(--sc) 10%, transparent); color: var(--sc); }
+    @media (max-width: 640px) { .main-header { font-size: 2rem; } .assign { margin-left: 0; } .load-name { width: 100px; } }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1142,8 +1210,8 @@ def task_card(rec, meta, agent, idx, fresh):
     deps = ", ".join(meta.get("dependencies", [])) or "yok"
     who = (f'<span class="assign">🤖 {esc(rec["assigned_agent"])}<small>FitScore: {rec["fit_score"]}</small></span>'
            if rec["assigned_agent"] else '<span class="assign" style="--c:#6B7280">🤖 atanmadı</span>')
-    reason = "" if rec[
-                       "status"] == "COMPLETED" else f'<div class="task-desc" style="margin-top:-6px;color:{sc}">⚠ {esc(rec["reason"])}</div>'
+    reason = "" if rec["status"] == "COMPLETED" or not rec.get("reason") else (
+        f'<div class="task-reason" style="--sc:{sc}">⚠ {esc(rec["reason"])}</div>')
     return (
         f'<div class="task-card{" fresh" if fresh else ""}" style="--c:{color}; animation-delay:{idx * 0.15}s">'
         f'<div class="task-head"><span class="task-title">{TASK_ICONS.get(rec["task_id"], "🔹")} {esc(rec["title"])}</span>'
@@ -1253,19 +1321,45 @@ components.html(network_html(current_load() if state.report else None,
                              {a["Agent ID"]: agent_status(a) for a in agents_data} if state.report else None),
                 height=310)
 
-st.markdown('<div class="section-title">Gereksinim</div>', unsafe_allow_html=True)
+EXAMPLE_REQUIREMENTS = {
+    "📚 Kütüphane": "Kullanıcıların hesap açabileceği, kitap arayabileceği, ödünç alıp iade edebileceği bir kütüphane "
+                   "yönetim sistemi istiyorum. Yöneticiler kitap ekleyip silebilmeli.",
+    "✅ Görev takibi": "Ekiplerin görev oluşturup kişilere atayabileceği, durumunu (yapılacak / sürüyor / bitti) "
+                      "güncelleyebileceği basit bir görev takip uygulaması istiyorum.",
+    "🛒 E-ticaret": "Ürünlerin listelendiği, kullanıcıların sepete ürün ekleyip sipariş verebileceği ve "
+                   "siparişlerini görüntüleyebileceği küçük bir e-ticaret altyapısı istiyorum.",
+}
+REQ_MAX = 50_000
+
+
+def _use_example():
+    """Örnek seçildiğinde gereksinim kutusunu doldurur, seçimi sıfırlar (tekrar seçilebilsin)."""
+    choice = st.session_state.get("req_example")
+    if choice:
+        st.session_state["req_text"] = EXAMPLE_REQUIREMENTS[choice]
+    st.session_state["req_example"] = None
+
+
+st.markdown('<div class="section-title">📝 Gereksinim</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-hint">Ne inşa etmek istediğinizi düz bir dille yazın; Master Agent bunu görevlere bölüp '
+            'uygun ajanlara dağıtır. Hızlı başlamak için bir örnek seçebilirsiniz.</div>', unsafe_allow_html=True)
+st.pills("Örnek gereksinimler", list(EXAMPLE_REQUIREMENTS), key="req_example", on_change=_use_example,
+         label_visibility="collapsed")
 requirement_input = st.text_area(
-    "Gereksinim:", height=130, label_visibility="collapsed",
+    "Gereksinim:", height=150, label_visibility="collapsed", key="req_text",
     placeholder="Örnek: Kullanıcıların hesap açabileceği, kitap arayabileceği bir kütüphane altyapısı istiyorum...")
+_n = len(requirement_input or "")
+st.markdown(f'<div class="char-count{" warn" if _n > REQ_MAX else ""}">'
+            f'{_n:,} / {REQ_MAX:,} karakter</div>'.replace(",", "."), unsafe_allow_html=True)
 
 if ENGINE_ERROR is not None:
     st.warning(f"Master Agent motoru yüklenemedi ({ENGINE_ERROR}). Sonuçlar DEMO VERİSİ olarak gösterilecek.")
 
-if st.button("🚀 Analiz et ve ajanlara dağıt", use_container_width=True):
+if st.button("🚀 Analiz et ve ajanlara dağıt", use_container_width=True, type="primary"):
     try:
         cleaned_req = validate_requirement_text(requirement_input) if ENGINE_ERROR is None else requirement_input.strip()
         if not cleaned_req:
-            st.warning("Analiz için önce bir gereksinim metni girin.")
+            st.warning("✍️ Analiz için önce bir gereksinim metni girin ya da yukarıdan bir örnek seçin.")
             st.stop()
     except InputValidationError as val_err:
         st.warning(f"⚠️ {val_err.reason}")
@@ -1288,7 +1382,7 @@ if st.button("🚀 Analiz et ve ajanlara dağıt", use_container_width=True):
         except Exception as e:
             live.update(label="Motor hata verdi", state="error")
             safe_err = redact_secrets(f"{type(e).__name__}: {e}") if ENGINE_ERROR is None else f"{type(e).__name__}: {e}"
-            st.error(f"Motor çalıştırılamadı: {safe_err}")
+            st.error(f"❌ Motor çalıştırılamadı: {safe_err}")
             st.stop()
         live.update(label="Motor çalıştırması bitti", state="complete")
     else:
@@ -1300,106 +1394,164 @@ if st.button("🚀 Analiz et ve ajanlara dağıt", use_container_width=True):
     state.fresh = True
     st.rerun()
 
+if not state.report:
+    st.markdown(
+        '<div class="steps">'
+        '<div class="step"><div class="n">1</div><div class="h">Gereksinimi yazın</div>'
+        '<div class="p">Ne istediğinizi birkaç cümleyle anlatın ya da bir örnek seçin.</div></div>'
+        '<div class="step"><div class="n">2</div><div class="h">Master ayrıştırır</div>'
+        '<div class="p">Gereksinim veritabanı, backend, frontend, test ve entegrasyon görevlerine bölünür.</div></div>'
+        '<div class="step"><div class="n">3</div><div class="h">Ajanlar üretir</div>'
+        '<div class="p">Her görev en uygun ajana (FitScore) atanır; hata olursa yeniden denenir ya da devredilir.</div></div>'
+        '<div class="step"><div class="n">4</div><div class="h">Sonucu indirin</div>'
+        '<div class="p">Üretilen dosyaları inceleyin, test sonuçlarını görün ve projeyi zip olarak indirin.</div></div>'
+        '</div>', unsafe_allow_html=True)
+
 if state.report:
     report = state.report
     assignments = report["task_assignments"]
     by_name = agent_by_name()
     total = len(assignments)
     done = sum(1 for r in assignments if r["status"] == "COMPLETED")
+    counts = report["status_counts"]
+    n_failed = sum(n for s, n in counts.items() if s in ("FAILED", "BLOCKED", "UNASSIGNED"))
+
+    # ---- Sonuç özeti ----
+    st.markdown(f'<div class="section-title">📊 Sonuç &nbsp;{mode_badge()}</div>', unsafe_allow_html=True)
+    if total and done == total:
+        b_ico, b_col, b_t = "✅", "#34D399", "Tüm görevler başarıyla tamamlandı"
+    elif done:
+        b_ico, b_col, b_t = "⚠️", "#FBBF24", "Görevlerin bir kısmı tamamlanamadı"
+    else:
+        b_ico, b_col, b_t = "❌", "#F87171", "Hiçbir görev tamamlanamadı"
+    b_d = (f"{done} / {total} görev tamamlandı"
+           + (f" · {state.elapsed:.2f} sn" if state.elapsed is not None else "")
+           + (" · nedenleri Görevler sekmesindeki kartlarda" if n_failed else ""))
+    st.markdown(f'<div class="result-banner" style="--c:{b_col}"><span class="ico">{b_ico}</span>'
+                f'<div><div class="t">{b_t}</div><div class="d">{esc(b_d)}</div></div></div>', unsafe_allow_html=True)
+    if state.fresh:
+        st.toast(f"{b_ico} {b_t} ({done}/{total})")
+
+    st.markdown('<div class="kpi-row">'
+                + f'<div class="kpi" style="--c:#4FACFE"><b>{total}</b><span>Toplam görev</span></div>'
+                + "".join(f'<div class="kpi" style="--c:{STATUS_STYLE.get(s, STATUS_STYLE["IDLE"])[0]}">'
+                          f'<b>{n}</b><span>{esc(s)}</span></div>' for s, n in counts.items())
+                + '</div>', unsafe_allow_html=True)
+    st.progress(done / max(total, 1), text=f"İlerleme: {done} / {total} görev tamamlandı")
 
     if state.decomp_demo:
         st.info(f"🛡️ **Aktif Kip: Güvenli Tanıtım / Yedek (Fallback Mode)** — {state.decomp_label}. "
                 "Görev ayrıştırma etiketli yedek şablonla yapıldı; ajan atamaları ve durumlar Master Agent motorundan gelir.")
-    st.markdown(f'<div class="section-title">Master Agent günlüğü &nbsp;{mode_badge()}</div>', unsafe_allow_html=True)
-    components.html(terminal_html(state.log, state.fresh), height=60 + 22 * (len(state.log) + 1))
 
-    st.markdown('<div class="section-title">Görev dağılımı</div>', unsafe_allow_html=True)
-    st.progress(done / max(total, 1), text=f"İlerleme: {done} / {total} görev tamamlandı")
-    counts = report["status_counts"]
-    st.markdown("".join(
-        f'<span class="chip chip-cx" style="--c:{STATUS_STYLE[s][0]};margin:0 8px 8px 0;display:inline-block">{s}: {n}</span>'
-        for s, n in counts.items()), unsafe_allow_html=True)
+    with st.expander(f"🖥️ Master Agent günlüğü ({len(state.log)} satır)", expanded=state.fresh):
+        components.html(terminal_html(state.log, state.fresh), height=60 + 22 * (len(state.log) + 1))
 
-    for i, rec in enumerate(assignments):
-        agent = by_name.get(rec["assigned_agent"])
-        st.markdown(task_card(rec, state.meta.get(rec["task_id"], {}), agent, i, state.fresh), unsafe_allow_html=True)
-        rp.render_task_attempts(st, rec["task_id"], state.attempt_rows, rec.get("attempted_agents"))
-        art = state.artifacts.get(rec["task_id"])
-        if art:
-            label = output_label(art["artifacts"])
-            with st.expander(label):
-                st.json(art["artifacts"])
-                raw_logs = "\n".join(art["logs"])
-                st.code(redact_secrets(raw_logs) if ENGINE_ERROR is None else raw_logs, language="text")
-        st.markdown('<div style="height:10px"></div>', unsafe_allow_html=True)
+    file_rows = generated_file_rows(report, state.artifacts) if state.mode == "engine" else []
+    tab_labels = (["📁 Üretilen dosyalar"] if state.mode == "engine" else []) + [
+        "📋 Görevler", "🧪 Kalite & test", "📈 Plan & analiz"]
+    tabs = dict(zip(tab_labels, st.tabs(tab_labels)))
 
+    # ---- Görevler ----
+    with tabs["📋 Görevler"]:
+        for i, rec in enumerate(assignments):
+            agent = by_name.get(rec["assigned_agent"])
+            st.markdown(task_card(rec, state.meta.get(rec["task_id"], {}), agent, i, state.fresh), unsafe_allow_html=True)
+            rp.render_task_attempts(st, rec["task_id"], state.attempt_rows, rec.get("attempted_agents"))
+            art = state.artifacts.get(rec["task_id"])
+            if art:
+                label = output_label(art["artifacts"])
+                with st.expander(label):
+                    st.json(art["artifacts"])
+                    raw_logs = "\n".join(art["logs"])
+                    st.code(redact_secrets(raw_logs) if ENGINE_ERROR is None else raw_logs, language="text")
+            st.markdown('<div style="height:10px"></div>', unsafe_allow_html=True)
+
+    # ---- Üretilen dosyalar ----
     if state.mode == "engine":
-        st.markdown('<div class="section-title">Üretilen dosyalar</div>', unsafe_allow_html=True)
-        file_rows = generated_file_rows(report, state.artifacts)
-        if file_rows:
-            if report.get("workspace_path"):
-                st.caption(f"Çalışma alanı: {report['workspace_path']}")
-            for i, row in enumerate(file_rows):
-                mode_txt, mode_color = GEN_MODE_LABELS.get(row["mode"], ("Üretim kipi bilinmiyor", "#6B7280"))
-                with st.expander(f"📄 {row['file']} · {row['task']}"):
-                    st.markdown(f'<span class="chip chip-cx" style="--c:{mode_color}">{esc(mode_txt)}</span> '
-                                f'<span class="chip">🤖 {esc(row["agent"])}</span>', unsafe_allow_html=True)
-                    st.caption(row["path"])
-                    if row["content"]:
-                        st.code(row["content"][:20000], language=CODE_LANGUAGES.get(Path(row["file"]).suffix.lower()))
-                        st.download_button("İndir", row["content"], file_name=Path(row["file"]).name,
-                                           key=f"dl-{report['run_id']}-{i}")
-        else:
-            st.caption("Bu çalıştırmada diske yazılmış dosya yok (tamamlanan görev yok ya da çıktı dosya içermiyor).")
+        with tabs["📁 Üretilen dosyalar"]:
+            if file_rows:
+                zip_name, zip_bytes, zip_count = run_export.build_run_zip(
+                    report.get("project_title"), file_rows, fallback_name=str(report.get("run_id") or "proje"))
+                c1, c2 = st.columns([3, 2], vertical_alignment="center")
+                c1.markdown(f"**{len(file_rows)} dosya üretildi**")
+                if report.get("workspace_path"):
+                    c1.caption(f"Çalışma alanı: {report['workspace_path']}")
+                if zip_count:
+                    c2.download_button(f"📦 Tümünü zip olarak indir ({zip_count} dosya)", zip_bytes,
+                                       file_name=zip_name, mime="application/zip", type="primary",
+                                       use_container_width=True, on_click="ignore",
+                                       key=f"zip-{report['run_id']}")
+                for i, row in enumerate(file_rows):
+                    mode_txt, mode_color = GEN_MODE_LABELS.get(row["mode"], ("Üretim kipi bilinmiyor", "#6B7280"))
+                    with st.expander(f"📄 {row['file']} · {row['task']}"):
+                        st.markdown(f'<span class="chip chip-cx" style="--c:{mode_color}">{esc(mode_txt)}</span> '
+                                    f'<span class="chip">🤖 {esc(row["agent"])}</span>', unsafe_allow_html=True)
+                        st.caption(row["path"])
+                        if row["content"]:
+                            st.code(row["content"][:20000], language=CODE_LANGUAGES.get(Path(row["file"]).suffix.lower()))
+                            st.download_button("⬇️ İndir", row["content"], file_name=Path(row["file"]).name,
+                                               on_click="ignore", key=f"dl-{report['run_id']}-{i}")
+                        else:
+                            st.caption("Dosya içeriği okunamadı.")
+            else:
+                st.info("📭 Bu çalıştırmada diske yazılmış dosya yok (tamamlanan görev yok ya da çıktı dosya içermiyor).")
 
-    if state.mode == "engine":
-        rp.render_review_panel(st, report, state.history)
-        render_smoke_test(report.get("smoke_test"))
-    render_generated_tests(report.get("generated_tests"))
+    # ---- Kalite & test ----
+    with tabs["🧪 Kalite & test"]:
+        if state.mode == "engine":
+            rp.render_review_panel(st, report, state.history)
+            render_smoke_test(report.get("smoke_test"))
+        render_generated_tests(report.get("generated_tests"))
+        if state.mode != "engine" and not report.get("generated_tests"):
+            st.info("Kod inceleme ve test sonuçları yalnızca canlı motor çalıştırmalarında üretilir.")
 
-    if state.plan:
-        render_plan(state.plan)
+    # ---- Plan & analiz ----
+    with tabs["📈 Plan & analiz"]:
+        if state.plan:
+            render_plan(state.plan)
 
-    if state.decomp:
-        with st.expander(f"Master Agent görev ayrıştırması (5 aşama) · {state.decomp_label}"):
-            # Küçük sütunlar tek satır, açıklama kısaltılır (tamamı fareyle üstüne gelince), tablo yana kayar
-            def _short(t, n=110):
-                t = " ".join(str(t).split())
-                return t if len(t) <= n else t[:n].rstrip() + "…"
+        if state.decomp:
+            with st.expander(f"Master Agent görev ayrıştırması (5 aşama) · {state.decomp_label}"):
+                # Küçük sütunlar tek satır, açıklama kısaltılır (tamamı fareyle üstüne gelince), tablo yana kayar
+                def _short(t, n=110):
+                    t = " ".join(str(t).split())
+                    return t if len(t) <= n else t[:n].rstrip() + "…"
 
-            _td = "padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.08);vertical-align:top;"
-            rows = "".join(
-                f'<tr><td style="{_td}white-space:nowrap;font-weight:600">{esc(p.replace("_", " "))}</td>'
-                f'<td style="{_td}white-space:nowrap">{esc(d.get("complexity", ""))}</td>'
-                f'<td style="{_td}white-space:nowrap">{esc(d.get("primary_skill_required", ""))}</td>'
-                f'<td style="{_td}white-space:nowrap;text-align:center">{esc(d.get("story_points", ""))}</td>'
-                f'<td style="{_td}min-width:320px;color:#D1D5DB" title="{esc(d.get("description", ""))}">'
-                f'{esc(_short(d.get("description", "")))}</td></tr>'
-                for p, d in state.decomp.items())
-            head = "".join(f'<th style="{_td}text-align:left;color:#9CA3AF;white-space:nowrap">{h}</th>'
-                           for h in ("Aşama", "Zorluk", "Yetenek", "Puan", "Açıklama"))
-            st.markdown('<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.9em">'
-                        f'<thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table></div>', unsafe_allow_html=True)
+                _td = "padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.08);vertical-align:top;"
+                rows = "".join(
+                    f'<tr><td style="{_td}white-space:nowrap;font-weight:600">{esc(p.replace("_", " "))}</td>'
+                    f'<td style="{_td}white-space:nowrap">{esc(d.get("complexity", ""))}</td>'
+                    f'<td style="{_td}white-space:nowrap">{esc(d.get("primary_skill_required", ""))}</td>'
+                    f'<td style="{_td}white-space:nowrap;text-align:center">{esc(d.get("story_points", ""))}</td>'
+                    f'<td style="{_td}min-width:320px;color:#D1D5DB" title="{esc(d.get("description", ""))}">'
+                    f'{esc(_short(d.get("description", "")))}</td></tr>'
+                    for p, d in state.decomp.items())
+                head = "".join(f'<th style="{_td}text-align:left;color:#9CA3AF;white-space:nowrap">{h}</th>'
+                               for h in ("Aşama", "Zorluk", "Yetenek", "Puan", "Açıklama"))
+                st.markdown('<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.9em">'
+                            f'<thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table></div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="section-title">Sprint burndown</div>', unsafe_allow_html=True)
-    st.caption("Gri çizgi ideal hız, turkuaz çizgi gerçek ilerleme (her görev 1 birim).")
-    st.line_chart(burndown_df(assignments), color=["#6B7280", "#00F2FE"], height=260)
+        g1, g2 = st.columns(2, gap="large")
+        with g1:
+            st.markdown('<div class="section-title">Sprint burndown</div>', unsafe_allow_html=True)
+            st.caption("Gri çizgi ideal hız, turkuaz çizgi gerçek ilerleme (her görev 1 birim).")
+            st.line_chart(burndown_df(assignments), color=["#6B7280", "#00F2FE"], height=260)
+        with g2:
+            st.markdown('<div class="section-title">Ajan iş yükü (tamamlanan görev)</div>', unsafe_allow_html=True)
+            load = current_load()
+            peak = max(max(load.values()), 1)
+            rows = ""
+            for a in agents_data:
+                pts = load[a["Agent ID"]]
+                rows += (f'<div class="load-row" style="--c:{a["color"]}"><span class="load-name">{esc(a["Agent ID"])}</span>'
+                         f'<div class="load-track"><div class="load-fill" style="width:{pts / peak * 100:.0f}%"></div></div>'
+                         f'<span class="load-pts">{pts} görev</span></div>')
+            st.markdown(rows, unsafe_allow_html=True)
 
-    st.markdown('<div class="section-title">Ajan iş yükü (tamamlanan görev)</div>', unsafe_allow_html=True)
-    load = current_load()
-    peak = max(max(load.values()), 1)
-    rows = ""
-    for a in agents_data:
-        pts = load[a["Agent ID"]]
-        rows += (f'<div class="load-row" style="--c:{a["color"]}"><span class="load-name">{esc(a["Agent ID"])}</span>'
-                 f'<div class="load-track"><div class="load-fill" style="width:{pts / peak * 100:.0f}%"></div></div>'
-                 f'<span class="load-pts">{pts} görev</span></div>')
-    st.markdown(rows, unsafe_allow_html=True)
-
-    with st.expander("Atama tablosu (Pandas)"):
-        df = pd.DataFrame([{"Görev": r["title"], "Ajan": r["assigned_agent"] or "-", "Model": r["model_used"] or "-",
-                            "FitScore": r["fit_score"], "Süre (sn)": r["execution_time_seconds"],
-                            "Durum": r["status"], "Neden": r["reason"]} for r in assignments])
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        with st.expander("Atama tablosu (Pandas)"):
+            df = pd.DataFrame([{"Görev": r["title"], "Ajan": r["assigned_agent"] or "-", "Model": r["model_used"] or "-",
+                                "FitScore": r["fit_score"], "Süre (sn)": r["execution_time_seconds"],
+                                "Durum": r["status"], "Neden": r["reason"]} for r in assignments])
+            st.dataframe(df, use_container_width=True, hide_index=True)
 
     state.fresh = False
