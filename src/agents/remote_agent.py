@@ -16,6 +16,10 @@ Features:
 - Enforces per-task HTTP timeouts and classifies network / HTTP errors
   (`TIMEOUT`, `UNAUTHORIZED`, `DUPLICATE_TASK`, `INVALID_PAYLOAD`, `UNREACHABLE`).
 - Supports optional fallback to an in-process local agent when `fallback_to_local=True`.
+- S5 A2A 1.0: `fetch_agent_card()` reads the worker's /.well-known/agent-card.json. When the
+  worker publishes a valid card (and MASTER_A2A_DISPATCH is not false) the task is sent as an
+  A2A SendMessage (POST /message:send) and the answer is read from the returned A2A Task;
+  workers without a card keep the original POST /task route.
 """
 
 import json
@@ -28,6 +32,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from pydantic import ValidationError
 
+from src import a2a_protocol as a2a
 from src.agents.base_agent import (
     AgentCapabilityProfile,
     AgentStatus,
@@ -139,6 +144,9 @@ class RemoteAgentProxy(BaseAgent):
         self._transport = transport or self._default_http_transport
         self.last_envelope: Optional[Dict[str, Any]] = None
         self.last_error_contract: Optional[WorkerErrorContract_v1] = None
+        # A2A: set by fetch_agent_card(); tasks go over A2A SendMessage only when the worker has a card
+        self.agent_card: Optional[Dict[str, Any]] = None
+        self.use_a2a = os.getenv("MASTER_A2A_DISPATCH", "true").strip().lower() not in ("0", "false", "no", "off")
 
     def _headers(self) -> Dict[str, str]:
         headers = {
@@ -178,6 +186,16 @@ class RemoteAgentProxy(BaseAgent):
         except Exception as exc:
             self.status = AgentStatus.OFFLINE
             return {"status": "OFFLINE", "error": str(exc), "endpoint": url}
+
+    def fetch_agent_card(self, timeout: float = 3.0) -> Optional[Dict[str, Any]]:
+        """Reads the worker's A2A Agent Card; None when the worker has none or it is not a valid A2A 1.0 card."""
+        url = f"{self.endpoint_url}{a2a.AGENT_CARD_PATH}"
+        try:
+            card = self._transport("GET", url, None, {"Accept": "application/json"}, timeout)
+        except Exception:
+            card = None
+        self.agent_card = card if card is not None and not a2a.validate_agent_card(card) else None
+        return self.agent_card
 
     def execute_task(self, task: Dict[str, Any]) -> TaskResult:
         """
@@ -224,20 +242,31 @@ class RemoteAgentProxy(BaseAgent):
 
         self.last_envelope = payload_dict
         effective_timeout = min(float(envelope.timeout_seconds), float(self.timeout))
-        url = f"{self.endpoint_url}{self.task_path}"
+        use_a2a = self.use_a2a and self.agent_card is not None
+        url = f"{self.endpoint_url}{a2a.SEND_MESSAGE_PATH if use_a2a else self.task_path}"
         logs = [
             f"[{self.name}] Dispatching task '{task_id}' (run_id='{envelope.run_id}', "
-            f"contract v{envelope.contract_version}) to {url}..."
+            f"contract v{envelope.contract_version}"
+            + (f", A2A {a2a.A2A_PROTOCOL_VERSION} SendMessage" if use_a2a else "") + f") to {url}..."
         ]
 
         try:
-            raw_response = self._transport(
-                "POST",
-                url,
-                payload_dict,
-                self._headers(),
-                effective_timeout,
-            )
+            if use_a2a:
+                raw_response = a2a.result_payload_from_task(self._transport(
+                    "POST",
+                    url,
+                    a2a.build_send_message_request(payload_dict),
+                    self._headers(),
+                    effective_timeout,
+                ))
+            else:
+                raw_response = self._transport(
+                    "POST",
+                    url,
+                    payload_dict,
+                    self._headers(),
+                    effective_timeout,
+                )
             result_contract = WorkerTaskResultContract_v1(
                 contract_version=str(raw_response.get("contract_version", CONTRACT_VERSION)),
                 run_id=raw_response.get("run_id", envelope.run_id),
