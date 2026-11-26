@@ -33,6 +33,7 @@ from fastapi import FastAPI, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
+from src import a2a_protocol as a2a
 from src.agents.backend_agent import BackendAgent
 from src.agents.base_agent import BaseAgent
 from src.agents.database_agent import DatabaseAgent
@@ -186,7 +187,10 @@ def create_worker_app(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Payload must be a JSON object",
             )
+        return await process_task(data)
 
+    async def process_task(data: Dict[str, Any]) -> Dict[str, Any]:
+        """Validates and runs one authenticated task payload (shared by /task and A2A /message:send)."""
         # S4-02: Input validation — sanitise task payload before execution
         try:
             from src.security.input_validation import validate_task_payload
@@ -369,7 +373,49 @@ def create_worker_app(
             "message": "Görev çıktısı ve eserler başarıyla kaydedildi.",
         }
 
+    # --- A2A 1.0: Agent Card + SendMessage / GetTask over the HTTP+JSON binding (S5) ---
+    register_a2a_routes(app, worker_agent, token_resolver, process_task)
+
     return app
+
+
+def register_a2a_routes(app: FastAPI, worker_agent: BaseAgent, token_resolver, process_task) -> None:
+    """
+    A2A (Agent2Agent) 1.0 endpoints next to the existing /task API (src/a2a_protocol.py).
+    The Agent Card is public (discovery); SendMessage and GetTask need the same Bearer token as /task.
+    """
+    a2a_tasks: Dict[str, Dict[str, Any]] = {}
+
+    @app.get(a2a.AGENT_CARD_PATH)
+    def agent_card(request: Request):
+        return a2a.build_agent_card(worker_agent, str(request.base_url))
+
+    @app.post(a2a.SEND_MESSAGE_PATH)
+    async def a2a_send_message(request: Request, authorization: Optional[str] = Header(None)):
+        raw_body = await request.body()
+        auth_err = check_bearer_token(authorization, token_resolver())
+        if auth_err:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Unauthorized: {auth_err}")
+        try:
+            body = json.loads(raw_body.decode("utf-8"))
+            data = a2a.task_payload_from_message(body)
+        except Exception as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid A2A SendMessageRequest: {exc}")
+        result_payload = await process_task(data)
+        task = a2a.build_task(result_payload, context_id=body["message"].get("contextId"))
+        a2a_tasks[task["id"]] = task
+        while len(a2a_tasks) > 100:  # keep only recent tasks for GetTask
+            a2a_tasks.pop(next(iter(a2a_tasks)))
+        return {"task": task}
+
+    @app.get("/tasks/{task_id}")
+    def a2a_get_task(task_id: str, authorization: Optional[str] = Header(None)):
+        auth_err = check_bearer_token(authorization, token_resolver())
+        if auth_err:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Unauthorized: {auth_err}")
+        if task_id not in a2a_tasks:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+        return a2a_tasks[task_id]
 
 
 # Default application instance for uvicorn

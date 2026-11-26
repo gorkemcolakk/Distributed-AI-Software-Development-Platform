@@ -277,6 +277,7 @@ try:
     from src.agents.database_agent import DatabaseAgent
     from src.agents.testing_agent import TestingAgent
     from src.agents.integration_agent import IntegrationAgent
+    from src import a2a_protocol as a2a
     from src.agents.remote_agent import wrap_agent_if_remote, RemoteAgentProxy, get_agent_endpoint_url
     from src.security.input_validation import validate_requirement_text, InputValidationError
     from src.security.output_sanitizer import redact_secrets
@@ -970,7 +971,21 @@ def remote_start_problem(ag):
     if warning:
         ag.status = AgentStatus.OFFLINE
         return warning
+    # A2A 1.0: the worker's Agent Card says which skills it has; a card for another role is the same
+    # mistake as a wrong role on /health. Workers without a card keep working over POST /task.
+    card = ag.fetch_agent_card()
+    expected = a2a.role_of(ag.agent_id)
+    if card and expected and expected not in a2a.card_roles(card):
+        ag.status = AgentStatus.OFFLINE
+        return f"A2A kartı başka bir rolü tanıtıyor ({', '.join(a2a.card_roles(card)) or '?'}), beklenen: {expected}"
     return ""
+
+
+def a2a_label(ag):
+    """Canlı akış için: görev A2A SendMessage ile mi, eski /task ile mi gidecek."""
+    if getattr(ag, "agent_card", None) and getattr(ag, "use_a2a", False):
+        return f" · A2A {a2a.A2A_PROTOCOL_VERSION} (kart: {ag.agent_card.get('name', '?')})"
+    return " · /task (A2A kartı yok)"
 
 
 def run_engine(requirement, live):
@@ -986,7 +1001,7 @@ def run_engine(requirement, live):
                 else:
                     live.write(f"⚪ {ag.name}: {ag.endpoint_url} {problem} → OFFLINE, görev almayacak")
             else:
-                live.write(f"🔗 {ag.name}: {ag.endpoint_url} → ONLINE")
+                live.write(f"🔗 {ag.name}: {ag.endpoint_url} → ONLINE{a2a_label(ag)}")
     ui_ctx = get_script_run_ctx()  # S4-07: paralel görevler başka thread'den yazar, Streamlit bağlamı gerekir
     ui_lock = threading.Lock()
     for ag in agents:  # canlı BUSY/sonuç satırları için sarmalayıcı

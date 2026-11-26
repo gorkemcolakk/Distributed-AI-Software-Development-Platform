@@ -172,3 +172,22 @@ Ağ gecikmeleri veya istemci tekrarları nedeniyle aynı `(run_id, task_id)` (ve
   "summary": "2 dosya incelendi, 0 bulgu saptandı. Durum: APPROVED"
 }
 ```
+
+## 8. A2A (Agent2Agent) 1.0 Uyumu (S5)
+
+Worker'lar A2A 1.0 protokolünü (https://a2a-protocol.org, alan adları resmi `a2a.proto` ile kontrol edildi)
+HTTP+JSON bağlamasıyla konuşur. Kod: `src/a2a_protocol.py`, uçlar `src/api/worker_server.py` içinde.
+
+| A2A kavramı | Bizdeki karşılığı |
+|---|---|
+| Agent Card, `GET /.well-known/agent-card.json` (herkese açık) | Worker'ın adı, rolü (skill), modeli, adresi ve Bearer kimlik doğrulaması |
+| `SendMessage`, `POST /message:send` | `POST /task` ile aynı işi yapar; görev zarfı (`TaskPayloadContract_v1`) mesajın `data` parçasında gider |
+| `Task` (`status.state`, `artifacts`) | Sonuç: `TASK_STATE_COMPLETED` / `TASK_STATE_FAILED`; üretilen her dosya bir `Part` (`filename`, `mediaType`), tam sonuç `worker-result` artifact'ında |
+| `GetTask`, `GET /tasks/{id}` | Son 100 görevin sonucu |
+| `contextId` | `run_id` |
+| `securitySchemes` / `securityRequirements` | `WORKER_AUTH_TOKEN` ile Bearer |
+
+- Master çalıştırma başında her worker'ın kartını okur. Kart varsa görev A2A `SendMessage` ile gider; kartı
+  olmayan (güncellenmemiş) worker eski `POST /task` yolunu kullanmaya devam eder. `MASTER_A2A_DISPATCH=false` A2A'yı kapatır.
+- Kartta başka bir rol varsa (ör. 8001'de frontend worker) ajan OFFLINE yapılır, görev gitmez.
+- Desteklenmeyenler: streaming ve push notification (kartta `false`); görevler kısa ve senkron.
