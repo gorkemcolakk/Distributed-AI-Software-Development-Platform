@@ -71,8 +71,11 @@ CATEGORY_RULES = {
                 "names and an optional id field. Store data in SQLite with the standard sqlite3 module (file app.db, "
                 "CREATE TABLE IF NOT EXISTS at startup with the contract's table and column names), not in memory. "
                 "If the contract has /register and /login: store a hashlib.sha256 hash of the password, never the "
-                "password, and return a random token from /login. Add CORSMiddleware allowing all origins and a "
-                "GET / route that returns the first .html file next to this file with FileResponse."),
+                "password, and /login returns {\"token\": ...} with a random token saved for that user; endpoints that "
+                "need the user read it from the Authorization: Bearer <token> header (never a fixed fake user). "
+                "Build responses as plain dicts (never Model(id=..., **item.dict())). Add CORSMiddleware allowing "
+                "all origins, import FileResponse from fastapi.responses, and add a GET / route that returns the "
+                "first .html file next to this file."),
     "FRONTEND": ("Write one HTML5 page with embedded CSS (clean card layout, readable colors, works on mobile) that "
                  "loads and sends ALL data through the shared contract's endpoints with fetch on relative paths "
                  "(e.g. fetch('/items')), never hard-coded sample data. Use the contract's field names in forms and "
@@ -357,6 +360,10 @@ class RequirementsAnalyzer:
                 if ("POST", path) not in paths:
                     endpoints.append({"method": "POST", "path": path, "description": desc,
                                       "request": ["username", "password"], "response": response})
+        for ep in endpoints:
+            # 26 Nov: the planner wrote "User" as the /login response and the backend returned the password hash
+            if ep["method"] == "POST" and ep["path"].rstrip("/").endswith("/login"):
+                ep["response"] = "token"
         return {"entities": entities[:4], "endpoints": endpoints[:12]}
 
     # ------------------------------------------------------------------ template
