@@ -86,7 +86,14 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
         else:
             self.ollama_generate_url = f"{base_host}/api/generate"
 
+        # Master'ın WORKER_HTTP_TIMEOUT'u 180 sn: LLM zaman aşımı bunun ALTINDA kalmalı ki
+        # statik analiz sonucu master pes etmeden dönebilsin.
         self.ollama_timeout = float(os.getenv("OLLAMA_TIMEOUT", "150"))
+        self.ollama_keep_alive = os.getenv("INTEGRATION_KEEP_ALIVE", "30m")
+        self.llm_num_predict = int(os.getenv("INTEGRATION_NUM_PREDICT", "400"))
+        self.llm_num_ctx = int(os.getenv("INTEGRATION_NUM_CTX", "4096"))
+        self.llm_max_chars_per_file = int(os.getenv("INTEGRATION_MAX_CHARS_PER_FILE", "600"))
+        self.llm_max_total_chars = int(os.getenv("INTEGRATION_MAX_TOTAL_CHARS", "4000"))
         # Same switch style as the other agents (BACKEND_AGENT_USE_OLLAMA, ...); tests pass use_llm=False
         self.use_llm = _env_flag("INTEGRATION_AGENT_USE_OLLAMA", True) if use_llm is None else bool(use_llm)
         # (review_mode, fallback_reason) of the last LLM review: "llm" / "fallback" / "static"
@@ -229,11 +236,25 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
         if not valid_files:
             return "", []
 
+        # CPU-only makinelerde (ör. i7-1255U) prompt boyutu doğrudan süreyi belirler:
+        # dosya başına ve toplamda karakter sınırı koyuyoruz.
         snippets = []
+        total_chars = 0
+        skipped_files: List[str] = []
         for path, code in valid_files.items():
-            snippet = str(code)[:1500]
+            snippet = str(code)[:self.llm_max_chars_per_file]
+            if total_chars + len(snippet) > self.llm_max_total_chars:
+                skipped_files.append(path)
+                continue
+            total_chars += len(snippet)
             snippets.append(f"--- FILE: {path} ---\n{snippet}")
         joined_files = "\n\n".join(snippets)
+        skipped_note = ""
+        if skipped_files:
+            skipped_note = (
+                f" ({len(skipped_files)} dosya boyut sınırı nedeniyle LLM incelemesine alınmadı: "
+                f"{', '.join(skipped_files)})"
+            )
 
         prompt = (
             "You are an expert Software Integration and Code Review Agent.\n"
@@ -251,6 +272,7 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
             "    }\n"
             "  ]\n"
             "}\n"
+            "Report at most 5 findings. Keep every text field under 200 characters.\n"
             "If there are no issues, return an empty list [] for findings.\n\n"
             f"{joined_files}"
         )
@@ -262,7 +284,14 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
                     "model": self.model_name,
                     "prompt": prompt,
                     "stream": False,
-                    "options": {"temperature": 0.1},
+                    "format": "json",
+                    "keep_alive": self.ollama_keep_alive,
+                    "options": {
+                        "temperature": 0.1,
+                        "seed": 42,
+                        "num_predict": self.llm_num_predict,
+                        "num_ctx": self.llm_num_ctx,
+                    },
                 },
                 timeout=self.ollama_timeout,
             )
@@ -308,11 +337,11 @@ class IntegrationAgent(BaseAgent if isinstance(BaseAgent, type) else object):
                                     ),
                                 )
                             )
-                    return summary_text or raw_text[:400], llm_findings
+                    return (summary_text or raw_text[:400]) + skipped_note, llm_findings
             except Exception:
                 pass
 
-            return raw_text[:500], []
+            return raw_text[:500] + skipped_note, []
         except Exception as exc:
             reason = "TIMEOUT" if "timeout" in type(exc).__name__.lower() else "CONNECTION_ERROR"
             self._llm_outcome = ("fallback", reason)

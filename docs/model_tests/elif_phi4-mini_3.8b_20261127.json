@@ -1,0 +1,98 @@
+{
+  "member": "elif",
+  "model": "phi4-mini:3.8b",
+  "date_utc": "2026-11-26T21:52:23+00:00",
+  "options": {
+    "temperature": 0,
+    "seed": 42
+  },
+  "machine": {
+    "os": "Windows 11",
+    "cpu": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+    "ram_gb": 15.8,
+    "gpu": "unavailable (FileNotFoundError)",
+    "ollama_version": "ollama version is 0.40.18",
+    "ollama_list": "NAME              ID              SIZE      MODIFIED    \nphi4-mini:3.8b    78fad5d182a7    2.5 GB    5 weeks ago"
+  },
+  "hardware_fit": {
+    "installed": true,
+    "model_size_gb": 2.5,
+    "size_source": "ollama list",
+    "vram_gb": null,
+    "required_vram_gb": 3.5,
+    "required_ram_gb": 5.5,
+    "placement": "cpu_only"
+  },
+  "summary": {
+    "json_task": {
+      "pass_rate": "3/3",
+      "median_wall_seconds": 40.48
+    },
+    "coding_task": {
+      "pass_rate": "3/3",
+      "median_wall_seconds": 7.73
+    }
+  },
+  "results": [
+    {
+      "task": "json_task",
+      "run": 1,
+      "passed": true,
+      "detail": "8 valid subtasks",
+      "wall_seconds": 40.91,
+      "output_tokens": 279,
+      "tokens_per_second": 7.7,
+      "response_excerpt": "```json\n{\n  \"subtasks\": [\n    {\"id\": \"T1\", \"title\": \"Create User Registration Endpoint\", \"category\": \"BACKEND\", \"depends_on\": []},\n    {\"id\": \"T2\", \"title\": \"Create User Login Endpoint\", \"category\": \"BACKEND\", \"depends_on\": [\"T1\"]},\n    {\"id\": \"T3\", \"title\": \"Create Endpoint to Save Notes\", \"category\": \"BACKEND\", \"depends_on\": [\"T1\"]},\n    {\"id\": \"T4\", \"title\": \"Create Endpoint to Retrieve Saved Notes\", \"category\": \"BACKEND\", \"depends_on\": [\"T1\"]},\n    {\"id\": \"T5\", \"title\": \"Create User Authenti"
+    },
+    {
+      "task": "json_task",
+      "run": 2,
+      "passed": true,
+      "detail": "8 valid subtasks",
+      "wall_seconds": 39.03,
+      "output_tokens": 282,
+      "tokens_per_second": 7.7,
+      "response_excerpt": "```json\n{\n  \"subtasks\": [\n    {\"id\": \"T1\", \"title\": \"Create user registration endpoint\", \"category\": \"BACKEND\", \"depends_on\": []},\n    {\"id\": \"T2\", \"title\": \"Create user login endpoint\", \"category\": \"BACKEND\", \"depends_on\": [\"T1\"]},\n    {\"id\": \"T3\", \"title\": \"Create endpoint to save notes\", \"category\": \"BACKEND\", \"depends_on\": [\"T1\"]},\n    {\"id\": \"T4\", \"title\": \"Create endpoint to retrieve saved notes\", \"category\": \"BACKEND\", \"depends_on\": [\"T1\"]},\n    {\"id\": \"T5\", \"title\": \"Create user authenti"
+    },
+    {
+      "task": "json_task",
+      "run": 3,
+      "passed": true,
+      "detail": "8 valid subtasks",
+      "wall_seconds": 40.48,
+      "output_tokens": 282,
+      "tokens_per_second": 7.4,
+      "response_excerpt": "```json\n{\n  \"subtasks\": [\n    {\"id\": \"T1\", \"title\": \"Create user registration endpoint\", \"category\": \"BACKEND\", \"depends_on\": []},\n    {\"id\": \"T2\", \"title\": \"Create user login endpoint\", \"category\": \"BACKEND\", \"depends_on\": [\"T1\"]},\n    {\"id\": \"T3\", \"title\": \"Create endpoint to save notes\", \"category\": \"BACKEND\", \"depends_on\": [\"T1\"]},\n    {\"id\": \"T4\", \"title\": \"Create endpoint to retrieve saved notes\", \"category\": \"BACKEND\", \"depends_on\": [\"T1\"]},\n    {\"id\": \"T5\", \"title\": \"Create user authenti"
+    },
+    {
+      "task": "coding_task",
+      "run": 1,
+      "passed": true,
+      "detail": "all asserts passed",
+      "wall_seconds": 8.87,
+      "output_tokens": 44,
+      "tokens_per_second": 7.9,
+      "response_excerpt": "```python\ndef is_palindrome(s: str) -> bool:\n    filtered_chars = [c.lower() for c in s if c.isalnum()]\n    return filtered_chars == filtered_chars[::-1]\n```"
+    },
+    {
+      "task": "coding_task",
+      "run": 2,
+      "passed": true,
+      "detail": "all asserts passed",
+      "wall_seconds": 7.44,
+      "output_tokens": 44,
+      "tokens_per_second": 8.4,
+      "response_excerpt": "```python\ndef is_palindrome(s: str) -> bool:\n    filtered_chars = [c.lower() for c in s if c.isalnum()]\n    return filtered_chars == filtered_chars[::-1]\n```"
+    },
+    {
+      "task": "coding_task",
+      "run": 3,
+      "passed": true,
+      "detail": "all asserts passed",
+      "wall_seconds": 7.73,
+      "output_tokens": 44,
+      "tokens_per_second": 7.9,
+      "response_excerpt": "```python\ndef is_palindrome(s: str) -> bool:\n    filtered_chars = [c.lower() for c in s if c.isalnum()]\n    return filtered_chars == filtered_chars[::-1]\n```"
+    }
+  ]
+}
