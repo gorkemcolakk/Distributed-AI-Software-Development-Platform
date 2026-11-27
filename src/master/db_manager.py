@@ -10,7 +10,9 @@ and attempts.model_used.
 See docs/DATA_MODEL.md for the schema.
 """
 
+import csv
 import ctypes
+import io
 import json
 import logging
 import os
@@ -910,6 +912,315 @@ def get_generated_test_pass_rates(db_path: Optional[str] = None) -> List[Dict[st
         return out
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# S5-04: Telemetry aggregation queries & repeatable CSV/JSON exports
+# ---------------------------------------------------------------------------
+
+AGENT_TELEMETRY_CSV_COLUMNS = (
+    "agent_name",
+    "model_used",
+    "total_attempts",
+    "successful_attempts",
+    "failed_attempts",
+    "attempt_success_rate",
+    "avg_attempt_duration_seconds",
+    "total_tasks",
+    "completed_tasks",
+    "failed_tasks",
+    "task_success_rate",
+    "avg_task_duration_seconds",
+    "output_files_produced",
+)
+
+RUN_HISTORY_CSV_COLUMNS = (
+    "run_id",
+    "project_title",
+    "requirement_id",
+    "system_status",
+    "total_tasks",
+    "completed_count",
+    "failed_count",
+    "unassigned_count",
+    "blocked_count",
+    "total_attempts",
+    "output_file_count",
+    "conflict_count",
+    "generated_test_status",
+    "generated_test_pass_rate",
+    "started_at",
+    "finished_at",
+    "duration_seconds",
+)
+
+
+def get_run_history(limit: Optional[int] = None,
+                    run_id: Optional[str] = None,
+                    db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    S5-04: Returns run history enriched with attempt counts, output file counts,
+    conflict counts, generated-test pass rates, and total duration in seconds.
+    Ordered deterministically (newest first, tie-broken by run_id).
+    """
+    conn = get_connection(db_path)
+    try:
+        where_clause = "WHERE r.run_id = ?" if run_id else ""
+        params: List[Any] = [run_id] if run_id else []
+        limit_clause = ""
+        if limit is not None:
+            limit_clause = "LIMIT ?"
+            params.append(max(0, int(limit)))
+
+        rows = conn.execute(f'''
+            SELECT
+                r.run_id,
+                r.project_title,
+                r.requirement_id,
+                r.system_status,
+                r.total_tasks,
+                r.completed_count,
+                r.failed_count,
+                r.unassigned_count,
+                r.blocked_count,
+                r.workspace_path,
+                r.started_at,
+                r.finished_at,
+                CASE
+                    WHEN r.started_at IS NOT NULL AND r.finished_at IS NOT NULL
+                    THEN MAX(0, CAST(strftime('%s', r.finished_at) AS INTEGER)
+                              - CAST(strftime('%s', r.started_at) AS INTEGER))
+                    ELSE NULL
+                END AS duration_seconds,
+                COALESCE((SELECT COUNT(*) FROM attempts a WHERE a.run_id = r.run_id), 0) AS total_attempts,
+                COALESCE((SELECT COUNT(*) FROM output_files f WHERE f.run_id = r.run_id), 0) AS output_file_count,
+                COALESCE((SELECT COUNT(*) FROM file_conflicts c WHERE c.run_id = r.run_id), 0) AS conflict_count,
+                g.status AS generated_test_status,
+                g.pass_rate AS generated_test_pass_rate
+            FROM runs r
+            LEFT JOIN generated_test_results g ON g.run_id = r.run_id
+            {where_clause}
+            ORDER BY r.started_at DESC, r.run_id DESC
+            {limit_clause}
+        ''', params).fetchall()
+
+        out: List[Dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            if item["generated_test_pass_rate"] is not None:
+                item["generated_test_pass_rate"] = round(float(item["generated_test_pass_rate"]), 4)
+            out.append(item)
+        return out
+    finally:
+        conn.close()
+
+
+def get_agent_telemetry(db_path: Optional[str] = None,
+                        run_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    S5-04: Aggregates per-agent (and model) average duration, success rate, attempt count,
+    task counts, and generated file counts across ``attempts``, ``tasks``, and ``output_files``.
+    Ordered deterministically by ``(agent_name, model_used)``.
+    """
+    conn = get_connection(db_path)
+    try:
+        where_run = "WHERE run_id = ?" if run_id else ""
+        params = (run_id,) if run_id else ()
+
+        att_rows = conn.execute(f'''
+            SELECT
+                COALESCE(agent_name, 'bilinmiyor') AS agent_name,
+                COALESCE(model_used, 'bilinmiyor') AS model_used,
+                COUNT(*) AS total_attempts,
+                SUM(CASE WHEN is_successful = 1 THEN 1 ELSE 0 END) AS successful_attempts,
+                SUM(CASE WHEN is_successful = 0 THEN 1 ELSE 0 END) AS failed_attempts,
+                AVG(execution_time_seconds) AS avg_attempt_duration_seconds
+            FROM attempts
+            {where_run}
+            GROUP BY COALESCE(agent_name, 'bilinmiyor'), COALESCE(model_used, 'bilinmiyor')
+        ''', params).fetchall()
+
+        task_where = "WHERE assigned_agent_name IS NOT NULL" + (" AND run_id = ?" if run_id else "")
+        task_rows = conn.execute(f'''
+            SELECT
+                assigned_agent_name AS agent_name,
+                COALESCE(model_used, 'bilinmiyor') AS model_used,
+                COUNT(*) AS total_tasks,
+                SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed_tasks,
+                SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) AS failed_tasks,
+                AVG(execution_time_seconds) AS avg_task_duration_seconds
+            FROM tasks
+            {task_where}
+            GROUP BY assigned_agent_name, COALESCE(model_used, 'bilinmiyor')
+        ''', params).fetchall()
+
+        file_where = "WHERE agent_name IS NOT NULL" + (" AND run_id = ?" if run_id else "")
+        file_counts = {
+            r["agent_name"]: int(r["cnt"])
+            for r in conn.execute(
+                f"SELECT agent_name, COUNT(*) AS cnt FROM output_files {file_where} GROUP BY agent_name",
+                params,
+            ).fetchall()
+        }
+
+        combined: Dict[tuple, Dict[str, Any]] = {}
+
+        def _slot(agent_name: str, model_used: str) -> Dict[str, Any]:
+            key = (agent_name, model_used)
+            if key not in combined:
+                combined[key] = {
+                    "agent_name": agent_name,
+                    "model_used": model_used,
+                    "total_attempts": 0,
+                    "successful_attempts": 0,
+                    "failed_attempts": 0,
+                    "attempt_success_rate": None,
+                    "avg_attempt_duration_seconds": 0.0,
+                    "total_tasks": 0,
+                    "completed_tasks": 0,
+                    "failed_tasks": 0,
+                    "task_success_rate": None,
+                    "avg_task_duration_seconds": 0.0,
+                    "output_files_produced": file_counts.get(agent_name, 0),
+                }
+            return combined[key]
+
+        for r in att_rows:
+            entry = _slot(r["agent_name"], r["model_used"])
+            total_att = int(r["total_attempts"] or 0)
+            succ_att = int(r["successful_attempts"] or 0)
+            fail_att = int(r["failed_attempts"] or 0)
+            entry["total_attempts"] = total_att
+            entry["successful_attempts"] = succ_att
+            entry["failed_attempts"] = fail_att
+            entry["attempt_success_rate"] = round(succ_att / total_att, 4) if total_att else None
+            entry["avg_attempt_duration_seconds"] = (
+                round(float(r["avg_attempt_duration_seconds"]), 4)
+                if r["avg_attempt_duration_seconds"] is not None else 0.0
+            )
+
+        for r in task_rows:
+            entry = _slot(r["agent_name"], r["model_used"])
+            total_t = int(r["total_tasks"] or 0)
+            comp_t = int(r["completed_tasks"] or 0)
+            fail_t = int(r["failed_tasks"] or 0)
+            entry["total_tasks"] = total_t
+            entry["completed_tasks"] = comp_t
+            entry["failed_tasks"] = fail_t
+            entry["task_success_rate"] = round(comp_t / total_t, 4) if total_t else None
+            entry["avg_task_duration_seconds"] = (
+                round(float(r["avg_task_duration_seconds"]), 4)
+                if r["avg_task_duration_seconds"] is not None else 0.0
+            )
+
+        return [combined[k] for k in sorted(combined)]
+    finally:
+        conn.close()
+
+
+def get_conflict_summary(db_path: Optional[str] = None,
+                         run_id: Optional[str] = None) -> Dict[str, Any]:
+    """S5-04: Summarizes PATH and SCHEMA conflicts across runs (or for a single run_id)."""
+    conn = get_connection(db_path)
+    try:
+        where_run = "WHERE run_id = ?" if run_id else ""
+        params = (run_id,) if run_id else ()
+        rows = conn.execute(
+            f"SELECT * FROM file_conflicts {where_run} ORDER BY conflict_id",
+            params,
+        ).fetchall()
+        records = [dict(r) for r in rows]
+        by_type = {t: 0 for t in CONFLICT_TYPES}
+        by_resolution = {res: 0 for res in CONFLICT_RESOLUTIONS}
+        for rec in records:
+            if rec["conflict_type"] in by_type:
+                by_type[rec["conflict_type"]] += 1
+            if rec["resolution"] in by_resolution:
+                by_resolution[rec["resolution"]] += 1
+        return {
+            "total": len(records),
+            "by_type": by_type,
+            "by_resolution": by_resolution,
+            "records": records,
+        }
+    finally:
+        conn.close()
+
+
+def get_telemetry_snapshot(db_path: Optional[str] = None,
+                           run_id: Optional[str] = None) -> Dict[str, Any]:
+    """
+    S5-04: Complete structured telemetry & benchmark report snapshot for Dashboard
+    and Model Comparison Report exports.
+    """
+    conn = get_connection(db_path)
+    try:
+        where_run = "WHERE run_id = ?" if run_id else ""
+        params = (run_id,) if run_id else ()
+        output_files = [
+            dict(r) for r in conn.execute(
+                f"SELECT * FROM output_files {where_run} ORDER BY run_id, file_id",
+                params,
+            ).fetchall()
+        ]
+    finally:
+        conn.close()
+
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "run_id_filter": run_id,
+        "runs": get_run_history(run_id=run_id, db_path=db_path),
+        "agent_telemetry": get_agent_telemetry(db_path=db_path, run_id=run_id),
+        "generated_test_pass_rates": get_generated_test_pass_rates(db_path=db_path),
+        "conflicts": get_conflict_summary(db_path=db_path, run_id=run_id),
+        "output_files": output_files,
+    }
+
+
+def _rows_to_csv(rows: Iterable[Dict[str, Any]], columns: Iterable[str]) -> str:
+    cols = list(columns)
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=cols, extrasaction="ignore", lineterminator="\n")
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({c: ("" if row.get(c) is None else row.get(c)) for c in cols})
+    return buf.getvalue()
+
+
+def export_telemetry_json(db_path: Optional[str] = None,
+                          run_id: Optional[str] = None,
+                          output_path: Optional[str] = None) -> str:
+    """S5-04: Exports the telemetry snapshot as deterministic, UTF-8 JSON (optionally writing to disk)."""
+    snapshot = get_telemetry_snapshot(db_path=db_path, run_id=run_id)
+    payload = json.dumps(snapshot, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    if output_path:
+        with open(output_path, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(payload)
+    return payload
+
+
+def export_agent_telemetry_csv(db_path: Optional[str] = None,
+                               run_id: Optional[str] = None,
+                               output_path: Optional[str] = None) -> str:
+    """S5-04: Exports per-agent benchmark telemetry as deterministic CSV (optionally writing to disk)."""
+    rows = get_agent_telemetry(db_path=db_path, run_id=run_id)
+    payload = _rows_to_csv(rows, AGENT_TELEMETRY_CSV_COLUMNS)
+    if output_path:
+        with open(output_path, "w", encoding="utf-8", newline="") as fh:
+            fh.write(payload)
+    return payload
+
+
+def export_run_history_csv(db_path: Optional[str] = None,
+                           run_id: Optional[str] = None,
+                           output_path: Optional[str] = None) -> str:
+    """S5-04: Exports run history & latency metrics as deterministic CSV (optionally writing to disk)."""
+    rows = get_run_history(run_id=run_id, db_path=db_path)
+    payload = _rows_to_csv(rows, RUN_HISTORY_CSV_COLUMNS)
+    if output_path:
+        with open(output_path, "w", encoding="utf-8", newline="") as fh:
+            fh.write(payload)
+    return payload
 
 
 if __name__ == "__main__":

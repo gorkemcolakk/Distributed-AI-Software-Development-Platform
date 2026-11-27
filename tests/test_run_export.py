@@ -3,15 +3,25 @@ Zip export of a run: all generated files in one download named after the project
 Pure functions, no Streamlit needed.
 """
 
+import csv
 import io
+import json
 import os
 import sys
+import tempfile
 import unittest
 import zipfile
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from master_agent_projesi.run_export import build_run_zip, safe_project_name
+from master_agent_projesi.run_export import (
+    build_agent_telemetry_csv_export,
+    build_run_history_csv_export,
+    build_run_zip,
+    build_telemetry_json_export,
+    safe_project_name,
+)
+from src.master import db_manager
 
 
 class TestProjectName(unittest.TestCase):
@@ -91,6 +101,56 @@ class TestBuildRunZip(unittest.TestCase):
         self.assertEqual((name, count), ("p.zip", 0))
         with self.open(data) as z:
             self.assertEqual(z.namelist(), [])
+
+
+class TestTelemetryExports(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db_path = os.path.join(self.tmp.name, "telemetry.db")
+        db_manager.init_db(self.db_path, verbose=False)
+        db_manager.create_run("run-exp-1", "Kütüphane Sistemi", total_tasks=1, db_path=self.db_path)
+        db_manager.save_task_result(
+            "run-exp-1",
+            {"task_id": "t-db", "title": "DB", "category": "DATABASE", "dependencies": []},
+            {
+                "task_id": "t-db", "title": "DB", "assigned_agent": "Database Agent",
+                "model_used": "llama3.2:3b", "fit_score": 90.0, "execution_time_seconds": 4.5,
+                "status": "COMPLETED", "agent_result_status": "SUCCESS",
+                "reason": "ok", "attempted_agents": ["Database Agent"],
+                "output_files": ["database/schema.sql"],
+            },
+            attempts=[{
+                "agent_id": "agent-database", "agent_name": "Database Agent",
+                "model_used": "llama3.2:3b", "is_successful": True, "execution_time_seconds": 4.5,
+            }],
+            db_path=self.db_path,
+        )
+        db_manager.finish_run("run-exp-1", "COMPLETED", {"COMPLETED": 1}, db_path=self.db_path)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_build_telemetry_json_and_csv_exports_are_repeatable(self):
+        j_name, j_bytes_1, j_count = build_telemetry_json_export("Kütüphane Sistemi", db_path=self.db_path)
+        _, j_bytes_2, _ = build_telemetry_json_export("Kütüphane Sistemi", db_path=self.db_path)
+        self.assertEqual(j_name, "kutuphane-sistemi-telemetry.json")
+        self.assertEqual(j_count, 1)
+        self.assertEqual(j_bytes_1, j_bytes_2)
+        self.assertEqual(json.loads(j_bytes_1.decode("utf-8"))["runs"][0]["run_id"], "run-exp-1")
+
+        a_name, a_bytes, a_count = build_agent_telemetry_csv_export("Kütüphane Sistemi", db_path=self.db_path)
+        self.assertEqual(a_name, "kutuphane-sistemi-agent-telemetry.csv")
+        self.assertEqual(a_count, 1)
+        a_rows = list(csv.DictReader(io.StringIO(a_bytes.decode("utf-8"))))
+        self.assertEqual(a_rows[0]["agent_name"], "Database Agent")
+        self.assertEqual(a_rows[0]["avg_attempt_duration_seconds"], "4.5")
+
+        r_name, r_bytes, r_count = build_run_history_csv_export("Kütüphane Sistemi", db_path=self.db_path)
+        self.assertEqual(r_name, "kutuphane-sistemi-run-history.csv")
+        self.assertEqual(r_count, 1)
+        r_rows = list(csv.DictReader(io.StringIO(r_bytes.decode("utf-8"))))
+        self.assertEqual(r_rows[0]["run_id"], "run-exp-1")
 
 
 if __name__ == "__main__":
