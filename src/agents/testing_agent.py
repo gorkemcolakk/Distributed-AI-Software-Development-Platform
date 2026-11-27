@@ -26,6 +26,9 @@ import urllib.request
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Dict, Any, List, Optional, Callable, Tuple
 
+from src.agents.api_contract import (  # noqa: F401 (re-exported for existing imports)
+    ALWAYS_ALLOWED_ENDPOINTS, HTTP_METHODS, contract_endpoints, off_contract, path_matches,
+)
 from src.agents.base_agent import BaseAgent, AgentCapabilityProfile
 
 
@@ -118,41 +121,6 @@ def validate_test_code(code: str) -> Tuple[int, int]:
     return test_functions, assertions
 
 
-HTTP_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE")
-# The backend rule (analyzer.CATEGORY_RULES) always adds these even though the contract does not list them
-ALWAYS_ALLOWED_ENDPOINTS = (("GET", "/health"), ("GET", "/"))
-
-
-def contract_endpoints(context: Optional[Dict[str, Any]]) -> List[Tuple[str, str]]:
-    """(METHOD, path) pairs of the shared contract in the task context; empty when there is none."""
-    contract = (context or {}).get("shared_contract") or {}
-    endpoints = []
-    for ep in contract.get("endpoints") or []:
-        if not isinstance(ep, dict):
-            continue
-        method = str(ep.get("method") or "").upper()
-        path = str(ep.get("path") or "").strip()
-        if method in HTTP_METHODS and path.startswith("/"):
-            endpoints.append((method, path))
-    return endpoints
-
-
-def _is_param(segment: str) -> bool:
-    return (segment.startswith("{") and segment.endswith("}")) or segment.startswith(":")
-
-
-def _split_path(path: str) -> List[str]:
-    return [s for s in path.split("?", 1)[0].split("#", 1)[0].split("/") if s != ""]
-
-
-def path_matches(template: str, called: str) -> bool:
-    """'/books/{book_id}' matches '/books/1' and '/books/{x}'; fixed segments must be equal."""
-    t, c = _split_path(template), _split_path(called)
-    if len(t) != len(c):
-        return False
-    return all(_is_param(ts) or ts == cs or _is_param(cs) for ts, cs in zip(t, c))
-
-
 def _literal_path(node: ast.AST) -> Optional[str]:
     """The URL of a call argument: a plain string, or an f-string with each {expr} kept as '{}'."""
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
@@ -193,15 +161,7 @@ def find_endpoint_calls(code: str) -> List[Tuple[str, str]]:
 
 def find_off_contract_calls(code: str, endpoints: List[Tuple[str, str]]) -> List[str]:
     """Calls in the test code that the contract does not define ('POST /orders'), in order, without duplicates."""
-    allowed = list(endpoints) + list(ALWAYS_ALLOWED_ENDPOINTS)
-    off = []
-    for method, path in find_endpoint_calls(code):
-        if any(m == method and path_matches(p, path) for m, p in allowed):
-            continue
-        label = f"{method} {path}"
-        if label not in off:
-            off.append(label)
-    return off
+    return off_contract(find_endpoint_calls(code), endpoints)
 
 
 def _safe_slug(value: str) -> str:

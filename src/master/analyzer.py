@@ -76,7 +76,8 @@ CATEGORY_RULES = {
                 "Build responses as plain dicts (never Model(id=..., **item.dict())). Add CORSMiddleware allowing "
                 "all origins, import FileResponse from fastapi.responses, and add a GET / route that returns the "
                 "first .html file next to this file."),
-    "FRONTEND": ("Write one HTML5 page with embedded CSS (clean card layout, readable colors, works on mobile) that "
+    "FRONTEND": ("Write one HTML5 page in Turkish, titled with the application's name, using the Frontend agent's "
+                 "ready stylesheet classes (cards, grid, tabs, alerts) that "
                  "loads and sends ALL data through the shared contract's endpoints with fetch on relative paths "
                  "(e.g. fetch('/items')), never hard-coded sample data. Use the contract's field names in forms and "
                  "lists and show success and error messages."),

@@ -24,6 +24,11 @@ try:  # çalıştırmanın dosyalarını proje adıyla zip olarak indirme
 except ImportError:  # app.py repo kökünden import edildiğinde (testler)
     from master_agent_projesi import run_export
 
+try:  # S5-03: seçilen run_id için state.db telemetri paneli
+    import run_dashboard
+except ImportError:  # app.py repo kökünden import edildiğinde (testler)
+    from master_agent_projesi import run_dashboard
+
 try:
     from dotenv import load_dotenv
 
@@ -281,6 +286,7 @@ try:
     from src.agents.remote_agent import wrap_agent_if_remote, RemoteAgentProxy, get_agent_endpoint_url
     from src.security.input_validation import validate_requirement_text, InputValidationError
     from src.security.output_sanitizer import redact_secrets
+    from src.master import db_manager
 
     ENGINE_ERROR = None
 except Exception as _e:  # motor yüklenemezse arayüz DEMO VERİSİ moduna düşer
@@ -1463,7 +1469,7 @@ if state.report:
 
     file_rows = generated_file_rows(report, state.artifacts) if state.mode == "engine" else []
     tab_labels = (["📁 Üretilen dosyalar"] if state.mode == "engine" else []) + [
-        "📋 Görevler", "🧪 Kalite & test", "📈 Plan & analiz"]
+        "📋 Görevler", "🧪 Kalite & test", "📡 Telemetri", "📈 Plan & analiz"]
     tabs = dict(zip(tab_labels, st.tabs(tab_labels)))
 
     # ---- Görevler ----
@@ -1474,6 +1480,13 @@ if state.report:
             rp.render_task_attempts(st, rec["task_id"], state.attempt_rows, rec.get("attempted_agents"))
             art = state.artifacts.get(rec["task_id"])
             if art:
+                # S5-03: frontend sayfası sözleşme dışı fetch / İngilizce etiket içeriyorsa uyarı (görev yine başarılı)
+                fe_art = art["artifacts"] or {}
+                fe_warn = list(fe_art.get("contract_warnings") or [])
+                if fe_art.get("english_labels"):
+                    fe_warn.append("İngilizce etiketler: " + ", ".join(fe_art["english_labels"]))
+                if fe_warn:
+                    st.warning("⚠️ Arayüz kontrolü:\n" + "\n".join(f"- {w}" for w in fe_warn))
                 label = output_label(art["artifacts"])
                 with st.expander(label):
                     st.json(art["artifacts"])
@@ -1519,6 +1532,13 @@ if state.report:
         render_generated_tests(report.get("generated_tests"))
         if state.mode != "engine" and not report.get("generated_tests"):
             st.info("Kod inceleme ve test sonuçları yalnızca canlı motor çalıştırmalarında üretilir.")
+
+    # ---- Telemetri (S5-03): seçilen run_id'nin state.db kayıtları; tanıtım verisi ayrı etiketlenir ----
+    with tabs["📡 Telemetri"]:
+        if state.mode == "engine" and ENGINE_ERROR is None:
+            run_dashboard.render_run_dashboard(st, db_manager, current_run_id=report.get("run_id"))
+        else:
+            run_dashboard.render_run_dashboard(st, None, demo_report=report)
 
     # ---- Plan & analiz ----
     with tabs["📈 Plan & analiz"]:

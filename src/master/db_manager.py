@@ -794,6 +794,30 @@ def get_running_runs(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
     finally:
         conn.close()
 
+def list_runs(limit: int = 50, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    """S5-03: the latest runs (newest first) for the dashboard's run_id picker."""
+    conn = get_connection(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM runs ORDER BY started_at DESC, rowid DESC LIMIT ?", (int(limit),)
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_attempts_for_run(run_id: str, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    """S5-03: every agent attempt of a run (all tasks), in the order they were made."""
+    conn = get_connection(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM attempts WHERE run_id = ? ORDER BY attempt_id", (run_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 def get_run(run_id: str, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
     conn = get_connection(db_path)
     try:
