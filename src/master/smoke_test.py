@@ -24,8 +24,9 @@ DEFAULT_TIMEOUT = 40.0
 
 # Runs inside the child process: imports the backend, calls the endpoints, prints one JSON line.
 _RUNNER = r'''
-import importlib.util, json, sys
-result = {"checks": [], "error": None}
+import importlib.util, json, sqlite3, sys
+from pathlib import Path
+result = {"checks": [], "error": None, "schema_applied": None, "schema_tables_missing": []}
 try:
     from fastapi.testclient import TestClient
     spec = importlib.util.spec_from_file_location("generated_backend", sys.argv[1])
@@ -33,6 +34,7 @@ try:
     spec.loader.exec_module(module)
     client = TestClient(module.app)
     endpoints = json.loads(sys.argv[2])
+    schema_arg = sys.argv[3] if len(sys.argv) > 3 else ""
     token = None
 
     def sample(field):
@@ -71,6 +73,36 @@ try:
         result["checks"].append({"method": method, "path": path, "status_code": code,
                                  "ok": code < 500 and not missing,
                                  "error": ep.get("error") or ("uç nokta yok" if missing else None)})
+
+    # Check whether the backend initialized app.db with the tables from the workspace's schema.sql
+    if schema_arg and Path(schema_arg).is_file():
+        expected = set()
+        mem = sqlite3.connect(":memory:")
+        try:
+            mem.executescript(Path(schema_arg).read_text(encoding="utf-8", errors="replace"))
+            expected = {r[0].lower() for r in mem.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            )}
+        except Exception:
+            expected = set()
+        finally:
+            mem.close()
+        if expected:
+            work_dir = Path(sys.argv[1]).parent
+            db_candidates = [work_dir / "app.db"] + [p for p in sorted(work_dir.glob("*.db")) if p.name != "app.db"]
+            db_file = next((p for p in db_candidates if p.is_file()), None)
+            actual = set()
+            if db_file is not None:
+                con = sqlite3.connect(str(db_file))
+                try:
+                    actual = {r[0].lower() for r in con.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                    )}
+                finally:
+                    con.close()
+            missing_tables = sorted(expected - actual)
+            result["schema_applied"] = not missing_tables
+            result["schema_tables_missing"] = missing_tables
 except Exception as exc:
     result["error"] = type(exc).__name__ + ": " + str(exc)[:300]
 print("SMOKE_RESULT " + json.dumps(result))
@@ -95,6 +127,14 @@ def find_backend(workspace: Path) -> Optional[Path]:
     return None
 
 
+def find_schema(workspace: Path) -> Optional[Path]:
+    """The first generated SQLite schema file (.sql) inside the workspace."""
+    for path in sorted(workspace.rglob("*.sql")):
+        if path.is_file():
+            return path
+    return None
+
+
 def run_smoke_test(workspace_path: Any, contract: Optional[Dict[str, Any]],
                    timeout: float = DEFAULT_TIMEOUT) -> Dict[str, Any]:
     """PASSED when the app imports, every contract route exists and none answers 5xx; FAILED otherwise; SKIPPED without a backend."""
@@ -105,13 +145,16 @@ def run_smoke_test(workspace_path: Any, contract: Optional[Dict[str, Any]],
     if backend is None:
         return {"status": "SKIPPED", "reason": "FastAPI backend dosyası bulunamadı", "checks": []}
 
+    schema = find_schema(workspace)
+    schema_rel = schema.relative_to(workspace).as_posix() if schema is not None else None
     endpoints: List[Dict[str, Any]] = list((contract or {}).get("endpoints") or [])
     with tempfile.TemporaryDirectory(prefix="smoke-") as tmp:
         copy = Path(tmp) / "app"
         shutil.copytree(workspace, copy)  # the app may create app.db; keep the real workspace clean
         target = copy / backend.relative_to(workspace)
+        schema_copy = str(copy / schema.relative_to(workspace)) if schema is not None else ""
         try:
-            proc = subprocess.run([sys.executable, "-c", _RUNNER, str(target), json.dumps(endpoints)],
+            proc = subprocess.run([sys.executable, "-c", _RUNNER, str(target), json.dumps(endpoints), schema_copy],
                                   cwd=str(target.parent), capture_output=True, text=True,
                                   timeout=timeout, encoding="utf-8", errors="replace")
         except subprocess.TimeoutExpired:
@@ -129,5 +172,15 @@ def run_smoke_test(workspace_path: Any, contract: Optional[Dict[str, Any]],
                 "backend_file": backend.name}
     passed = sum(1 for c in checks if c["ok"])
     status = "PASSED" if checks and passed == len(checks) else "FAILED"
-    return {"status": status, "reason": f"{passed}/{len(checks)} uç nokta çalıştı",
-            "checks": checks, "backend_file": backend.name}
+    report: Dict[str, Any] = {
+        "status": status,
+        "reason": f"{passed}/{len(checks)} uç nokta çalıştı",
+        "checks": checks,
+        "backend_file": backend.name,
+    }
+    if schema_rel is not None:
+        report["schema_file"] = schema_rel
+        report["schema_applied"] = data.get("schema_applied")
+        if data.get("schema_tables_missing"):
+            report["schema_tables_missing"] = data["schema_tables_missing"]
+    return report
