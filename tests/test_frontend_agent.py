@@ -16,7 +16,13 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.agents.frontend_agent import (
+    BASE_CSS_ID,
     FrontendAgent,
+    apply_base_css,
+    check_app_title,
+    check_fetch_against_contract,
+    find_english_labels,
+    find_fetch_calls,
     ModelOutputError,
     OllamaCallError,
     extract_html_code,
@@ -204,13 +210,220 @@ class TestFrontendAgentGeneration(unittest.TestCase):
             self.assertTrue(os.path.isfile(written[0]["path"]))
 
 
+class TestOutputBudgetAndBaseCss(unittest.TestCase):
+    """S5-03 test findings (Nov 26-27): truncated pages and weak styling from the 3b model."""
+
+    def test_default_output_budget_is_4096_with_room_in_context(self):
+        agent = FrontendAgent()
+        self.assertEqual(agent.num_predict, 4096)
+        self.assertGreater(agent.num_ctx, agent.num_predict)
+
+    def test_output_budget_comes_from_env(self):
+        old = os.environ.get("FRONTEND_NUM_PREDICT")
+        try:
+            os.environ["FRONTEND_NUM_PREDICT"] = "6000"
+            self.assertEqual(FrontendAgent().num_predict, 6000)
+            os.environ["FRONTEND_NUM_PREDICT"] = "not-a-number"
+            self.assertEqual(FrontendAgent().num_predict, 4096)
+        finally:
+            if old is None:
+                os.environ.pop("FRONTEND_NUM_PREDICT", None)
+            else:
+                os.environ["FRONTEND_NUM_PREDICT"] = old
+
+    def test_base_css_goes_first_into_head_once(self):
+        out = apply_base_css(PAGE)
+        self.assertIn(f'<style id="{BASE_CSS_ID}">', out)
+        # after <meta charset> (must stay in the first 1024 bytes), before </head>
+        self.assertLess(out.index('charset="utf-8"'), 1024)
+        self.assertLess(out.index('charset="utf-8"'), out.index(BASE_CSS_ID))
+        self.assertLess(out.index(BASE_CSS_ID), out.index("</head>"))
+        self.assertEqual(apply_base_css(out), out)  # idempotent
+        validate_ui_code(out)
+
+    def test_base_css_added_when_page_has_no_head(self):
+        page = "<html><body><header><h1>A</h1></header><main><p>x</p></main></body></html>"
+        out = apply_base_css(page)
+        self.assertIn("<head>", out)
+        self.assertIn(BASE_CSS_ID, out)
+        validate_ui_code(out)
+
+    def test_generated_and_template_pages_carry_base_css(self):
+        for use_ollama in (True, False):
+            with self.subTest(use_ollama=use_ollama):
+                art = FrontendAgent(use_ollama=use_ollama, llm_client=fixed_reply(VALID_REPLY)).execute_task(
+                    FE_TASK).output_artifacts
+                content = art["files"][0]["content"]
+                self.assertIn(BASE_CSS_ID, content)
+                for cls in (".card", ".grid", ".btn-primary", ".form", ".alert"):
+                    self.assertIn(cls, content)
+
+
+CONTRACT_TASK = dict(FE_TASK, title="Frontend UI", context_artifacts={
+    "requirement": "Kafe sipariş uygulaması",
+    "shared_contract": {"endpoints": [
+        {"method": "POST", "path": "/register"}, {"method": "POST", "path": "/login"},
+        {"method": "GET", "path": "/products"}, {"method": "POST", "path": "/orders"},
+        {"method": "GET", "path": "/orders/{order_id}"},
+    ]},
+})
+
+
+def page_with(body, title="Kafe Sipariş", script=""):
+    return (f"<!DOCTYPE html><html lang=\"tr\"><head><meta charset=\"utf-8\"><title>{title}</title></head><body>"
+            f"<header class=\"app-header\"><h1>{title}</h1></header><main class=\"container\">{body}</main>"
+            f"<script>{script}</script></body></html>")
+
+
+GOOD_BODY = "<section class=\"section\"><h2>Ürünler</h2><div class=\"grid\" id=\"g\"></div></section>"
+
+
+def sequence_reply(*texts):
+    calls = []
+
+    def client(prompt):
+        calls.append(prompt)
+        return texts[min(len(calls), len(texts)) - 1]
+    client.calls = calls
+    return client
+
+
+class TestTagBalance(unittest.TestCase):
+    """S5-03: Elif's review found a page whose tags did not match."""
+
+    def test_unclosed_div_is_rejected_with_line(self):
+        broken = page_with("<section class=\"section\"><div class=\"grid\"><div class=\"card\">x</div></section>")
+        with self.assertRaises(ModelOutputError) as ctx:
+            validate_ui_code(broken)
+        self.assertIn("<div>", str(ctx.exception))
+        self.assertIn("kapatılmamış", str(ctx.exception))
+
+    def test_stray_closing_tag_is_rejected(self):
+        with self.assertRaises(ModelOutputError) as ctx:
+            validate_ui_code(page_with(GOOD_BODY + "</span>"))
+        self.assertIn("</span>", str(ctx.exception))
+
+    def test_optional_end_tags_and_markup_inside_script_are_fine(self):
+        body = ("<ul class=\"list\"><li>Bir<li>İki</ul><p>Paragraf<table><tr><td>a<td>b</table>"
+                "<br><img src=\"x.png\" alt=\"\"><div/>" + GOOD_BODY)
+        script = "g.innerHTML = '<div class=\"card\"><h3>' + name + '</h3>';"
+        validate_ui_code(page_with(body, script=script))
+
+    def test_mismatched_page_is_retried_once_then_accepted(self):
+        broken = "```html\n" + page_with("<div>" + GOOD_BODY) + "\n```"
+        fixed = "```html\n" + page_with(GOOD_BODY) + "\n```"
+        client = sequence_reply(broken, fixed)
+        result = FrontendAgent(use_ollama=True, llm_client=client).execute_task(FE_TASK)
+        self.assertEqual(result.status, "SUCCESS")
+        self.assertEqual(len(client.calls), 2)
+        self.assertIn("REJECTED", client.calls[1])
+        self.assertIn("kapatılmamış", client.calls[1])
+        self.assertEqual(result.output_artifacts["validation_retries"], 1)
+
+    def test_still_mismatched_after_retry_fails(self):
+        broken = "```html\n" + page_with("<div>" + GOOD_BODY) + "\n```"
+        client = sequence_reply(broken)
+        result = FrontendAgent(use_ollama=True, llm_client=client).execute_task(FE_TASK)
+        self.assertEqual(result.status, "FAILED")
+        self.assertIn("uyumsuz etiket", result.error_message)
+        self.assertEqual(len(client.calls), 2)
+
+
+class TestAppNameAndTurkishPrompt(unittest.TestCase):
+    """S5-03: the cafe page was titled 'Frontend Interface', had flat forms and English labels."""
+
+    def test_prompt_asks_for_app_name_turkish_sections_and_css_classes(self):
+        prompt = FrontendAgent(use_ollama=True).build_prompt(CONTRACT_TASK)
+        for expected in ("lang=\"tr\"", "Frontend Interface", "Giriş Yap", "Siparişlerim", "div.grid",
+                         "div.tabs", "Do NOT write a <style>", "Kafe sipariş uygulaması", "POST /orders"):
+            self.assertIn(expected, prompt)
+        self.assertNotIn("Put all CSS in one <style> block", prompt)
+
+    def test_generic_title_is_rejected(self):
+        for title in ("Frontend Interface", "Frontend UI", "Web App", ""):
+            with self.subTest(title=title), self.assertRaises(ModelOutputError):
+                check_app_title(page_with(GOOD_BODY, title=title), CONTRACT_TASK)
+        self.assertEqual(check_app_title(page_with(GOOD_BODY), CONTRACT_TASK), "Kafe Sipariş")
+
+    def test_generic_title_triggers_retry(self):
+        generic = "```html\n" + page_with(GOOD_BODY, title="Frontend Interface") + "\n```"
+        named = "```html\n" + page_with(GOOD_BODY) + "\n```"
+        client = sequence_reply(generic, named)
+        art = FrontendAgent(use_ollama=True, llm_client=client).execute_task(CONTRACT_TASK).output_artifacts
+        self.assertEqual(art["app_title"], "Kafe Sipariş")
+        self.assertIn("uygulamanın adı değil", client.calls[1])
+
+    def test_english_labels_are_reported_as_warning(self):
+        body = (GOOD_BODY + "<form class=\"form\"><label>Email</label><input placeholder=\"Password\">"
+                "<button class=\"btn\">Login</button><button class=\"btn\">Sepete Ekle</button></form>")
+        self.assertEqual(find_english_labels(page_with(body)), ["Email", "Login", "Password"])
+        art = FrontendAgent(use_ollama=True, llm_client=fixed_reply(page_with(body))).execute_task(
+            FE_TASK).output_artifacts
+        self.assertEqual(art["english_labels"], ["Email", "Login", "Password"])
+
+
+class TestFetchContractCheck(unittest.TestCase):
+    """S5-03: frontend version of the Testing agent's contract check (warnings only)."""
+
+    SCRIPT = """
+    const API = '';
+    fetch('/products').then(r => r.json());
+    fetch(`${API}/orders`, {method: 'POST', headers: {'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + token}, body: JSON.stringify({items: cart})});
+    fetch('/orders/' + id);
+    fetch("http://localhost:8000/login", { method: "post", body: JSON.stringify(f(x)) });
+    fetch('/api/v1/cart', {method: 'PUT'});
+    fetch(url);
+    """
+
+    def test_fetch_calls_are_extracted(self):
+        calls = find_fetch_calls(self.SCRIPT)
+        self.assertEqual(calls, [("GET", "/products"), ("POST", "/orders"), ("GET", "/orders/{}"),
+                                 ("POST", "/login"), ("PUT", "/api/v1/cart")])
+
+    def test_off_contract_and_unused_endpoints_are_warnings(self):
+        reply = page_with(GOOD_BODY, script=self.SCRIPT)
+        result = FrontendAgent(use_ollama=True, llm_client=fixed_reply(reply)).execute_task(CONTRACT_TASK)
+        self.assertEqual(result.status, "SUCCESS")
+        art = result.output_artifacts
+        self.assertTrue(art["contract_checked"])
+        self.assertEqual(art["contract_warnings"], ["Sözleşmede olmayan çağrı: PUT /api/v1/cart"])
+        self.assertEqual(art["unused_endpoints"], ["POST /register"])
+        self.assertTrue(any("[UYARI]" in line and "/api/v1/cart" in line for line in result.logs))
+
+    def test_placeholder_script_is_asked_again_once(self):
+        empty = page_with(GOOD_BODY, script="// JavaScript code will be added here")
+        working = page_with(GOOD_BODY, script="fetch('/products').then(r => r.json());")
+        client = sequence_reply(empty, working)
+        art = FrontendAgent(use_ollama=True, llm_client=client).execute_task(CONTRACT_TASK).output_artifacts
+        self.assertEqual(len(client.calls), 2)
+        self.assertIn("fetch ile çağırmıyor", client.calls[1])
+        self.assertEqual(art["fetch_calls"], ["GET /products"])
+        self.assertEqual(art["validation_retries"], 1)
+
+    def test_page_without_any_fetch_gets_warning(self):
+        art = FrontendAgent(use_ollama=True, llm_client=fixed_reply(page_with(GOOD_BODY))).execute_task(
+            CONTRACT_TASK).output_artifacts
+        self.assertIn("Sayfa sözleşmedeki hiçbir uç noktayı fetch ile çağırmıyor.", art["contract_warnings"])
+        self.assertEqual(check_fetch_against_contract(page_with(GOOD_BODY), [])["contract_warnings"],
+                         ["Sayfa sözleşmedeki hiçbir uç noktayı fetch ile çağırmıyor."])
+
+    def test_no_contract_means_no_contract_warnings(self):
+        art = FrontendAgent(use_ollama=True, llm_client=fixed_reply(page_with(GOOD_BODY, script=self.SCRIPT))
+                            ).execute_task(FE_TASK).output_artifacts
+        self.assertFalse(art["contract_checked"])
+        self.assertEqual(art["contract_warnings"], [])
+        self.assertIn("PUT /api/v1/cart", art["fetch_calls"])
+
+
 class _StubOllama(BaseHTTPRequestHandler):
     reply = {"response": VALID_REPLY, "done": True}
     status = 200
     raw = None
+    last_body = None
 
     def do_POST(self):
-        self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        _StubOllama.last_body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
         payload = self.raw if self.raw is not None else json.dumps(self.reply).encode("utf-8")
         self.send_response(self.status)
         self.send_header("Content-Type", "application/json")
@@ -240,6 +453,9 @@ class TestOllamaHttpClient(unittest.TestCase):
         result = agent.execute_task(FE_TASK)
         self.assertEqual(result.status, "SUCCESS")
         self.assertEqual(result.output_artifacts["generation_mode"], "ollama")
+        options = _StubOllama.last_body["options"]
+        self.assertEqual(options["num_predict"], 4096)
+        self.assertEqual(options["num_ctx"], 8192)
 
     def test_model_not_found_maps_to_not_found(self):
         _StubOllama.status = 404
