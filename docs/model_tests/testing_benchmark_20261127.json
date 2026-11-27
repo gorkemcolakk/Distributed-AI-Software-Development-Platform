@@ -1,0 +1,221 @@
+{
+  "date": "2026-11-27",
+  "script": "scripts/testing_model_benchmark.py",
+  "repeats": 1,
+  "hardware": "Windows 10, 20 mantıksal çekirdek, Python 3.11.0",
+  "ollama_options": {
+    "temperature": 0.1,
+    "seed": 42,
+    "num_predict": 1024
+  },
+  "scenarios": [
+    "books",
+    "events_tickets",
+    "todos"
+  ],
+  "summary": [
+    {
+      "model": "deepseek-coder:6.7b",
+      "tasks": 3,
+      "valid_output_rate": 1.0,
+      "first_attempt_rate": 1.0,
+      "median_duration_s": 39.68,
+      "generated_tests_passed": 16,
+      "generated_tests_total": 16,
+      "generated_test_pass_rate": 1.0,
+      "fully_passing_suites": 3
+    }
+  ],
+  "config_comparison": [
+    {
+      "model": "deepseek-coder:6.7b",
+      "estimated": {
+        "agent": "Testing Agent",
+        "capabilities": {
+          "coding": 88.0,
+          "reasoning": 95.0,
+          "context_capacity": 82.0
+        },
+        "provenance": {
+          "coding": "estimated",
+          "reasoning": "estimated",
+          "context_capacity": "estimated"
+        }
+      },
+      "measured": {
+        "coding_proxy": 100.0,
+        "reasoning_proxy": 100.0
+      },
+      "difference": {
+        "coding": 12.0,
+        "reasoning": 5.0
+      }
+    }
+  ],
+  "cases": {
+    "deepseek-coder:6.7b": [
+      {
+        "scenario": "books",
+        "repeat": 1,
+        "duration_s": 39.68,
+        "status": "SUCCESS",
+        "error": null,
+        "validation_retries": 0,
+        "test_functions": 5,
+        "endpoints_called": [
+          "DELETE /books/1",
+          "GET /books",
+          "GET /books/1",
+          "POST /books"
+        ],
+        "generated_tests": {
+          "status": "PASSED",
+          "passed": 5,
+          "failed": 0,
+          "errors": 0,
+          "total": 5,
+          "pass_rate": 1.0
+        },
+        "failed_tests": []
+      },
+      {
+        "scenario": "events_tickets",
+        "repeat": 1,
+        "duration_s": 58.9,
+        "status": "SUCCESS",
+        "error": null,
+        "validation_retries": 0,
+        "test_functions": 8,
+        "endpoints_called": [
+          "GET /events",
+          "GET /tickets",
+          "POST /events",
+          "POST /tickets"
+        ],
+        "generated_tests": {
+          "status": "PASSED",
+          "passed": 8,
+          "failed": 0,
+          "errors": 0,
+          "total": 8,
+          "pass_rate": 1.0
+        },
+        "failed_tests": []
+      },
+      {
+        "scenario": "todos",
+        "repeat": 1,
+        "duration_s": 21.79,
+        "status": "SUCCESS",
+        "error": null,
+        "validation_retries": 0,
+        "test_functions": 3,
+        "endpoints_called": [
+          "GET /todos",
+          "POST /todos",
+          "PUT /todos/1"
+        ],
+        "generated_tests": {
+          "status": "PASSED",
+          "passed": 3,
+          "failed": 0,
+          "errors": 0,
+          "total": 3,
+          "pass_rate": 1.0
+        },
+        "failed_tests": []
+      }
+    ]
+  },
+  "test_suite": "python -m unittest discover -s tests: 521 test, OK (11 atlandı) — 27 Kasım 2026, CI ile aynı çevrim dışı ayarlar (OLLAMA_HOST kapalı port).",
+  "limitations": [
+    "temperature 0.1 + seed 42: aynı makinede sonuçlar büyük ölçüde tekrarlanabilir, farklı donanımda süreler değişir.",
+    "Ölçülen vekil metrikler yalnızca test yazma görevini kapsar; yapılandırmadaki genel yetenek puanlarının yerine geçmez.",
+    "Yalnızca deepseek-coder:6.7b ölçüldü (Testing Agent'ın atanmış modeli); diğer modeller bu makinede kurulu değil. Betik --model ile çoklu model kıyasını destekler.",
+    "E2E çalıştırmasında yalnızca Testing Agent'ın modeli kurulu; diğer ajanlar etiketli yedek şablonla çalıştı ve ayrıştırma sabit şablondan geldi (qwen2.5:7b kurulu değil)."
+  ],
+  "e2e": {
+    "requirement": "docs/model_tests/sample_requirement.md",
+    "duration_s": 47.66,
+    "system_status": "COMPLETED",
+    "status_counts": {
+      "COMPLETED": 6,
+      "FAILED": 0,
+      "UNASSIGNED": 0,
+      "BLOCKED": 0
+    },
+    "decomposition_mode": "template",
+    "shared_contract": false,
+    "tasks": [
+      {
+        "task_id": "task-req-1",
+        "status": "COMPLETED",
+        "agent": "Backend Architecture Agent",
+        "model": "qwen2.5-coder:7b",
+        "seconds": 3.08,
+        "reason": null
+      },
+      {
+        "task_id": "task-db-1",
+        "status": "COMPLETED",
+        "agent": "Database Schema Agent",
+        "model": "llama3.2:3b",
+        "seconds": 3.06,
+        "reason": null
+      },
+      {
+        "task_id": "task-be-1",
+        "status": "COMPLETED",
+        "agent": "Backend Architecture Agent",
+        "model": "qwen2.5-coder:7b",
+        "seconds": 3.06,
+        "reason": null
+      },
+      {
+        "task_id": "task-fe-1",
+        "status": "COMPLETED",
+        "agent": "Frontend Specialist Agent",
+        "model": "qwen2.5-coder:3b",
+        "seconds": 2.04,
+        "reason": null
+      },
+      {
+        "task_id": "task-qa-1",
+        "status": "COMPLETED",
+        "agent": "Automated Testing Agent",
+        "model": "deepseek-coder:6.7b",
+        "seconds": 32.37,
+        "reason": null
+      },
+      {
+        "task_id": "task-int-1",
+        "status": "COMPLETED",
+        "agent": "Integration Agent",
+        "model": "phi4-mini:3.8b",
+        "seconds": 2.1144,
+        "reason": null
+      }
+    ],
+    "smoke_test": {
+      "status": "PASSED",
+      "reason": "1/1 uç nokta çalıştı",
+      "checks": [
+        "GET /health -> 200"
+      ]
+    },
+    "generated_tests": {
+      "status": "FAILED",
+      "reason": "2/3 test geçti (%67)",
+      "passed": 2,
+      "total": 3,
+      "pass_rate": 0.6667,
+      "model_used": "deepseek-coder:6.7b",
+      "failed_tests": [
+        {
+          "name": "test_normal",
+          "message": "IndexError: list index out of range"
+        }
+      ]
+    }
+  }
+}
