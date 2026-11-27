@@ -2,6 +2,9 @@
 Unit Tests for SQLite Persistence Layer (S2-07).
 """
 
+import csv
+import io
+import json
 import os
 import sqlite3
 import sys
@@ -407,6 +410,146 @@ class TestDbManager(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["system_status"], "ABORTED")
         self.assertIsNotNone(rows[0]["finished_at"])
+
+    # --- S5-04: Telemetry queries, repeatable CSV/JSON exports & DATA_MODEL alignment ---
+    def _seed_telemetry_runs(self):
+        db_manager.init_db(self.db_path, verbose=False)
+        db_manager.create_run("run-m1", "Library App", requirement_id="req-1", total_tasks=2, db_path=self.db_path)
+        db_manager.save_task_result(
+            "run-m1",
+            {"task_id": "t-db", "title": "DB", "category": "DATABASE", "dependencies": []},
+            {
+                "task_id": "t-db", "title": "DB", "assigned_agent": "Database Agent",
+                "model_used": "llama3.2:3b", "fit_score": 92.0, "execution_time_seconds": 6.0,
+                "status": "COMPLETED", "agent_result_status": "SUCCESS",
+                "reason": "ok", "attempted_agents": ["Database Agent", "Database Agent"],
+                "output_files": ["database/schema_t_db.sql"],
+            },
+            attempts=[
+                {"agent_id": "agent-database", "agent_name": "Database Agent", "model_used": "llama3.2:3b",
+                 "is_successful": False, "error_message": "CHECK constraint", "execution_time_seconds": 2.0},
+                {"agent_id": "agent-database", "agent_name": "Database Agent", "model_used": "llama3.2:3b",
+                 "is_successful": True, "error_message": None, "execution_time_seconds": 4.0},
+            ],
+            file_records=[{
+                "relative_path": "database/schema_t_db.sql",
+                "requested_path": "database/schema_t_db.sql",
+                "size_bytes": 120,
+                "sha256": "b" * 64,
+                "review_status": "APPROVED",
+            }],
+            db_path=self.db_path,
+        )
+        db_manager.save_task_result(
+            "run-m1",
+            {"task_id": "t-be", "title": "API", "category": "BACKEND", "dependencies": ["t-db"]},
+            {
+                "task_id": "t-be", "title": "API", "assigned_agent": "Backend Agent",
+                "model_used": "qwen2.5-coder:7b", "fit_score": 95.0, "execution_time_seconds": 10.0,
+                "status": "COMPLETED", "agent_result_status": "SUCCESS",
+                "reason": "ok", "attempted_agents": ["Backend Agent"],
+                "output_files": ["backend_t_be.py"],
+            },
+            attempts=[
+                {"agent_id": "agent-backend", "agent_name": "Backend Agent", "model_used": "qwen2.5-coder:7b",
+                 "is_successful": True, "error_message": None, "execution_time_seconds": 10.0},
+            ],
+            file_records=[{
+                "relative_path": "backend_t_be.py",
+                "requested_path": "backend_t_be.py",
+                "size_bytes": 450,
+                "sha256": "c" * 64,
+                "review_status": "APPROVED",
+            }],
+            conflicts=[{
+                "conflict_type": "PATH", "file_path": "backend_t_be.py",
+                "resolved_path": "backend_t_be.py", "task_id": "t-be",
+                "other_task_id": "t-db", "resolution": "DEDUPLICATED", "detail": "same hash",
+            }],
+            db_path=self.db_path,
+        )
+        db_manager.save_generated_test_result(
+            "run-m1",
+            {"status": "PASSED", "passed": 3, "failed": 0, "errors": 0, "skipped": 0, "total": 3, "pass_rate": 1.0},
+            model_used="deepseek-coder:6.7b",
+            db_path=self.db_path,
+        )
+        db_manager.finish_run("run-m1", "COMPLETED", {"COMPLETED": 2, "FAILED": 0, "UNASSIGNED": 0, "BLOCKED": 0},
+                              db_path=self.db_path)
+
+    def test_agent_telemetry_and_run_history_queries(self):
+        self._seed_telemetry_runs()
+
+        agents = {a["agent_name"]: a for a in db_manager.get_agent_telemetry(db_path=self.db_path)}
+        self.assertEqual(set(agents), {"Backend Agent", "Database Agent"})
+
+        db_ag = agents["Database Agent"]
+        self.assertEqual(db_ag["model_used"], "llama3.2:3b")
+        self.assertEqual(db_ag["total_attempts"], 2)
+        self.assertEqual(db_ag["successful_attempts"], 1)
+        self.assertEqual(db_ag["failed_attempts"], 1)
+        self.assertEqual(db_ag["attempt_success_rate"], 0.5)
+        self.assertEqual(db_ag["avg_attempt_duration_seconds"], 3.0)
+        self.assertEqual(db_ag["total_tasks"], 1)
+        self.assertEqual(db_ag["completed_tasks"], 1)
+        self.assertEqual(db_ag["task_success_rate"], 1.0)
+        self.assertEqual(db_ag["avg_task_duration_seconds"], 6.0)
+        self.assertEqual(db_ag["output_files_produced"], 1)
+
+        be_ag = agents["Backend Agent"]
+        self.assertEqual(be_ag["attempt_success_rate"], 1.0)
+        self.assertEqual(be_ag["avg_attempt_duration_seconds"], 10.0)
+
+        history = db_manager.get_run_history(db_path=self.db_path)
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["run_id"], "run-m1")
+        self.assertEqual(history[0]["total_attempts"], 3)
+        self.assertEqual(history[0]["output_file_count"], 2)
+        self.assertEqual(history[0]["conflict_count"], 1)
+        self.assertEqual(history[0]["generated_test_status"], "PASSED")
+        self.assertEqual(history[0]["generated_test_pass_rate"], 1.0)
+        self.assertIsNotNone(history[0]["duration_seconds"])
+
+        conflicts = db_manager.get_conflict_summary(db_path=self.db_path)
+        self.assertEqual(conflicts["total"], 1)
+        self.assertEqual(conflicts["by_type"]["PATH"], 1)
+        self.assertEqual(conflicts["by_resolution"]["DEDUPLICATED"], 1)
+
+    def test_telemetry_csv_and_json_exports_are_repeatable_and_writable(self):
+        self._seed_telemetry_runs()
+
+        json_1 = db_manager.export_telemetry_json(db_path=self.db_path)
+        json_2 = db_manager.export_telemetry_json(db_path=self.db_path)
+        self.assertEqual(json_1, json_2)
+        parsed = json.loads(json_1)
+        self.assertEqual(parsed["schema_version"], db_manager.SCHEMA_VERSION)
+        self.assertEqual(len(parsed["runs"]), 1)
+        self.assertEqual(len(parsed["agent_telemetry"]), 2)
+        self.assertEqual(len(parsed["output_files"]), 2)
+
+        agent_csv_1 = db_manager.export_agent_telemetry_csv(db_path=self.db_path)
+        agent_csv_2 = db_manager.export_agent_telemetry_csv(db_path=self.db_path)
+        self.assertEqual(agent_csv_1, agent_csv_2)
+        agent_rows = list(csv.DictReader(io.StringIO(agent_csv_1)))
+        self.assertEqual([r["agent_name"] for r in agent_rows], ["Backend Agent", "Database Agent"])
+        self.assertEqual(agent_rows[1]["attempt_success_rate"], "0.5")
+
+        run_csv_path = os.path.join(self.tmp.name, "runs.csv")
+        run_csv = db_manager.export_run_history_csv(db_path=self.db_path, output_path=run_csv_path)
+        self.assertTrue(os.path.isfile(run_csv_path))
+        with open(run_csv_path, encoding="utf-8") as fh:
+            self.assertEqual(fh.read(), run_csv)
+        run_rows = list(csv.DictReader(io.StringIO(run_csv)))
+        self.assertEqual(len(run_rows), 1)
+        self.assertEqual(run_rows[0]["run_id"], "run-m1")
+
+    def test_data_model_doc_matches_all_expected_tables(self):
+        doc_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "docs", "DATA_MODEL.md"))
+        with open(doc_path, encoding="utf-8") as fh:
+            content = fh.read()
+        self.assertIn(f"schema version `{db_manager.SCHEMA_VERSION}`", content)
+        for table in db_manager.EXPECTED_TABLES:
+            self.assertIn(f"### `{table}`", content, f"Table '{table}' is missing from docs/DATA_MODEL.md")
 
 
 if __name__ == "__main__":

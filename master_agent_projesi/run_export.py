@@ -7,9 +7,18 @@ app.py only calls ``build_run_zip`` and passes the bytes to ``st.download_button
 
 import io
 import re
+import sys
 import zipfile
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Dict, Iterable, Optional, Tuple
+
+
+def _db_manager():
+    repo_root = str(Path(__file__).resolve().parent.parent)
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+    from src.master import db_manager
+    return db_manager
 
 # Turkish letters have no ASCII decomposition, so they are mapped by hand
 _TR = str.maketrans({"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u",
@@ -56,3 +65,45 @@ def build_run_zip(project_title: Optional[str], files: Iterable[Dict], fallback_
             archive.writestr(f"{name}/{member}", content.encode("utf-8"))
             count += 1
     return f"{name}.zip", buffer.getvalue(), count
+
+
+def build_telemetry_json_export(project_title: Optional[str] = None,
+                                db_path: Optional[str] = None,
+                                run_id: Optional[str] = None) -> Tuple[str, bytes, int]:
+    """
+    S5-04: Returns ``(filename, utf8_json_bytes, run_count)`` for Streamlit download
+    or benchmark report archiving. Repeatable on the same database state.
+    """
+    dbm = _db_manager()
+    prefix = safe_project_name(project_title or run_id, fallback="telemetry")
+    payload = dbm.export_telemetry_json(db_path=db_path, run_id=run_id)
+    run_count = len(dbm.get_run_history(run_id=run_id, db_path=db_path))
+    return f"{prefix}-telemetry.json", payload.encode("utf-8"), run_count
+
+
+def build_agent_telemetry_csv_export(project_title: Optional[str] = None,
+                                     db_path: Optional[str] = None,
+                                     run_id: Optional[str] = None) -> Tuple[str, bytes, int]:
+    """
+    S5-04: Returns ``(filename, utf8_csv_bytes, agent_row_count)`` for per-agent
+    average duration, success rate, and attempt count benchmark export.
+    """
+    dbm = _db_manager()
+    prefix = safe_project_name(project_title or run_id, fallback="telemetry")
+    rows = dbm.get_agent_telemetry(db_path=db_path, run_id=run_id)
+    payload = dbm.export_agent_telemetry_csv(db_path=db_path, run_id=run_id)
+    return f"{prefix}-agent-telemetry.csv", payload.encode("utf-8"), len(rows)
+
+
+def build_run_history_csv_export(project_title: Optional[str] = None,
+                                 db_path: Optional[str] = None,
+                                 run_id: Optional[str] = None) -> Tuple[str, bytes, int]:
+    """
+    S5-04: Returns ``(filename, utf8_csv_bytes, run_row_count)`` for run history
+    duration, status, and output file count export.
+    """
+    dbm = _db_manager()
+    prefix = safe_project_name(project_title or run_id, fallback="telemetry")
+    rows = dbm.get_run_history(run_id=run_id, db_path=db_path)
+    payload = dbm.export_run_history_csv(db_path=db_path, run_id=run_id)
+    return f"{prefix}-run-history.csv", payload.encode("utf-8"), len(rows)

@@ -111,6 +111,22 @@ Actual file contents live on disk under `workspaces/{run_id}/`; SQLite stores on
 | `detail` | TEXT | Human-readable explanation |
 | `created_at` | TIMESTAMP | |
 
+### `generated_test_results` — generated code test pass rates (S5-06)
+| Column | Type | Notes |
+| :--- | :--- | :--- |
+| `run_id` | TEXT **PK, FK** → `runs.run_id` | `ON DELETE CASCADE`; one summary row per run |
+| `model_used` | TEXT | Testing Agent Ollama model tag |
+| `status` | TEXT NOT NULL | `PASSED`, `FAILED`, `SKIPPED` (CHECK) |
+| `passed`, `failed`, `errors`, `skipped`, `total` | INTEGER | Execution counters (default `0`) |
+| `pass_rate` | REAL | `passed / total` (NULL when `total = 0`) |
+| `reason` | TEXT | Optional summary or skip reason |
+| `created_at` | TIMESTAMP | |
+
+### Telemetry Queries & Repeatable CSV/JSON Export (S5-04)
+`src/master/db_manager.py` and `master_agent_projesi/run_export.py` expose deterministic read and export helpers for both the Streamlit Dashboard and the Model Comparison Report:
+* **Queries (`src/master/db_manager.py`):** `get_run_history()`, `get_agent_telemetry()` (per-agent average duration, attempt/task success rates, attempt counts, and output file counts), `get_conflict_summary()`, `get_generated_test_pass_rates()`, and `get_telemetry_snapshot()`.
+* **Repeatable Exports (`src/master/db_manager.py` & `master_agent_projesi/run_export.py`):** `export_telemetry_json()`, `export_agent_telemetry_csv()`, `export_run_history_csv()`, plus Streamlit download wrappers `build_telemetry_json_export()`, `build_agent_telemetry_csv_export()`, and `build_run_history_csv_export()`. Output ordering and rounding are deterministic so repeated exports on the same database state are byte-for-byte identical.
+
 ### Integrity rules — "never silently COMPLETED"
 Failed, blocked or unassigned tasks are prevented from being stored as `COMPLETED` by three layers:
 1. **Python guard:** `validate_task_record()` raises `ValueError` unless `agent_result_status = 'SUCCESS'` and an agent is assigned.
@@ -142,6 +158,7 @@ erDiagram
     TASKS ||--o{ ATTEMPTS : "has"
     TASKS ||--o{ OUTPUT_FILES : "produces"
     TASKS ||--o{ FILE_CONFLICTS : "records"
+    RUNS ||--o| GENERATED_TEST_RESULTS : "measured by"
     RUNS {
         TEXT run_id PK
         TEXT system_status
@@ -186,6 +203,14 @@ erDiagram
         TEXT task_id FK
         TEXT conflict_type
         TEXT resolution
+    }
+    GENERATED_TEST_RESULTS {
+        TEXT run_id PK
+        TEXT model_used
+        TEXT status
+        INTEGER passed
+        INTEGER total
+        REAL pass_rate
     }
 ```
 
