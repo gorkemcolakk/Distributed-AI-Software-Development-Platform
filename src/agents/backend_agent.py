@@ -177,7 +177,10 @@ class BackendAgent(BaseAgent):
             "2. Define schemas for request/response models with type annotations.\n"
             "3. Implement REST endpoints with standard HTTP status codes (200, 201, 400, 404).\n"
             "4. Include a GET /health endpoint returning {'status': 'HEALTHY'}.\n"
-            "5. Provide in-memory dictionary storage simulation for persistence.\n"
+            "5. Store data in SQLite ('app.db') via sqlite3; at startup, find the first '.sql' schema file under "
+            "Path(__file__).parent (via Path(__file__).parent.rglob('*.sql')) and run conn.executescript(...) on it "
+            "instead of hardcoding duplicate CREATE TABLE statements (only fall back to CREATE TABLE IF NOT EXISTS "
+            "if no '.sql' file exists).\n"
             "6. Output ONLY executable Python code enclosed in ```python ``` markdown fences.\n"
         )
 

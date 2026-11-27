@@ -472,6 +472,16 @@ class MasterOrchestrator:
                     excerpts = code_excerpts_for_testing(generated_files_by_path)
                     if excerpts:
                         merged_context["code_under_test"] = excerpts
+                # Backend executes the workspace's .sql schema file at startup; when DATABASE already ran
+                # (e.g. template/sequential mode), include the schema file path and a short excerpt.
+                if category == TaskCategory.BACKEND:
+                    sql_files = sorted(p for p in generated_files_by_path if p.endswith(".sql"))
+                    if sql_files:
+                        schema_rel = sql_files[0]
+                        merged_context["database_schema_file"] = schema_rel
+                        schema_text = generated_files_by_path.get(schema_rel, "")
+                        if schema_text:
+                            merged_context["database_schema_sql"] = schema_text[:2000]
 
                 # Build versioned S3-01 task envelope (includes run_id, task_id, timeout_seconds)
                 envelope = build_task_envelope(

@@ -13,7 +13,9 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from src.agents.backend_agent import BackendAgent
 from src.master import smoke_test
+from src.master.analyzer import CATEGORY_RULES
 from src.master.orchestrator import MasterOrchestrator
 
 GOOD = '''
@@ -159,6 +161,84 @@ class TestSmokeTest(unittest.TestCase):
         with patch.dict(os.environ, {"MASTER_SMOKE_TEST": "false"}):
             report = MasterOrchestrator(persist=False).process_requirement("Small app", "Small")
         self.assertIsNone(report["smoke_test"])
+
+    def test_backend_initializes_db_from_workspace_schema_sql(self):
+        schema_sql = (
+            "CREATE TABLE IF NOT EXISTS dishes (\n"
+            "    id INTEGER PRIMARY KEY,\n"
+            "    name TEXT NOT NULL,\n"
+            "    price REAL NOT NULL\n"
+            ");\n"
+        )
+        backend_using_schema = '''
+import sqlite3
+from pathlib import Path
+from typing import Optional
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+app = FastAPI()
+db = sqlite3.connect("app.db", check_same_thread=False)
+sql_file = next(Path(__file__).parent.rglob("*.sql"), None)
+if sql_file is not None:
+    db.executescript(sql_file.read_text(encoding="utf-8"))
+
+class Dish(BaseModel):
+    id: Optional[int] = None
+    name: str
+    price: float
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+@app.post("/dishes", status_code=201)
+def add_dish(d: Dish):
+    cur = db.execute("INSERT INTO dishes (name, price) VALUES (?, ?)", (d.name, d.price))
+    db.commit()
+    return {"id": cur.lastrowid, "name": d.name, "price": d.price}
+
+@app.get("/dishes")
+def list_dishes():
+    return [{"id": r[0], "name": r[1], "price": r[2]} for r in db.execute("SELECT id, name, price FROM dishes")]
+'''
+        contract = {"endpoints": [
+            {"method": "POST", "path": "/dishes", "request": ["name", "price"]},
+            {"method": "GET", "path": "/dishes"},
+        ]}
+        with workspace({
+            "backend_task_be_1.py": backend_using_schema,
+            "database/schema_task_db_1.sql": schema_sql,
+        }) as ws:
+            result = smoke_test.run_smoke_test(ws, contract)
+            self.assertEqual(result["status"], "PASSED", result)
+            self.assertEqual(result["schema_file"], "database/schema_task_db_1.sql")
+            self.assertTrue(result["schema_applied"])
+            self.assertNotIn("schema_tables_missing", result)
+
+    def test_smoke_test_flags_missing_schema_tables_when_backend_ignores_schema_sql(self):
+        schema_sql = (
+            "CREATE TABLE IF NOT EXISTS dishes (id INTEGER PRIMARY KEY, name TEXT, price REAL);\n"
+            "CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY, dish_id INTEGER);\n"
+        )
+        with workspace({
+            "backend_task_be_1.py": GOOD,
+            "database/schema_task_db_1.sql": schema_sql,
+        }) as ws:
+            result = smoke_test.run_smoke_test(ws, CONTRACT)
+            self.assertEqual(result["status"], "PASSED", result)
+            self.assertEqual(result["schema_file"], "database/schema_task_db_1.sql")
+            self.assertFalse(result["schema_applied"])
+            self.assertEqual(result["schema_tables_missing"], ["orders"])
+
+    def test_backend_rule_and_prompt_instruct_executing_schema_sql(self):
+        self.assertIn("executescript", CATEGORY_RULES["BACKEND"])
+        self.assertIn("rglob('*.sql')", CATEGORY_RULES["BACKEND"])
+        prompt = BackendAgent(use_ollama=False)._build_prompt({
+            "task_id": "task-be-1", "title": "API", "description": "Build API",
+        })
+        self.assertIn("executescript", prompt)
+        self.assertIn("*.sql", prompt)
 
 
 if __name__ == "__main__":

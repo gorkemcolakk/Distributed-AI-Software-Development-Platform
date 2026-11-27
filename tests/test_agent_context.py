@@ -97,6 +97,11 @@ class TestDispatchedContext(unittest.TestCase):
         self.assertTrue(art)
         self.assertTrue(all(isinstance(v, str) and v for v in art.values()))
 
+    def test_backend_task_receives_database_schema_when_db_ran_first(self):
+        ctx = self.sent["task-be-1"]["context_artifacts"]
+        self.assertTrue(str(ctx.get("database_schema_file", "")).endswith(".sql"))
+        self.assertIn("CREATE TABLE", ctx.get("database_schema_sql", ""))
+
 
 class TestConfigArchitectureOwner(unittest.TestCase):
 
