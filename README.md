@@ -110,7 +110,7 @@ Sprints 1 through 4 are **completed** (99 Story Points delivered across 26 cards
 │   │   ├── orchestrator.py      # End-to-end execution & failover pipeline
 │   │   ├── retry_policy.py      # Bounded retry & backoff decision policy
 │   │   ├── scheduler.py         # Topological DAG scheduler & cycle detector
-│   │   ├── smoke_test.py        # Orchestrator pipeline smoke test utility
+│   │   ├── smoke_test.py        # Smoke test runner for generated applications
 │   │   └── workspace.py         # Sandboxed workspaces/{run_id}/ file writer
 │   └── security/                # Input/Output Security & Error Classification
 │       ├── error_classification.py
@@ -132,7 +132,7 @@ Sprints 1 through 4 are **completed** (99 Story Points delivered across 26 cards
 
 ### 1. Installation & Environment Configuration
 ```bash
-git clone [https://github.com/gorkemcolakk/Distributed-AI-Software-Development-Platform.git](https://github.com/gorkemcolakk/Distributed-AI-Software-Development-Platform.git)
+git clone https://github.com/gorkemcolakk/Distributed-AI-Software-Development-Platform.git
 cd Distributed-AI-Software-Development-Platform
 
 # Create and activate virtual environment (recommended)

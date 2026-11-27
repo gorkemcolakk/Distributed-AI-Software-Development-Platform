@@ -27,15 +27,21 @@ import os
 import time
 import urllib.request
 import uuid
+from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
+try:
+    from dotenv import dotenv_values
+except ImportError:  # pragma: no cover
+    dotenv_values = None
+
 from src import a2a_protocol as a2a
 from src.agents.backend_agent import BackendAgent
-from src.agents.base_agent import BaseAgent
+from src.agents.base_agent import AgentStatus, BaseAgent
 from src.agents.database_agent import DatabaseAgent
 from src.agents.frontend_agent import FrontendAgent
 from src.agents.integration_agent import IntegrationAgent
@@ -48,11 +54,30 @@ from src.contracts import (
 )
 
 
+def _read_local_env() -> Dict[str, str]:
+    """Reads key-value pairs from the project root .env file without mutating os.environ."""
+    if dotenv_values is None:
+        return {}
+    project_root = Path(__file__).resolve().parents[2]
+    env_path = project_root / ".env"
+    if not env_path.is_file():
+        return {}
+    return {k: (v or "") for k, v in dotenv_values(env_path).items() if k}
+
+
 def get_auth_token(override_token: Optional[str] = None) -> str:
-    """Reads configured worker authentication token from environment without hardcoding."""
+    """Reads configured worker authentication token from local .env or environment without hardcoding."""
     if override_token is not None:
         return override_token.strip()
-    return (os.getenv("WORKER_AUTH_TOKEN") or os.getenv("BACKEND_AUTH_TOKEN") or "").strip()
+    local_env = _read_local_env()
+    token = (
+        local_env.get("WORKER_AUTH_TOKEN")
+        or local_env.get("BACKEND_AUTH_TOKEN")
+        or os.getenv("WORKER_AUTH_TOKEN")
+        or os.getenv("BACKEND_AUTH_TOKEN")
+        or ""
+    )
+    return token.strip()
 
 
 def check_bearer_token(auth_header: Optional[str], expected_token: str) -> Optional[str]:
@@ -245,6 +270,9 @@ def create_worker_app(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=redact_secrets(f"Worker execution error: {exc}"),
             )
+        finally:
+            if not getattr(worker_agent, "current_tasks", []):
+                worker_agent.status = AgentStatus.IDLE
 
         response_payload = {
             "contract_version": data.get("contract_version", CONTRACT_VERSION),
@@ -464,6 +492,9 @@ def run_server(host: str = "0.0.0.0", port: int = 8000, agent: Optional[BaseAgen
 
 
 if __name__ == "__main__":
+    for _k, _v in _read_local_env().items():
+        if _v and not os.getenv(_k):
+            os.environ[_k] = _v
     parser = argparse.ArgumentParser(description="Distributed Worker Agent HTTP API Server")
     parser.add_argument(
         "--agent",
