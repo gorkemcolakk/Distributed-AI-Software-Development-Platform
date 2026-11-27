@@ -76,6 +76,8 @@ Rules:
 ### 2.3 Current score inventory
 
 No local benchmark has been run yet, so **no score in the repository is `measured` under this policy.**
+*(Update 27 Nov 2026: the Testing Agent benchmark in section 8 compares measured proxies with the
+estimated scores; the config values stay `estimated` because the task set is small.)*
 
 | Location | Agent / model | coding | reasoning | context_capacity | Label | Basis |
 |---|---|---|---|---|---|---|
@@ -315,4 +317,73 @@ All agents operate locally on developer machines using standard Ollama server in
 | **6** | **TestingAgent** | Berat İnan | `deepseek-coder:6.7b` | DeepSeek-Coder | 16K | Pytest suites, assertions, automated test verification |
 
 *20 Ekim 2026: master modeli qwen2.5:3b'den qwen2.5:7b'ye geçirildi, puanlar henüz ölçülmedi.*
+
+---
+
+## 8. Testing Agent Model Benchmark & E2E Check (S5-06, 27 Nov 2026)
+
+Owner: Berat İnan (Testing & QA Agent, `deepseek-coder:6.7b`). Evidence:
+`docs/model_tests/testing_benchmark_20261127.json` / `.md`, produced by
+`scripts/testing_model_benchmark.py`.
+
+### 8.1 Procedure (same task set and prompts for every model)
+
+```bash
+python scripts/testing_model_benchmark.py --model deepseek-coder:6.7b --e2e
+python scripts/testing_model_benchmark.py --model deepseek-coder:6.7b --model qwen2.5-coder:3b --repeats 2
+```
+
+- **Task set:** 3 fixed scenarios (`books` CRUD with path parameters, `events_tickets` with two
+  entities, `todos` with a bool field and PUT). Each has a fixed shared contract and a known-good
+  reference FastAPI + SQLite backend, checked with hand-written tests before the run.
+- **Same prompts:** the production `TestingAgent` is called (same prompt, contract check, status-code
+  check and one validation retry), with the first 1500 characters of the backend as context, exactly
+  like the orchestrator sends `code_under_test`. Ollama options: `temperature=0.1`, `seed=42`,
+  `num_predict=1024`.
+- **Measured:** generation time (incl. retry), valid output rate, first-attempt acceptance rate and the
+  pass rate of the generated tests run against the reference backend (`src/master/generated_tests.py`).
+
+### 8.2 Results
+
+| Model | Tasks | Valid output | Accepted first try | Median time | Generated-test pass rate | Fully passing suites |
+|---|---|---|---|---|---|---|
+| `deepseek-coder:6.7b` | 3 | 100% | 100% | 39.7 s | 100% (16/16) | 3/3 |
+
+Per scenario: `books` 39.7 s, 5 tests; `events_tickets` 58.9 s, 8 tests; `todos` 21.8 s, 3 tests.
+Every call stayed inside the contract (e.g. `POST /events`, `POST /tickets`, `PUT /todos/{id}`).
+Hardware: Windows, 20 logical cores, CPU only (no GPU), Python 3.11.
+
+### 8.3 Estimated vs. measured (`config/agents_config.json`)
+
+The benchmark measures the test-writing task only, so the measured values are **proxies** on the
+0-100 scale: coding ≈ valid output rate × generated-test pass rate; reasoning ≈ first-attempt
+acceptance (follows the contract and status-code rules without correction).
+
+| Model | Coding (estimated → measured proxy) | Δ | Reasoning (estimated → measured proxy) | Δ |
+|---|---|---|---|---|
+| `deepseek-coder:6.7b` | 88.0 → 100.0 | +12.0 | 95.0 → 100.0 | +5.0 |
+
+The estimates are not contradicted: on this task set the model did at least as well as estimated.
+With 3 tasks the sample is small, so the config values stay `estimated` (section 2.1 reserves
+`measured` for broader local runs); `context_capacity` was not measured.
+
+### 8.4 End-to-end (E2E) check
+
+`--e2e` runs the whole Master pipeline on `docs/model_tests/sample_requirement.md` with
+`MASTER_SMOKE_TEST=true`: 6/6 tasks **COMPLETED** in 47.7 s, smoke test **PASSED** (`GET /health → 200`),
+generated tests 2/3 passed. The failing test (`test_normal`, `IndexError`) assumed the list endpoint
+already had data. In this run no other model was installed: the decomposition came from the fixed
+template (no shared contract, so the contract and status-code checks did not apply) and the other
+agents returned their labelled fallback templates (the report still names their configured models).
+The automated suite (`python -m unittest discover -s tests`, includes `tests/test_master_engine.py`)
+ran 521 tests, OK (11 skipped).
+
+### 8.5 Limitations
+
+- Only `deepseek-coder:6.7b` (the Testing Agent's assigned model) was measured; no other model is
+  installed on this machine. Other members can add their model with `--model <tag>`; the report then
+  lists the models side by side.
+- One repetition per scenario; durations depend on the machine.
+- The E2E run used fallback agents for everything except testing, so it checks the pipeline and the
+  pass-rate measurement, not the quality of the other models.
 

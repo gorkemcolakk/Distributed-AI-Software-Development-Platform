@@ -14,6 +14,10 @@ S5-06 (Berat İnan):
   the tests may call, and every client.get/post/... call in the reply is checked against it.
   A call outside the contract is a validation error: the model is asked once more with the
   rejected calls listed (TESTING_AGENT_VALIDATION_RETRIES, default 1), then the task FAILS.
+- (27 Nov) The prompt shows a valid example body per POST/PUT endpoint (types from the generated
+  backend's Pydantic models when its code is in the context) and says 422 is expected only for a body
+  that leaves out a required field. Status-code assertions that contradict the body actually sent
+  (422 for a complete body, 200 for a body missing a field) are rejected like off-contract calls.
 """
 
 import ast
@@ -204,6 +208,238 @@ def find_off_contract_calls(code: str, endpoints: List[Tuple[str, str]]) -> List
     return off
 
 
+# --------------------------------------------------------------------------------------------------
+# S5-06 (27 Nov finding): "invalid request" tests must expect what the contract really defines.
+# FastAPI answers 422 only when the JSON body fails Pydantic validation (a required field is missing or
+# a value has the wrong type). An empty string or a past date is still a valid str, so the backend
+# answers 200 (test_invalid_events expected 422); a body without a required field is rejected with
+# 422 (test_tickets expected 200). The agent now shows a valid example body per endpoint and checks
+# every status-code assertion against the body that was actually sent.
+# --------------------------------------------------------------------------------------------------
+BODY_METHODS = ("POST", "PUT", "PATCH")
+_MODEL_RE = re.compile(r"^class\s+(\w+)\s*\(\s*(?:pydantic\.)?BaseModel\s*\)\s*:[ \t]*\n((?:[ \t]+[^\n]*\n?|[ \t]*\n)*)", re.M)
+_FIELD_RE = re.compile(r"^[ \t]+(\w+)\s*:\s*([^=\n#]+?)\s*(=[^\n#]*)?[ \t]*(?:#[^\n]*)?$", re.M)
+_ROUTE_RE = re.compile(
+    r"@\w+\.(get|post|put|patch|delete)\(\s*[\"']([^\"']+)[\"'][^\n]*\n(?:[ \t]*@[^\n]*\n)*"
+    r"[ \t]*(?:async[ \t]+)?def[ \t]+\w+[ \t]*\(([^)]*)\)", re.I)
+
+
+def _type_kind(annotation: str) -> str:
+    """'number', 'bool', 'str' or 'any' for a Pydantic field annotation."""
+    a = annotation.replace(" ", "").lower()
+    for wrapper in ("optional[", "typing.optional["):
+        if a.startswith(wrapper):
+            a = a[len(wrapper):-1]
+    a = a.split("|")[0]
+    if a in ("int", "float", "decimal", "conint", "confloat", "positiveint"):
+        return "number"
+    if a == "bool":
+        return "bool"
+    if a in ("str", "emailstr", "constr", "date", "datetime", "time"):
+        return "str"
+    return "any"
+
+
+def parse_body_models(code: str) -> Dict[Tuple[str, str], Dict[str, Any]]:
+    """
+    {(METHOD, path): {"fields": {name: kind}, "required": [names]}} for each route of the generated
+    backend that takes a Pydantic body. Uses regexes, so it also works on a truncated code excerpt.
+    """
+    models: Dict[str, Dict[str, Any]] = {}
+    for match in _MODEL_RE.finditer(code or ""):
+        fields, required = {}, []
+        for f in _FIELD_RE.finditer(match.group(2)):
+            name, annotation, default = f.group(1), f.group(2), f.group(3)
+            if name in ("model_config", "Config") or annotation.startswith(("ClassVar", "class")):
+                continue
+            fields[name] = _type_kind(annotation)
+            optional = default is not None or "optional" in annotation.lower() or "none" in annotation.lower()
+            if not optional:
+                required.append(name)
+        models[match.group(1)] = {"fields": fields, "required": required}
+
+    routes: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    for route in _ROUTE_RE.finditer(code or ""):
+        method, path, params = route.group(1).upper(), route.group(2), route.group(3)
+        for param in params.split(","):
+            if ":" not in param:
+                continue
+            annotation = param.split(":", 1)[1].split("=")[0].strip()
+            if annotation in models:
+                routes[(method, path)] = models[annotation]
+                break
+    return routes
+
+
+def endpoint_body_schemas(context: Optional[Dict[str, Any]]) -> Dict[Tuple[str, str], Dict[str, Any]]:
+    """
+    Body schema of every POST/PUT/PATCH endpoint of the contract: field types and required fields from the
+    generated backend when its code is in the context, otherwise the contract's request fields (all
+    required, types unknown), as the backend rule asks for Pydantic models with exactly those fields.
+    """
+    context = context or {}
+    code = "\n".join(str(v) for v in (context.get("code_under_test") or {}).values())
+    from_code = parse_body_models(code)
+    contract = context.get("shared_contract") or {}
+    schemas: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    for ep in contract.get("endpoints") or []:
+        if not isinstance(ep, dict):
+            continue
+        method, path = str(ep.get("method") or "").upper(), str(ep.get("path") or "")
+        if method not in BODY_METHODS:
+            continue
+        found = next((s for (m, p), s in from_code.items() if m == method and path_matches(p, path)), None)
+        if found is not None:
+            schemas[(method, path)] = dict(found, source="code")
+            continue
+        names = [str(n) for n in ep.get("request") or [] if str(n) and str(n) != "id"]
+        if names:
+            schemas[(method, path)] = {"fields": {n: "any" for n in names}, "required": names, "source": "contract"}
+    return schemas
+
+
+def sample_value(name: str, kind: str) -> Any:
+    """A value that passes validation for the field (used in the prompt's example bodies)."""
+    lowered = name.lower()
+    if kind == "number" or (kind == "any" and (lowered == "id" or lowered.endswith(("_id", "_count")) or lowered in (
+            "price", "amount", "quantity", "year", "age", "capacity", "seats", "count", "total", "rating"))):
+        return 1
+    if kind == "bool" or (kind == "any" and lowered.startswith(("is_", "has_")) or lowered in ("done", "completed")):
+        return True
+    if "email" in lowered:
+        return "user@example.com"
+    if "date" in lowered:
+        return "2026-12-01"
+    if "password" in lowered:
+        return "secret123"
+    return f"test {lowered}"
+
+
+def _value_fits(value: Any, kind: str) -> bool:
+    if kind == "number":
+        if isinstance(value, bool):
+            return False
+        if isinstance(value, (int, float)):
+            return True
+        return isinstance(value, str) and re.fullmatch(r"\s*-?\d+(\.\d+)?\s*", value) is not None
+    if kind == "bool":
+        return isinstance(value, bool) or value in (0, 1, "true", "false", "True", "False", "yes", "no")
+    if kind == "str":
+        return isinstance(value, str)
+    return value is not None
+
+
+def _field_kind(name: str, schema: Dict[str, Any]) -> str:
+    """The field's type; without backend code it is guessed from the name (event_id, capacity -> number)."""
+    kind = schema["fields"].get(name, "any")
+    if kind != "any":
+        return kind
+    sample = sample_value(name, "any")
+    if isinstance(sample, bool):
+        return "bool"
+    return "number" if isinstance(sample, int) else "any"
+
+
+_UNKNOWN = object()
+
+
+def _call_info(call: ast.Call) -> Optional[Dict[str, Any]]:
+    """Method, path and JSON body (when it is a dict literal) of a client.get/post/... call."""
+    if not isinstance(call.func, ast.Attribute):
+        return None
+    attr = call.func.attr.lower()
+    if attr.upper() in HTTP_METHODS and call.args:
+        method, url_node = attr.upper(), call.args[0]
+    elif attr == "request" and len(call.args) >= 2 and isinstance(call.args[0], ast.Constant):
+        method, url_node = str(call.args[0].value).upper(), call.args[1]
+    else:
+        return None
+    path = _literal_path(url_node)
+    if path is None or not path.startswith("/"):
+        return None
+    body: Any = None
+    for kw in call.keywords:
+        if kw.arg == "json":
+            if isinstance(kw.value, ast.Dict) and all(isinstance(k, ast.Constant) for k in kw.value.keys):
+                body = {k.value: (v.value if isinstance(v, ast.Constant) else _UNKNOWN)
+                        for k, v in zip(kw.value.keys, kw.value.values)}
+            else:
+                body = _UNKNOWN
+    return {"method": method, "path": path, "body": body}
+
+
+def _expected_codes(compare: ast.Compare) -> Optional[set]:
+    """{422} for `x.status_code == 422`, {200, 201} for `x.status_code in (200, 201)`."""
+    if len(compare.ops) != 1 or len(compare.comparators) != 1:
+        return None
+    op, right = compare.ops[0], compare.comparators[0]
+    if isinstance(op, ast.Eq) and isinstance(right, ast.Constant) and isinstance(right.value, int):
+        return {right.value}
+    if isinstance(op, ast.In) and isinstance(right, (ast.Tuple, ast.List, ast.Set)):
+        codes = {e.value for e in right.elts if isinstance(e, ast.Constant) and isinstance(e.value, int)}
+        return codes if codes and len(codes) == len(right.elts) else None
+    return None
+
+
+def find_wrong_status_expectations(code: str, schemas: Dict[Tuple[str, str], Dict[str, Any]]) -> List[str]:
+    """
+    Status-code assertions that cannot hold for the body the test sends:
+    - 4xx expected although every required field is sent with a valid type (the backend answers 200);
+    - 2xx expected although a required field is missing or has the wrong type (FastAPI answers 422).
+    Calls whose body is not a dict literal, or endpoints without a known schema, are not judged.
+    """
+    if not schemas:
+        return []
+    problems: List[str] = []
+    tree = ast.parse(code)
+    for func in ast.walk(tree):
+        if not (isinstance(func, (ast.FunctionDef, ast.AsyncFunctionDef)) and func.name.startswith("test")):
+            continue
+        responses: Dict[str, Dict[str, Any]] = {}
+        nodes = sorted((n for n in ast.walk(func) if hasattr(n, "lineno")),
+                       key=lambda n: (n.lineno, n.col_offset))
+        for node in nodes:
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
+                info = _call_info(node.value)
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        if info:
+                            responses[target.id] = info
+                        else:
+                            responses.pop(target.id, None)
+            if not isinstance(node, ast.Compare):
+                continue
+            left = node.left
+            if not (isinstance(left, ast.Attribute) and left.attr == "status_code"):
+                continue
+            if isinstance(left.value, ast.Name):
+                info = responses.get(left.value.id)
+            elif isinstance(left.value, ast.Call):
+                info = _call_info(left.value)
+            else:
+                info = None
+            codes = _expected_codes(node)
+            if not info or not codes or info["method"] not in BODY_METHODS or info["body"] is _UNKNOWN:
+                continue
+            schema = next((s for (m, p), s in schemas.items()
+                           if m == info["method"] and path_matches(p, info["path"])), None)
+            if schema is None:
+                continue
+            body = info["body"] or {}
+            missing = [f for f in schema["required"] if f not in body]
+            wrong_type = [f for f, v in body.items()
+                          if v is not _UNKNOWN and f in schema["fields"] and not _value_fits(v, _field_kind(f, schema))]
+            label = f"{func.name}: {info['method']} {info['path']}"
+            expected = "/".join(str(c) for c in sorted(codes))
+            if all(400 <= c < 500 for c in codes) and not missing and not wrong_type:
+                problems.append(f"{label} tüm zorunlu alanları geçerli tiple gönderiyor, uç nokta 200 döner "
+                                f"ama test {expected} bekliyor (geçersiz istek için zorunlu bir alanı çıkar)")
+            elif all(200 <= c < 300 for c in codes) and (missing or wrong_type):
+                why = ", ".join([f"eksik alan '{f}'" for f in missing] + [f"'{f}' alanının tipi yanlış" for f in wrong_type])
+                problems.append(f"{label} için {why}: FastAPI 422 döner ama test {expected} bekliyor")
+    return problems
+
+
 def _safe_slug(value: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9_]+", "_", value or "").strip("_").lower()
     return slug or "generated"
@@ -248,6 +484,7 @@ class TestingAgent(BaseAgent):
             return self._template_result(filename, generation_mode="template")
 
         endpoints = contract_endpoints(task.get("context_artifacts"))
+        schemas = endpoint_body_schemas(task.get("context_artifacts")) if endpoints else {}
         prompt = self.build_prompt(task)
         total_attempts = 1 + self.max_validation_retries
         logs.append(f"[{self.name}] Sending test generation prompt to local Ollama model '{self.model_name}'...")
@@ -269,6 +506,10 @@ class TestingAgent(BaseAgent):
                     if off_contract:
                         raise ModelOutputError(
                             "Testler sözleşmede olmayan uç noktaları çağırıyor: " + ", ".join(off_contract))
+                    wrong_expectations = find_wrong_status_expectations(code, schemas)
+                    if wrong_expectations:
+                        raise ModelOutputError(
+                            "Testlerin durum kodu beklentisi sözleşmeye uymuyor: " + "; ".join(wrong_expectations))
             except ModelOutputError as exc:
                 if attempt < total_attempts:
                     logs.append(f"[{self.name}] Test doğrulama hatası (deneme {attempt}/{total_attempts}): {exc} "
@@ -323,13 +564,34 @@ class TestingAgent(BaseAgent):
         endpoints = contract_endpoints(task.get("context_artifacts"))
         if not endpoints:
             return ""
-        listed = "\n".join(f"  - {m} {p}" for m, p in endpoints)
-        return (
+        schemas = endpoint_body_schemas(task.get("context_artifacts"))
+        lines = []
+        for m, p in endpoints:
+            schema = schemas.get((m, p))
+            if schema:
+                example = {f: sample_value(f, schema["fields"].get(f, "any")) for f in schema["fields"]
+                           if f in schema["required"] or f != "id"}
+                lines.append(f"  - {m} {p}  valid body: json={json.dumps(example, ensure_ascii=False)}")
+            else:
+                lines.append(f"  - {m} {p}")
+        rules = (
             "\nAPI CONTRACT — the tests may call ONLY these endpoints (plus GET /health), with exactly this\n"
             "method and path; replace {param} parts with an id created earlier in the same test:\n"
-            f"{listed}\n"
+            + "\n".join(lines) + "\n"
             "Do not invent other paths, versions (/api/v1/...) or methods.\n"
         )
+        if schemas:
+            rules += (
+                "STATUS CODES:\n"
+                "- A valid request sends EVERY field of the valid body above with the same value types;\n"
+                "  assert r.status_code in (200, 201).\n"
+                "- The only invalid request the contract defines is a body that LEAVES OUT a required field\n"
+                "  (or sends a text where a number is expected); FastAPI answers it with 422:\n"
+                "  assert r.status_code == 422.\n"
+                "- Never expect 400/422 for empty strings, negative numbers, past dates or unknown ids:\n"
+                "  the contract does not forbid them, so the backend answers 200.\n"
+            )
+        return rules
 
     def build_retry_prompt(self, task: Dict[str, Any], previous_output: str, error: str) -> str:
         """Follow-up prompt asking the model to fix a rejected reply (e.g. calls outside the contract)."""
