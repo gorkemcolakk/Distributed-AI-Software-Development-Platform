@@ -140,6 +140,8 @@ class BackendAgent(BaseAgent):
         model_name: str = "qwen2.5-coder:7b",
         ollama_host: str = None,
         timeout: int = None,
+        num_ctx: Optional[int] = None,
+        num_predict: Optional[int] = None,
         use_ollama: Optional[bool] = None,
         fallback_enabled: Optional[bool] = None,
         output_dir: Optional[str] = None,
@@ -153,7 +155,9 @@ class BackendAgent(BaseAgent):
         )
         super().__init__(agent_id=agent_id, name=name, model_name=model_name, capability_profile=profile)
         self.ollama_host = (ollama_host or os.getenv("OLLAMA_HOST", "http://localhost:11434")).rstrip("/")
-        self.timeout = int(timeout or os.getenv("OLLAMA_TIMEOUT", "45"))
+        self.timeout = int(timeout or os.getenv("BACKEND_OLLAMA_TIMEOUT") or os.getenv("OLLAMA_TIMEOUT", "45"))
+        self.num_ctx = int(num_ctx if num_ctx is not None else (os.getenv("BACKEND_NUM_CTX") or os.getenv("OLLAMA_NUM_CTX", "4096")))
+        self.num_predict = int(num_predict if num_predict is not None else (os.getenv("BACKEND_NUM_PREDICT") or os.getenv("OLLAMA_NUM_PREDICT", "2048")))
         self.use_ollama = _env_flag("BACKEND_AGENT_USE_OLLAMA", True) if use_ollama is None else use_ollama
         self.fallback_enabled = _env_flag("FALLBACK_ENABLED", True) if fallback_enabled is None else fallback_enabled
         self.output_dir = output_dir if output_dir is not None else os.getenv("BACKEND_AGENT_OUTPUT_DIR", "")
@@ -194,7 +198,12 @@ class BackendAgent(BaseAgent):
             "model": self.model_name,
             "prompt": prompt,
             "stream": False,
-            "options": {"temperature": 0.2, "seed": 42}
+            "options": {
+                "temperature": 0.2,
+                "seed": 42,
+                "num_ctx": self.num_ctx,
+                "num_predict": self.num_predict,
+            }
         }).encode("utf-8")
 
         req = urllib.request.Request(
@@ -310,25 +319,50 @@ def delete_item(item_id: str):
 
         code: Optional[str] = None
         synthesis_mode = "ollama_inference"
+        fallback_reason: Optional[str] = None
 
         if self.use_ollama:
             prompt = self._build_prompt(task)
-            logs.append(f"[{self.name}] Sending prompt to local Ollama model '{self.model_name}' at {self.ollama_host}...")
+            limits_info = (
+                f"model={self.model_name}, num_ctx={self.num_ctx}, "
+                f"num_predict={self.num_predict}, timeout={self.timeout}s, prompt_chars={len(prompt)}"
+            )
+            start_msg = f"[{self.name}] Sending prompt to local Ollama ({limits_info}) at {self.ollama_host}..."
+            logs.append(start_msg)
+            print(start_msg, flush=True)
             try:
                 raw_response = self.llm_client(prompt)
                 extracted_code = extract_python_code(raw_response)
                 validate_backend_code(extracted_code)
                 code = extracted_code
-                logs.append(f"[{self.name}] Successfully generated {len(code.splitlines())} lines of backend Python code via {self.model_name}.")
+                ok_msg = f"[{self.name}] Successfully generated {len(code.splitlines())} lines of backend Python code via {self.model_name} ({limits_info})."
+                logs.append(ok_msg)
+                print(ok_msg, flush=True)
             except (OllamaCallError, ModelOutputError) as exc:
+                err_type = getattr(exc, "error_type", type(exc).__name__)
+                status_code = getattr(exc, "status_code", None)
+                status_part = f", status_code={status_code}" if status_code is not None else ""
+                reason_detail = f"error_type={err_type}{status_part}, {limits_info}, detail={exc}"
                 if not self.fallback_enabled:
-                    logs.append(f"[{self.name}] Ollama call failed and fallback is disabled: {exc}")
+                    fail_msg = f"[{self.name}] Ollama call failed and fallback is disabled ({reason_detail})"
+                    logs.append(fail_msg)
+                    print(fail_msg, flush=True)
                     raise
-                logs.append(f"[{self.name}] [FALLBACK] Ollama inference failed ({exc}). Using safe deterministic code synthesis.")
+                fb_msg = f"[{self.name}] [FALLBACK] Ollama inference failed ({reason_detail}). Using safe deterministic code synthesis."
+                fallback_reason = reason_detail
+                logs.append(fb_msg)
+                print(fb_msg, flush=True)
                 code = self._generate_fallback_code(task)
                 synthesis_mode = "safe_fallback"
         else:
-            logs.append(f"[{self.name}] [FALLBACK] BACKEND_AGENT_USE_OLLAMA is false. Generating deterministic backend code template.")
+            fb_msg = (
+                f"[{self.name}] [FALLBACK] BACKEND_AGENT_USE_OLLAMA is false "
+                f"(model={self.model_name}, num_ctx={self.num_ctx}, num_predict={self.num_predict}). "
+                "Generating deterministic backend code template."
+            )
+            fallback_reason = f"BACKEND_AGENT_USE_OLLAMA is false (model={self.model_name}, num_ctx={self.num_ctx}, num_predict={self.num_predict})"
+            logs.append(fb_msg)
+            print(fb_msg, flush=True)
             code = self._generate_fallback_code(task)
             synthesis_mode = "safe_fallback"
 
@@ -367,5 +401,6 @@ def delete_item(item_id: str):
             "security": "OAuth2 / Bearer Token",
             "model_used": self.model_name,
             "synthesis_mode": synthesis_mode,
+            "fallback_reason": fallback_reason,
             "status": "BACKEND_API_GENERATED"
         }
